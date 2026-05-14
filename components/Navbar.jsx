@@ -115,7 +115,7 @@ export default function Navbar() {
         >
           {/* May 14, 2026 REASON: external domain — must use <a> not <Link> */}
           
-            href="https://therealmedico.store/login?ref=community"
+           <a href="https://therealmedico.store/login?ref=community"
             onMouseEnter={handleSignInEnter}
             onMouseLeave={handleSignInLeave}
             style={{
