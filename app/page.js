@@ -145,7 +145,7 @@ export default function HomePage() {
             Join the Community
           </a>
           
-            href="#coming-soon"
+           <a href="#coming-soon"
             style={{
               backgroundColor: 'var(--bg-primary)',
               color: 'var(--accent-primary)',
