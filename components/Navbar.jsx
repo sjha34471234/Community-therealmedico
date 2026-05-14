@@ -3,23 +3,22 @@
 // PURPOSE: Top navigation bar — logo, search placeholder, sign in button
 // LAST CHANGED: May 14, 2026
 // WHY IT EXISTS: Appears on every page via app/layout.js
-//               Search bar is present but disabled until Phase 6
-//               Sign In links to main store shared auth
 // DEPENDENCIES: lucide-react, app/globals.css CSS variables
-// ⚠️ DO NOT CHANGE: Sign In must use <a> tag not <Link> — it goes
-//                   to therealmedico.store which is a different domain
-//                   Search input stays disabled until Phase 6
+// ⚠️ DO NOT CHANGE: Sign In must use <a> tag not <Link> — external domain
 // ============================================================
 
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
-import { Search, Menu, X } from 'lucide-react';
+import { Search } from 'lucide-react';
 
 export default function Navbar() {
-  // May 14, 2026 REASON: Mobile menu toggle state
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  function handleSignInEnter(e) {
+    e.target.style.backgroundColor = 'var(--accent-hover)';
+  }
+  function handleSignInLeave(e) {
+    e.target.style.backgroundColor = 'var(--accent-primary)';
+  }
 
   return (
     <header
@@ -43,7 +42,7 @@ export default function Navbar() {
         }}
       >
 
-        {/* ── Logo ── */}
+        {/* Logo */}
         <Link
           href="/"
           style={{
@@ -71,14 +70,8 @@ export default function Navbar() {
           </span>
         </Link>
 
-        {/* ── Search bar — disabled until Phase 6 ── */}
-        <div
-          style={{
-            flex: 1,
-            maxWidth: '480px',
-            position: 'relative',
-          }}
-        >
+        {/* Search bar — disabled until Phase 6 */}
+        <div style={{ flex: 1, maxWidth: '480px', position: 'relative' }}>
           <Search
             size={15}
             style={{
@@ -110,7 +103,7 @@ export default function Navbar() {
           />
         </div>
 
-        {/* ── Right side actions ── */}
+        {/* Right side */}
         <div
           style={{
             display: 'flex',
@@ -120,21 +113,11 @@ export default function Navbar() {
             flexShrink: 0,
           }}
         >
-
-          {/* Ask a question — links to /ask (Phase 2) */}
-          <Link
-            href="/ask"
-            style={{
-              display: 'none', // hidden until Phase 2
-            }}
-          >
-            Ask
-          </Link>
-
-          {/* Sign In — uses <a> not <Link> because it's a different domain */}
-          {/* May 14, 2026 REASON: rule #23 — external links use <a> tag */}
+          {/* May 14, 2026 REASON: external domain — must use <a> not <Link> */}
           
             href="https://therealmedico.store/login?ref=community"
+            onMouseEnter={handleSignInEnter}
+            onMouseLeave={handleSignInLeave}
             style={{
               backgroundColor: 'var(--accent-primary)',
               color: '#FFFFFF',
@@ -146,76 +129,18 @@ export default function Navbar() {
               textDecoration: 'none',
               transition: 'background-color 0.15s ease',
             }}
-            onMouseEnter={e => e.target.style.backgroundColor = 'var(--accent-hover)'}
-            onMouseLeave={e => e.target.style.backgroundColor = 'var(--accent-primary)'}
           >
             Sign In
           </a>
-
-          {/* Mobile menu toggle — visible on small screens */}
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            aria-label="Toggle menu"
-            style={{
-              display: 'none', // shown via media query workaround below
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              color: 'var(--text-secondary)',
-              padding: '4px',
-            }}
-          >
-            {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
-          </button>
-
         </div>
-      </div>
 
-      {/* ── Mobile search (shown below navbar on small screens) ── */}
-      <div
-        className="mobile-search-bar"
-        style={{
-          padding: '0 1rem 0.75rem',
-          display: 'none', // controlled by CSS class below
-        }}
-      >
-        <div style={{ position: 'relative' }}>
-          <Search
-            size={15}
-            style={{
-              position: 'absolute',
-              left: '10px',
-              top: '50%',
-              transform: 'translateY(-50%)',
-              color: 'var(--text-muted)',
-              pointerEvents: 'none',
-            }}
-          />
-          <input
-            type="text"
-            placeholder="Search questions…"
-            disabled
-            style={{
-              width: '100%',
-              padding: '8px 12px 8px 32px',
-              borderRadius: '6px',
-              border: '1px solid var(--bg-tertiary)',
-              backgroundColor: 'var(--bg-secondary)',
-              fontFamily: 'Inter, system-ui, sans-serif',
-              fontSize: '0.875rem',
-              outline: 'none',
-              cursor: 'not-allowed',
-              opacity: 0.7,
-            }}
-          />
-        </div>
       </div>
-
     </header>
   );
 }
 
 // --- CHANGE LOG ---
 // [May 14, 2026] CREATED: Initial build
-// REASON: Phase 1 navbar — logo + disabled search + sign in button
+// [May 14, 2026] FIXED: Replaced inline arrow functions with named handlers
+// REASON: JSX parser on Vercel rejected arrow functions in event props
 // --- END CHANGE LOG ---
