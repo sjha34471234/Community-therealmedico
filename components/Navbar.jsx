@@ -43,7 +43,6 @@ export default function Navbar() {
       >
 
         {/* Logo */}
-        <Link
          <a href="/"
           style={{
             fontFamily: 'Merriweather, Georgia, serif',
@@ -68,7 +67,7 @@ export default function Navbar() {
           >
             Community
           </span>
-        </Link>
+         </a>
 
         {/* Search bar — disabled until Phase 6 */}
         <div style={{ flex: 1, maxWidth: '480px', position: 'relative' }}>
