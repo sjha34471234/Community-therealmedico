@@ -99,10 +99,17 @@
 /* ─── BASE RESETS ───────────────────────────────────────────── */
 
 /* May 14, 2026 REASON: Prevents white border bug seen on learn site */
-html,
-body {
+html, body {
   margin: 0;
   padding: 0;
+  width: 100%;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
   background-color: var(--bg-primary);
   color: var(--text-primary);
   font-family: 'Inter', system-ui, sans-serif;
