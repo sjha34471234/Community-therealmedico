@@ -129,38 +129,7 @@ export default function HomePage() {
           <a href="#coming-soon" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--accent-primary)', fontFamily: 'Inter, system-ui, sans-serif', fontWeight: 500, fontSize: '0.9rem', padding: '10px 24px', borderRadius: '7px', textDecoration: 'none', border: '1px solid var(--accent-primary)', display: 'inline-block' }}>
             Browse Questions
           </a>
-        </div>
-            style={{
-              backgroundColor: 'var(--accent-primary)',
-              color: '#FFFFFF',
-              fontFamily: 'Inter, system-ui, sans-serif',
-              fontWeight: 500,
-              fontSize: '0.9rem',
-              padding: '10px 24px',
-              borderRadius: '7px',
-              textDecoration: 'none',
-              display: 'inline-block',
-            }}
-          >
-            Join the Community
-          </a>
-          
-           <a href="#coming-soon"
-            style={{
-              backgroundColor: 'var(--bg-primary)',
-              color: 'var(--accent-primary)',
-              fontFamily: 'Inter, system-ui, sans-serif',
-              fontWeight: 500,
-              fontSize: '0.9rem',
-              padding: '10px 24px',
-              borderRadius: '7px',
-              textDecoration: 'none',
-              border: '1px solid var(--accent-primary)',
-              display: 'inline-block',
-            }}
-          >
-            Browse Questions
-          </a>
+       
         </div>
 
       </div>
