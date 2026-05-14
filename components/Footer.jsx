@@ -1,18 +1,21 @@
 // ============================================================
 // FILE: components/Footer.jsx
-// PURPOSE: Minimal site footer with links to sister projects
-//          and basic legal/identity info
+// PURPOSE: Minimal site footer with ecosystem links and disclaimer
 // LAST CHANGED: May 14, 2026
 // WHY IT EXISTS: Appears on every page via app/layout.js
-//               Keeps the site feeling complete and professional
 // DEPENDENCIES: app/globals.css CSS variables
-// ⚠️ DO NOT CHANGE: All links here use <a> tag not <Link> because
-//                   they point to external domains
-//                   (therealmedico.store, learn.therealmedico.store)
+// ⚠️ DO NOT CHANGE: All links use <a> not <Link> — external domains
 // ============================================================
 
 export default function Footer() {
   const currentYear = new Date().getFullYear();
+
+  function handleLinkEnter(e) {
+    e.target.style.color = 'var(--accent-primary)';
+  }
+  function handleLinkLeave(e) {
+    e.target.style.color = 'var(--text-secondary)';
+  }
 
   return (
     <footer
@@ -35,7 +38,7 @@ export default function Footer() {
         }}
       >
 
-        {/* ── Brand block ── */}
+        {/* Brand block */}
         <div style={{ maxWidth: '260px' }}>
           <p
             style={{
@@ -61,14 +64,8 @@ export default function Footer() {
           </p>
         </div>
 
-        {/* ── Links block ── */}
-        <div
-          style={{
-            display: 'flex',
-            gap: '3rem',
-            flexWrap: 'wrap',
-          }}
-        >
+        {/* Links block */}
+        <div style={{ display: 'flex', gap: '3rem', flexWrap: 'wrap' }}>
 
           {/* Ecosystem links */}
           <div>
@@ -85,40 +82,36 @@ export default function Footer() {
             >
               Ecosystem
             </p>
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '0.5rem',
-              }}
-            >
-              {/* May 14, 2026 REASON: external links use <a> not <Link> — rule #23 */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+
               
                 href="https://therealmedico.store"
+                onMouseEnter={handleLinkEnter}
+                onMouseLeave={handleLinkLeave}
                 style={{
                   fontFamily: 'Inter, system-ui, sans-serif',
                   fontSize: '0.85rem',
                   color: 'var(--text-secondary)',
                   textDecoration: 'none',
                 }}
-                onMouseEnter={e => e.target.style.color = 'var(--accent-primary)'}
-                onMouseLeave={e => e.target.style.color = 'var(--text-secondary)'}
               >
                 Store
               </a>
+
               
                 href="https://learn.therealmedico.store"
+                onMouseEnter={handleLinkEnter}
+                onMouseLeave={handleLinkLeave}
                 style={{
                   fontFamily: 'Inter, system-ui, sans-serif',
                   fontSize: '0.85rem',
                   color: 'var(--text-secondary)',
                   textDecoration: 'none',
                 }}
-                onMouseEnter={e => e.target.style.color = 'var(--accent-primary)'}
-                onMouseLeave={e => e.target.style.color = 'var(--text-secondary)'}
               >
                 Learn
               </a>
+
               
                 href="https://community.therealmedico.store"
                 style={{
@@ -131,6 +124,7 @@ export default function Footer() {
               >
                 Community ←
               </a>
+
             </div>
           </div>
 
@@ -149,46 +143,43 @@ export default function Footer() {
             >
               Community
             </p>
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '0.5rem',
-              }}
-            >
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+
               
                 href="/tags"
+                onMouseEnter={handleLinkEnter}
+                onMouseLeave={handleLinkLeave}
                 style={{
                   fontFamily: 'Inter, system-ui, sans-serif',
                   fontSize: '0.85rem',
                   color: 'var(--text-secondary)',
                   textDecoration: 'none',
                 }}
-                onMouseEnter={e => e.target.style.color = 'var(--accent-primary)'}
-                onMouseLeave={e => e.target.style.color = 'var(--text-secondary)'}
               >
                 Browse Tags
               </a>
+
               
                 href="/ask"
+                onMouseEnter={handleLinkEnter}
+                onMouseLeave={handleLinkLeave}
                 style={{
                   fontFamily: 'Inter, system-ui, sans-serif',
                   fontSize: '0.85rem',
                   color: 'var(--text-secondary)',
                   textDecoration: 'none',
                 }}
-                onMouseEnter={e => e.target.style.color = 'var(--accent-primary)'}
-                onMouseLeave={e => e.target.style.color = 'var(--text-secondary)'}
               >
                 Ask a Question
               </a>
+
             </div>
           </div>
 
         </div>
       </div>
 
-      {/* ── Bottom bar ── */}
+      {/* Bottom bar */}
       <div
         style={{
           borderTop: '1px solid var(--bg-tertiary)',
@@ -214,5 +205,6 @@ export default function Footer() {
 
 // --- CHANGE LOG ---
 // [May 14, 2026] CREATED: Initial build
-// REASON: Phase 1 footer — brand identity + ecosystem links + disclaimer
+// [May 14, 2026] FIXED: Replaced inline arrow functions with named handlers
+// REASON: JSX parser on Vercel rejected arrow functions in event props
 // --- END CHANGE LOG ---
