@@ -85,7 +85,7 @@ export default function Footer() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
 
               
-                href="https://therealmedico.store"
+               <a href="https://therealmedico.store"
                 onMouseEnter={handleLinkEnter}
                 onMouseLeave={handleLinkLeave}
                 style={{
@@ -99,7 +99,7 @@ export default function Footer() {
               </a>
 
               
-                href="https://learn.therealmedico.store"
+               <a href="https://learn.therealmedico.store"
                 onMouseEnter={handleLinkEnter}
                 onMouseLeave={handleLinkLeave}
                 style={{
@@ -113,7 +113,7 @@ export default function Footer() {
               </a>
 
               
-                href="https://community.therealmedico.store"
+               <a href="https://community.therealmedico.store"
                 style={{
                   fontFamily: 'Inter, system-ui, sans-serif',
                   fontSize: '0.85rem',
@@ -146,7 +146,7 @@ export default function Footer() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
 
               
-                href="/tags"
+               <a href="/tags"
                 onMouseEnter={handleLinkEnter}
                 onMouseLeave={handleLinkLeave}
                 style={{
@@ -160,7 +160,7 @@ export default function Footer() {
               </a>
 
               
-                href="/ask"
+               <a href="/ask"
                 onMouseEnter={handleLinkEnter}
                 onMouseLeave={handleLinkLeave}
                 style={{
