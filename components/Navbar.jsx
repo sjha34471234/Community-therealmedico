@@ -44,7 +44,7 @@ export default function Navbar() {
 
         {/* Logo */}
         <Link
-          href="/"
+         <a href="/"
           style={{
             fontFamily: 'Merriweather, Georgia, serif',
             fontWeight: 700,
