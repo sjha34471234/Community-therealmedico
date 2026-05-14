@@ -70,27 +70,18 @@
 /* ─── CSS VARIABLES — community colour palette ──────────────── */
 
 :root {
-  /* Backgrounds */
   --bg-primary:     #FFFFFF;
   --bg-secondary:   #F7F8FA;
   --bg-tertiary:    #EFF1F3;
-
-  /* Text */
   --text-primary:   #1A1D23;
   --text-secondary: #5B6474;
   --text-muted:     #9AA0AE;
-
-  /* Accent — medical blue */
   --accent-primary: #1D6FA4;
   --accent-hover:   #155A87;
   --accent-light:   #EBF4FB;
-
-  /* Status colours */
   --success: #2E7D32;
   --warning: #B45309;
   --danger:  #C62828;
-
-  /* Real Medico+ member cosmetics */
   --member-gold:   #B8860B;
   --member-border: #D4AF37;
   --member-bg:     #FFFBEB;
@@ -98,18 +89,20 @@
 
 /* ─── BASE RESETS ───────────────────────────────────────────── */
 
-/* May 14, 2026 REASON: Prevents white border bug seen on learn site */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 html, body {
   margin: 0;
   padding: 0;
   width: 100%;
   overflow-x: hidden;
-  box-sizing: border-box;
 }
 
-*, *::before, *::after {
-  box-sizing: border-box;
-}
+body {
   background-color: var(--bg-primary);
   color: var(--text-primary);
   font-family: 'Inter', system-ui, sans-serif;
@@ -119,29 +112,19 @@ html, body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* May 14, 2026 REASON: box-sizing reset prevents layout calculation bugs */
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
-
 /* ─── TYPOGRAPHY HELPERS ────────────────────────────────────── */
 
-/* Question titles use Merriweather for authority and readability */
 .font-question-title {
   font-family: 'Merriweather', Georgia, serif;
   font-weight: 700;
   line-height: 1.3;
 }
 
-/* Member username — gold colour for Real Medico+ */
 .username-member {
   font-weight: 600;
   color: var(--member-gold);
 }
 
-/* Plain text post body — preserves line breaks, no markdown yet */
 .post-body {
   white-space: pre-wrap;
   word-break: break-word;
@@ -163,7 +146,7 @@ a:hover {
   text-decoration: underline;
 }
 
-/* ─── SCROLLBAR (subtle, not distracting) ───────────────────── */
+/* ─── SCROLLBAR ─────────────────────────────────────────────── */
 
 ::-webkit-scrollbar {
   width: 6px;
@@ -178,7 +161,26 @@ a:hover {
   border-radius: 3px;
 }
 
+/* ─── NAVBAR RESPONSIVE ─────────────────────────────────────── */
+
+/* Hide search bar on small screens — reappears above 640px */
+.navbar-search {
+  display: none;
+}
+
+@media (min-width: 640px) {
+  .navbar-search {
+    display: block;
+    flex: 1;
+    max-width: 480px;
+    position: relative;
+  }
+}
+
 /* --- CHANGE LOG ---
    [May 14, 2026] CREATED: Initial build
-   REASON: Global styles foundation for community design system
+   [May 14, 2026] FIXED: Missing body { opening brace — properties were floating outside selector
+   [May 14, 2026] FIXED: Duplicate box-sizing reset removed
+   [May 14, 2026] ADDED: .navbar-search responsive class — hides search on mobile to fix overflow
+   REASON: Broken CSS caused unpredictable rendering; search bar caused horizontal overflow on mobile
    --- END CHANGE LOG --- */
