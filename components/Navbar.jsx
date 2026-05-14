@@ -43,34 +43,15 @@ export default function Navbar() {
       >
 
         {/* Logo */}
-         <a href="/"
-          style={{
-            fontFamily: 'Merriweather, Georgia, serif',
-            fontWeight: 700,
-            fontSize: '1.05rem',
-            color: 'var(--accent-primary)',
-            textDecoration: 'none',
-            whiteSpace: 'nowrap',
-            flexShrink: 0,
-          }}
-        >
+        <a href="/" style={{ fontFamily: 'Merriweather, Georgia, serif', fontWeight: 700, fontSize: '1.05rem', color: 'var(--accent-primary)', textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0 }}>
           The Real Medico
-          <span
-            style={{
-              fontFamily: 'Inter, system-ui, sans-serif',
-              fontWeight: 500,
-              fontSize: '0.75rem',
-              color: 'var(--text-muted)',
-              marginLeft: '6px',
-              letterSpacing: '0.04em',
-            }}
-          >
+          <span style={{ fontFamily: 'Inter, system-ui, sans-serif', fontWeight: 500, fontSize: '0.75rem', color: 'var(--text-muted)', marginLeft: '6px', letterSpacing: '0.04em' }}>
             Community
           </span>
-         </a>
+        </a>
 
-        {/* Search bar — disabled until Phase 6 */}
-        <div style={{ flex: 1, maxWidth: '480px', position: 'relative' }}>
+        {/* Search bar — hidden on mobile, visible 640px+ — disabled until Phase 6 */}
+        <div className="navbar-search">
           <Search
             size={15}
             style={{
@@ -112,23 +93,7 @@ export default function Navbar() {
             flexShrink: 0,
           }}
         >
-          {/* May 14, 2026 REASON: external domain — must use <a> not <Link> */}
-          
-           <a href="https://therealmedico.store/login?ref=community"
-            onMouseEnter={handleSignInEnter}
-            onMouseLeave={handleSignInLeave}
-            style={{
-              backgroundColor: 'var(--accent-primary)',
-              color: '#FFFFFF',
-              fontFamily: 'Inter, system-ui, sans-serif',
-              fontWeight: 500,
-              fontSize: '0.875rem',
-              padding: '7px 16px',
-              borderRadius: '6px',
-              textDecoration: 'none',
-              transition: 'background-color 0.15s ease',
-            }}
-          >
+          <a href="https://therealmedico.store/login?ref=community" onMouseEnter={handleSignInEnter} onMouseLeave={handleSignInLeave} style={{ backgroundColor: 'var(--accent-primary)', color: '#FFFFFF', fontFamily: 'Inter, system-ui, sans-serif', fontWeight: 500, fontSize: '0.875rem', padding: '7px 16px', borderRadius: '6px', textDecoration: 'none', transition: 'background-color 0.15s ease' }}>
             Sign In
           </a>
         </div>
@@ -141,5 +106,6 @@ export default function Navbar() {
 // --- CHANGE LOG ---
 // [May 14, 2026] CREATED: Initial build
 // [May 14, 2026] FIXED: Replaced inline arrow functions with named handlers
-// REASON: JSX parser on Vercel rejected arrow functions in event props
+// [May 14, 2026] FIXED: Search bar now uses className="navbar-search" — hides on mobile to fix horizontal overflow
+// REASON: Search input between logo and Sign In was overflowing viewport on small screens
 // --- END CHANGE LOG ---
