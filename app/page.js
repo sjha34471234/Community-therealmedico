@@ -8,14 +8,10 @@
 // DEPENDENCIES: app/layout.js, app/globals.css
 // ⚠️ DO NOT CHANGE: revalidate value — set to 300 (5 min) ready
 //                   for Phase 2 when live data gets added
-//                   metadata canonical must stay as absolute URL
 // ============================================================
 
-// May 14, 2026 REASON: Homepage refreshes every 5 minutes in
-// Phase 2 when real questions are loaded — rule #29 from brain dump
 export const revalidate = 300;
 
-// May 14, 2026 REASON: Every page must have metadata — rule #28
 export const metadata = {
   title: 'Medical Q&A Community — The Real Medico',
   description: 'Ask medical questions, share clinical knowledge, and learn from healthcare professionals worldwide. Free to read, sign up to participate.',
@@ -32,6 +28,7 @@ export const metadata = {
 };
 
 export default function HomePage() {
+
   return (
     <div
       style={{
@@ -41,7 +38,7 @@ export default function HomePage() {
       }}
     >
 
-      {/* ── Hero block ── */}
+      {/* Hero block */}
       <div
         style={{
           textAlign: 'center',
@@ -93,33 +90,35 @@ export default function HomePage() {
             { label: 'Questions', value: '—' },
             { label: 'Answers', value: '—' },
             { label: 'Members', value: '—' },
-          ].map(stat => (
-            <div key={stat.label} style={{ textAlign: 'center' }}>
-              <p
-                style={{
-                  fontFamily: 'Inter, system-ui, sans-serif',
-                  fontWeight: 700,
-                  fontSize: '1.5rem',
-                  color: 'var(--accent-primary)',
-                  margin: '0 0 0.25rem 0',
-                }}
-              >
-                {stat.value}
-              </p>
-              <p
-                style={{
-                  fontFamily: 'Inter, system-ui, sans-serif',
-                  fontSize: '0.8rem',
-                  color: 'var(--text-muted)',
-                  margin: 0,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em',
-                }}
-              >
-                {stat.label}
-              </p>
-            </div>
-          ))}
+          ].map(function(stat) {
+            return (
+              <div key={stat.label} style={{ textAlign: 'center' }}>
+                <p
+                  style={{
+                    fontFamily: 'Inter, system-ui, sans-serif',
+                    fontWeight: 700,
+                    fontSize: '1.5rem',
+                    color: 'var(--accent-primary)',
+                    margin: '0 0 0.25rem 0',
+                  }}
+                >
+                  {stat.value}
+                </p>
+                <p
+                  style={{
+                    fontFamily: 'Inter, system-ui, sans-serif',
+                    fontSize: '0.8rem',
+                    color: 'var(--text-muted)',
+                    margin: 0,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                  }}
+                >
+                  {stat.label}
+                </p>
+              </div>
+            );
+          })}
         </div>
 
         {/* CTA buttons */}
@@ -142,6 +141,7 @@ export default function HomePage() {
               padding: '10px 24px',
               borderRadius: '7px',
               textDecoration: 'none',
+              display: 'inline-block',
             }}
           >
             Join the Community
@@ -158,14 +158,16 @@ export default function HomePage() {
               borderRadius: '7px',
               textDecoration: 'none',
               border: '1px solid var(--accent-primary)',
+              display: 'inline-block',
             }}
           >
             Browse Questions
           </a>
         </div>
+
       </div>
 
-      {/* ── Coming soon block ── */}
+      {/* Coming soon block */}
       <div
         id="coming-soon"
         style={{
@@ -195,7 +197,7 @@ export default function HomePage() {
             margin: 0,
           }}
         >
-          We are building the Q&amp;A feed. Sign in now to be ready when it launches.
+          We are building the Q&A feed. Sign in now to be ready when it launches.
         </p>
       </div>
 
@@ -205,5 +207,7 @@ export default function HomePage() {
 
 // --- CHANGE LOG ---
 // [May 14, 2026] CREATED: Initial build
-// REASON: Phase 1 placeholder homepage — replaced with live feed in Phase 2
+// [May 14, 2026] FIXED: Removed inline arrow functions, replaced .map arrow
+//               with named function, removed &amp; entity that broke JSX
+// REASON: JSX parser on Vercel rejected arrow functions in event props
 // --- END CHANGE LOG ---
