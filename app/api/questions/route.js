@@ -1,183 +1,271 @@
 // ============================================================
 // FILE: app/api/questions/route.js
-// PURPOSE: GET — returns paginated question list for the feed
-//          Hottest first by default (upvotes + recent activity)
-//          For logged-in users: filters out already-viewed posts
-//          unless new activity happened after the user viewed it
+// PURPOSE: API route for community questions — GET feed + POST new question
 // LAST CHANGED: May 14, 2026
-// WHY IT EXISTS: Homepage feed and future tag/search pages
-//               all fetch from this single endpoint
-// DEPENDENCIES: lib/supabase.js, community_questions table,
-//               community_post_views table
-// ⚠️ DO NOT CHANGE: cache: 'no-store' must stay — this returns
-//                   live data, never cache it
-//                   Public GET requires no auth check
-//                   Never return user emails or auth data
+// WHY IT EXISTS: GET powers the live question feed (Phase 2).
+//   POST added in Phase 3 — handles new question submission with auth,
+//   rate limiting, slug generation, and Supabase insert.
+// DEPENDENCIES: lib/supabaseServer.js
+// ⚠️ DO NOT CHANGE:
+//   - force-dynamic + cache: 'no-store' — this is live data, never cache it.
+//   - Auth must be verified server-side via getUser() — never trust client-sent user_id.
+//   - Rate limit: max 5 questions per user per hour.
+//   - Slug must be keyword-rich — never use UUID as slug.
+//   - Array.from(new Set(...)) — never [...new Set(...)].
+//   - Never return user emails or sensitive fields in GET response.
+//   - body preview capped at 200 chars in GET — never return full body in feed.
 // ============================================================
 
-import { createClient } from '@supabase/supabase-js';
-import { NextResponse } from 'next/server';
+export const dynamic = 'force-dynamic'
+export const fetchCache = 'force-no-store'
 
-export const dynamic = 'force-dynamic';
+import { NextResponse } from 'next/server'
+import { createServerClient } from '@/lib/supabaseServer'
+import { createClient } from '@supabase/supabase-js'
 
-// Server-side Supabase client — uses anon key (RLS handles security)
-function getSupabase() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  );
+// ── Slug generator ────────────────────────────────────────────────────────────
+function generateSlug(title) {
+  const base = title
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .slice(0, 74)
+    .replace(/-$/, '')
+
+  const suffix = Math.random().toString(36).slice(2, 8)
+  return base + '-' + suffix
 }
 
+// ── Rate limit check ──────────────────────────────────────────────────────────
+async function checkQuestionRateLimit(supabase, userId) {
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString()
+  const { count } = await supabase
+    .from('community_questions')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .gte('created_at', oneHourAgo)
+
+  return (count || 0) >= 5
+}
+
+// ── GET — question feed ───────────────────────────────────────────────────────
 export async function GET(request) {
   try {
-    const { searchParams } = new URL(request.url);
+    const { searchParams } = new URL(request.url)
+    const sort = searchParams.get('sort') || 'hot'
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10))
+    const limit = 20
+    const offset = (page - 1) * limit
+    const userId = searchParams.get('userId') || null
 
-    // Query params
-    const sort = searchParams.get('sort') || 'hot';
-    const page = parseInt(searchParams.get('page') || '1', 10);
-    const limit = 20;
-    const offset = (page - 1) * limit;
-    const userId = searchParams.get('userId') || null;
-
-    const supabase = getSupabase();
-
-    // ─── Fetch questions ─────────────────────────────────────
+    const supabase = createServerClient()
 
     let query = supabase
       .from('community_questions')
       .select('id, slug, title, body, tags, upvotes, view_count, answer_count, is_answered, is_pinned, last_activity_at, created_at, user_id')
-      .range(offset, offset + limit - 1);
+      .range(offset, offset + limit - 1)
 
-    if (sort === 'hot') {
-      query = query.order('upvotes', { ascending: false }).order('last_activity_at', { ascending: false });
-    } else if (sort === 'new') {
-      query = query.order('created_at', { ascending: false });
+    if (sort === 'new') {
+      query = query.order('created_at', { ascending: false })
     } else if (sort === 'top') {
-      query = query.order('upvotes', { ascending: false });
+      query = query.order('upvotes', { ascending: false }).order('created_at', { ascending: false })
+    } else {
+      // hot — most recently active
+      query = query.order('is_pinned', { ascending: false }).order('last_activity_at', { ascending: false })
     }
 
-    const { data: questions, error: questionsError } = await query;
+    const { data: questions, error } = await query
 
-    if (questionsError) {
-      console.error('Questions fetch error:', questionsError);
-      return NextResponse.json({ error: 'Failed to fetch questions' }, { status: 500 });
+    if (error) {
+      console.error('GET /api/questions error:', error)
+      return NextResponse.json({ error: 'Failed to load questions' }, { status: 500 })
     }
 
     if (!questions || questions.length === 0) {
-      return NextResponse.json({ questions: [], hasMore: false });
+      return NextResponse.json({ questions: [], hasMore: false }, { status: 200, headers: { 'Cache-Control': 'no-store' } })
     }
 
-    // ─── Viewed post filtering (logged-in users only) ────────
+    // Cap body preview at 200 chars
+    let processed = questions.map(function capBody(q) {
+      return {
+        ...q,
+        body: q.body ? q.body.slice(0, 200) : '',
+      }
+    })
 
-    let processedQuestions = questions;
-
+    // Viewed-post filtering for logged-in users
     if (userId) {
-      const questionIds = questions.map(function(q) { return q.id; });
+      const questionIds = processed.map(function getId(q) { return q.id })
 
       const { data: views } = await supabase
         .from('community_post_views')
         .select('question_id, activity_snapshot')
         .eq('user_id', userId)
-        .in('question_id', questionIds);
+        .in('question_id', questionIds)
 
-      if (views && views.length > 0) {
-        // Build a map of question_id → activity_snapshot at time of viewing
-        const viewMap = {};
-        views.forEach(function(v) {
-          viewMap[v.question_id] = v.activity_snapshot;
-        });
-
-        processedQuestions = questions.map(function(q) {
-          const viewedAt = viewMap[q.id];
-
-          if (!viewedAt) {
-            // Never viewed — show normally
-            return { ...q, isViewed: false, hasNewActivity: false };
-          }
-
-          // Check if new activity happened after the user viewed it
-          const hasNewActivity = new Date(q.last_activity_at) > new Date(viewedAt);
-
-          if (hasNewActivity) {
-            // Resurface with highlight flag
-            return { ...q, isViewed: true, hasNewActivity: true };
-          }
-
-          // Already viewed, no new activity — exclude from feed
-          return null;
-        }).filter(function(q) { return q !== null; });
-      } else {
-        // No views on record — show all normally
-        processedQuestions = questions.map(function(q) {
-          return { ...q, isViewed: false, hasNewActivity: false };
-        });
+      const viewMap = {}
+      if (views) {
+        views.forEach(function mapView(v) {
+          viewMap[v.question_id] = v.activity_snapshot
+        })
       }
-    } else {
-      // Guest — show all, no view tracking
-      processedQuestions = questions.map(function(q) {
-        return { ...q, isViewed: false, hasNewActivity: false };
-      });
+
+      processed = processed.map(function attachActivity(q) {
+        const snapshot = viewMap[q.id]
+        if (!snapshot) return { ...q, hasNewActivity: false }
+        const hasNew = new Date(q.last_activity_at) > new Date(snapshot)
+        return { ...q, hasNewActivity: hasNew }
+      })
+
+      // Exclude posts the user has viewed with no new activity (keep unviewed + new activity)
+      processed = processed.filter(function filterViewed(q) {
+        const snapshot = viewMap[q.id]
+        if (!snapshot) return true       // never viewed — always show
+        return q.hasNewActivity          // viewed — only show if new reply
+      })
     }
 
-    // ─── Fetch display names from profiles ───────────────────
-
-    const userIds = Array.from(new Set(
-      processedQuestions
-        .map(function(q) { return q.user_id; })
-        .filter(Boolean)
-    ));
-
-    let profileMap = {};
-
+    // Fetch author usernames
+    const userIds = Array.from(new Set(processed.map(function getId(q) { return q.user_id }).filter(Boolean)))
+    let profileMap = {}
     if (userIds.length > 0) {
       const { data: profiles } = await supabase
         .from('profiles')
         .select('id, community_username')
-        .in('id', userIds);
-
+        .in('id', userIds)
       if (profiles) {
-        profiles.forEach(function(p) {
-          profileMap[p.id] = p.community_username || 'Anonymous';
-        });
+        profiles.forEach(function mapP(p) { profileMap[p.id] = p })
       }
     }
 
-    // Attach display name, strip user_id from response
-    const safeQuestions = processedQuestions.map(function(q) {
+    const final = processed.map(function attachProfile(q) {
+      const profile = profileMap[q.user_id] || null
       return {
-        id: q.id,
-        slug: q.slug,
-        title: q.title,
-        body: q.body ? q.body.slice(0, 200) : '',
-        tags: q.tags || [],
-        upvotes: q.upvotes,
-        view_count: q.view_count,
-        answer_count: q.answer_count,
-        is_answered: q.is_answered,
-        is_pinned: q.is_pinned,
-        last_activity_at: q.last_activity_at,
-        created_at: q.created_at,
-        author: profileMap[q.user_id] || 'Anonymous',
-        isViewed: q.isViewed,
-        hasNewActivity: q.hasNewActivity,
-      };
-    });
+        ...q,
+        author_username: profile ? (profile.community_username || 'Anonymous User') : 'Anonymous User',
+      }
+    })
 
-    return NextResponse.json({
-      questions: safeQuestions,
-      hasMore: questions.length === limit,
-    }, {
-      headers: { 'Cache-Control': 'no-store' },
-    });
+    return NextResponse.json(
+      { questions: final, hasMore: questions.length === limit },
+      { status: 200, headers: { 'Cache-Control': 'no-store' } }
+    )
+  } catch (err) {
+    console.error('GET /api/questions unexpected error:', err)
+    return NextResponse.json({ error: 'Unexpected server error' }, { status: 500 })
+  }
+}
+
+// ── POST — create new question ────────────────────────────────────────────────
+export async function POST(request) {
+  try {
+    // Parse body
+    let body
+    try {
+      body = await request.json()
+    } catch {
+      return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+    }
+
+    const { title, body: questionBody, tags } = body
+
+    // Basic validation
+    if (!title || typeof title !== 'string' || title.trim().length < 15) {
+      return NextResponse.json({ error: 'Title must be at least 15 characters' }, { status: 400 })
+    }
+    if (title.trim().length > 200) {
+      return NextResponse.json({ error: 'Title must be under 200 characters' }, { status: 400 })
+    }
+    if (!questionBody || typeof questionBody !== 'string' || questionBody.trim().length < 30) {
+      return NextResponse.json({ error: 'Body must be at least 30 characters' }, { status: 400 })
+    }
+    if (questionBody.trim().length > 5000) {
+      return NextResponse.json({ error: 'Body must be under 5000 characters' }, { status: 400 })
+    }
+
+    const cleanTags = Array.isArray(tags)
+      ? Array.from(new Set(
+          tags
+            .map(function cleanTag(t) { return String(t).toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 30) })
+            .filter(function filterTag(t) { return t.length > 0 })
+        )).slice(0, 5)
+      : []
+
+    // Verify auth server-side using anon key + cookie session
+    // We use the anon client with the cookie so getUser() works correctly
+    const anonClient = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      {
+        auth: { persistSession: false, autoRefreshToken: false },
+        global: {
+          headers: {
+            cookie: request.headers.get('cookie') || '',
+          },
+        },
+      }
+    )
+
+    const { data: { user }, error: authError } = await anonClient.auth.getUser()
+
+    if (authError || !user) {
+      return NextResponse.json({ error: 'You must be signed in to ask a question' }, { status: 401 })
+    }
+
+    const supabase = createServerClient()
+
+    // Rate limit check
+    const rateLimited = await checkQuestionRateLimit(supabase, user.id)
+    if (rateLimited) {
+      return NextResponse.json(
+        { error: 'You have posted too many questions in the last hour. Please wait before posting again.' },
+        { status: 429 }
+      )
+    }
+
+    // Generate slug
+    const slug = generateSlug(title.trim())
+
+    // Insert question
+    const now = new Date().toISOString()
+    const { data: inserted, error: insertError } = await supabase
+      .from('community_questions')
+      .insert({
+        slug,
+        title: title.trim(),
+        body: questionBody.trim(),
+        tags: cleanTags,
+        user_id: user.id,
+        upvotes: 0,
+        view_count: 0,
+        answer_count: 0,
+        is_answered: false,
+        is_pinned: false,
+        last_activity_at: now,
+        created_at: now,
+        updated_at: now,
+      })
+      .select('id, slug')
+      .single()
+
+    if (insertError) {
+      console.error('POST /api/questions insert error:', insertError)
+      return NextResponse.json({ error: 'Failed to post question. Please try again.' }, { status: 500 })
+    }
+
+    return NextResponse.json({ id: inserted.id, slug: inserted.slug }, { status: 201 })
 
   } catch (err) {
-    console.error('API route error:', err);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    console.error('POST /api/questions unexpected error:', err)
+    return NextResponse.json({ error: 'Unexpected server error' }, { status: 500 })
   }
 }
 
 // --- CHANGE LOG ---
-// [May 14, 2026] CREATED: Initial build
-// REASON: Homepage feed needs paginated, sorted question list
-//         with viewed-post filtering for logged-in users
+// [May 14, 2026] CREATED: GET handler — Phase 2 feed
+// [May 14, 2026] UPDATED: POST handler added — Phase 3
+// REASON: New question submission. Auth verified server-side. Rate limit 5/hour.
+//   Slug generated from title. last_activity_at set on insert.
 // --- END CHANGE LOG ---
