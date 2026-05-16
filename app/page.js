@@ -188,7 +188,7 @@ export default function HomePage() {
         <div style={{ marginTop: '2rem', padding: '1.25rem', backgroundColor: 'var(--accent-light)', borderRadius: '10px', border: '1px solid var(--accent-primary)', textAlign: 'center' }}>
           <p style={{ fontFamily: 'Inter, system-ui, sans-serif', fontWeight: 600, fontSize: '0.9rem', color: 'var(--accent-primary)', margin: '0 0 0.4rem 0' }}>Want to join the discussion?</p>
           <p style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.85rem', color: 'var(--text-secondary)', margin: '0 0 1rem 0' }}>Sign in to ask questions, post answers, and vote.</p>
-          <button onClick={function() { window.dispatchEvent(new CustomEvent('open-auth-modal')) }} style={{ backgroundColor: 'var(--accent-primary)', color: '#FFFFFF', fontFamily: 'Inter, system-ui, sans-serif', fontWeight: 500, fontSize: '0.875rem', padding: '8px 20px', borderRadius: '7px', border: 'none', cursor: 'pointer' }}>Sign In</button>
+          <a href="/auth" style={{ backgroundColor: 'var(--accent-primary)', color: '#FFFFFF', fontFamily: 'Inter, system-ui, sans-serif', fontWeight: 500, fontSize: '0.875rem', padding: '8px 20px', borderRadius: '7px', textDecoration: 'none', display: 'inline-block' }}>Sign In</a>
         </div>
       )}
 
