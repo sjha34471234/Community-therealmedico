@@ -1,38 +1,26 @@
 // ============================================================
 // FILE: components/Navbar.jsx
-// PURPOSE: Top navigation bar — logo, search, auth button
+// PURPOSE: Top navigation bar — auth state, username, search bar, nav links
 // LAST CHANGED: May 16, 2026
-// WHY IT EXISTS: Appears on every page via app/layout.js
-// DEPENDENCIES: lucide-react, authStore
-// ⚠️ DO NOT CHANGE: navbar-search class controls mobile hide via CSS
-//                   Logo uses <a> not <Link> — same domain but safe
-//                   Never use onMouseEnter in arrow functions in JSX
-//                   Sign out uses supabase imported at module level
-//                   Sign In navigates to /auth — do not reopen modal
+// WHY IT EXISTS: Site-wide navigation. Updated in Phase 6 to activate SearchBar
+//   and add Tags link to nav.
+// DEPENDENCIES: store/authStore.js, lib/supabase.js, components/SearchBar.jsx
+// ⚠️ DO NOT CHANGE: Sign In navigates to /auth — never reopen modal. Crashed Chrome iPad.
+// ⚠️ DO NOT CHANGE: Sign Out calls signOut() then window.location.href = '/' — force reload clears state
+// ⚠️ DO NOT CHANGE: onAuthStateChange is in authStore — never add another listener here
+// ⚠️ DO NOT CHANGE: .navbar-search hidden below 640px via CSS — don't remove that class
 // ============================================================
 
 'use client'
 
-import { useState } from 'react'
+import { useEffect } from 'react'
 import Link from 'next/link'
-import { Search } from 'lucide-react'
-import supabase from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
+import supabase from '@/lib/supabase'
+import SearchBar from '@/components/SearchBar'
 
 export default function Navbar() {
   const { user, profile, loading } = useAuthStore()
-
-  function handleSignInEnter(e) {
-    e.target.style.backgroundColor = 'var(--accent-hover)'
-  }
-
-  function handleSignInLeave(e) {
-    e.target.style.backgroundColor = 'var(--accent-primary)'
-  }
-
-  function handleOpenAuth() {
-    window.location.href = '/auth'
-  }
 
   async function handleSignOut() {
     await supabase.auth.signOut()
@@ -40,145 +28,49 @@ export default function Navbar() {
   }
 
   return (
-    <header
-      style={{
-        backgroundColor: 'var(--bg-primary)',
-        borderBottom: '1px solid var(--bg-tertiary)',
-        position: 'sticky',
-        top: 0,
-        zIndex: 50,
-      }}
-    >
-      <div
-        style={{
-          maxWidth: '1100px',
-          margin: '0 auto',
-          padding: '0 1rem',
-          height: '56px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '1rem',
-        }}
-      >
-        {/* Logo */}
-        <a href="/" style={{ fontFamily: 'Merriweather, Georgia, serif', fontWeight: 700, fontSize: '1.05rem', color: 'var(--accent-primary)', textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0 }}>
-          The Real Medico
-          <span style={{ fontFamily: 'Inter, system-ui, sans-serif', fontWeight: 500, fontSize: '0.75rem', color: 'var(--text-muted)', marginLeft: '6px', letterSpacing: '0.04em' }}>
-            Community
-          </span>
+    <nav className="navbar">
+      <div className="navbar-inner">
+
+        {/* Left — Logo */}
+        <a href="/" className="navbar-logo">
+          Real Medico
         </a>
 
-        {/* Search bar — hidden on mobile, visible 640px+ — disabled until Phase 6 */}
+        {/* Centre — Search bar (hidden on mobile via CSS) */}
         <div className="navbar-search">
-          <Search
-            size={15}
-            style={{
-              position: 'absolute',
-              left: '10px',
-              top: '50%',
-              transform: 'translateY(-50%)',
-              color: 'var(--text-muted)',
-              pointerEvents: 'none',
-            }}
-          />
-          <input
-            type="text"
-            placeholder="Search questions…"
-            disabled
-            style={{
-              width: '100%',
-              padding: '7px 12px 7px 32px',
-              borderRadius: '6px',
-              border: '1px solid var(--bg-tertiary)',
-              backgroundColor: 'var(--bg-secondary)',
-              color: 'var(--text-primary)',
-              fontFamily: 'Inter, system-ui, sans-serif',
-              fontSize: '0.875rem',
-              outline: 'none',
-              cursor: 'not-allowed',
-              opacity: 0.7,
-            }}
-          />
+          <SearchBar />
         </div>
 
-        {/* Right side */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.75rem',
-            marginLeft: 'auto',
-            flexShrink: 0,
-          }}
-        >
-          {loading ? null : user && profile ? (
-            <>
-              {/* Profile link */}
-              {profile?.community_username && (
-                <Link
-                  href={`/profile/${profile.community_username}`}
-                  style={{
-                    fontFamily: 'Inter, system-ui, sans-serif',
-                    fontWeight: 500,
-                    fontSize: '0.875rem',
-                    color: 'var(--accent-primary)',
-                    textDecoration: 'none',
-                  }}
-                >
-                  {profile.community_username}
-                </Link>
-              )}
+        {/* Right — Nav links + auth */}
+        <div className="navbar-right">
+          <a href="/tags" className="navbar-link">Tags</a>
 
-              {/* Sign Out button */}
-              <button
-                onClick={handleSignOut}
-                style={{
-                  backgroundColor: 'transparent',
-                  color: 'var(--text-muted)',
-                  fontFamily: 'Inter, system-ui, sans-serif',
-                  fontWeight: 500,
-                  fontSize: '0.875rem',
-                  padding: '7px 16px',
-                  borderRadius: '6px',
-                  border: '1px solid var(--bg-tertiary)',
-                  cursor: 'pointer',
-                }}
-              >
-                Sign Out
-              </button>
+          {!loading && (
+            <>
+              {user && profile ? (
+                <>
+                  <a href={`/profile/${profile.community_username}`} className="navbar-link navbar-username">
+                    {profile.community_username}
+                  </a>
+                  <button onClick={handleSignOut} className="navbar-btn navbar-btn--ghost">
+                    Sign Out
+                  </button>
+                </>
+              ) : (
+                <a href="/auth" className="navbar-btn navbar-btn--primary">
+                  Sign In
+                </a>
+              )}
             </>
-          ) : (
-            <button
-              onClick={handleOpenAuth}
-              onMouseEnter={handleSignInEnter}
-              onMouseLeave={handleSignInLeave}
-              style={{
-                backgroundColor: 'var(--accent-primary)',
-                color: '#FFFFFF',
-                fontFamily: 'Inter, system-ui, sans-serif',
-                fontWeight: 500,
-                fontSize: '0.875rem',
-                padding: '7px 16px',
-                borderRadius: '6px',
-                border: 'none',
-                cursor: 'pointer',
-                transition: 'background-color 0.15s ease',
-              }}
-            >
-              Sign In
-            </button>
           )}
         </div>
+
       </div>
-    </header>
+    </nav>
   )
 }
 
 // --- CHANGE LOG ---
-// [May 14, 2026] CREATED: Initial build
-// [May 14, 2026] FIXED: Replaced inline arrow functions with named handlers
-// [May 14, 2026] FIXED: Search bar now uses className="navbar-search" — hides on mobile
-// [May 16, 2026] UPDATED: Sign In navigates to /auth — modal removed from Navbar
-// [May 16, 2026] FIXED: supabase imported at module level — fixes sign out
-// [May 16, 2026] FIXED: Removed duplicate handleOpenModal — caused build error
+// [May 16, 2026] UPDATED: Phase 6 — SearchBar activated, Tags link added
+// REASON: Search goes live in Phase 6
 // --- END CHANGE LOG ---
