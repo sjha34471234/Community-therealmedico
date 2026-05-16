@@ -7,11 +7,10 @@
 //   onAuthStateChange and getting out of sync
 // DEPENDENCIES: lib/supabase.js (browser client), Zustand
 // ⚠️ DO NOT CHANGE: onAuthStateChange is the primary listener.
-//   getSession() fallback has a 500ms delay — this is intentional.
-//   Without the delay, auth.uid() isn't set in RLS context yet
-//   and fetchProfile returns nothing on refresh.
+//   fetchProfile calls /api/profile — never Supabase directly.
+//   This bypasses RLS timing issues on refresh.
+//   accessToken must stay in state and be passed to fetchProfile.
 //   Never call getUser() or getSession() in individual components.
-//   accessToken must stay in state — Safari blocks getSession().
 // ============================================================
 
 import { create } from 'zustand'
@@ -32,31 +31,28 @@ const useAuthStore = create((set, get) => ({
         const user = session?.user ?? null
         const accessToken = session?.access_token ?? null
         set({ user, accessToken, loading: false })
-        if (user) {
-          await get().fetchProfile(user.id)
+        if (user && accessToken) {
+          await get().fetchProfile(user.id, accessToken)
         } else {
           set({ profile: null, accessToken: null })
         }
       }
     )
 
-    // Safari/Chrome fallback — getSession() catches existing session
-    // on refresh when onAuthStateChange fires late or not at all.
-    // 500ms delay gives RLS auth.uid() time to initialize.
+    // Fallback — catches existing session on refresh
+    // when onAuthStateChange fires late
     setTimeout(function() {
       supabase.auth.getSession().then(function(result) {
         const session = result.data?.session
         const currentUser = get().user
-        // Only act if onAuthStateChange hasn't already set the user
         if (session?.user && !currentUser) {
           set({
             user: session.user,
             accessToken: session.access_token,
             loading: false,
           })
-          get().fetchProfile(session.user.id)
+          get().fetchProfile(session.user.id, session.access_token)
         } else if (!session?.user && !currentUser) {
-          // No session anywhere — confirm logged out
           set({ loading: false })
         }
       })
@@ -65,19 +61,33 @@ const useAuthStore = create((set, get) => ({
     return function() { subscription.unsubscribe() }
   },
 
-  fetchProfile: async (userId) => {
-    if (!userId) return
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id, community_username, community_bio, community_joined_at, community_flair')
-      .eq('id', userId)
-      .single()
-    if (error) {
-      console.error('[authStore] fetchProfile error:', error.message)
+  // fetchProfile calls /api/profile via Bearer token
+  // — never queries Supabase directly to avoid RLS timing issues
+  fetchProfile: async (userId, accessToken) => {
+    if (!userId || !accessToken) return
+
+    try {
+      const res = await fetch('/api/profile', {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      })
+
+      if (!res.ok) {
+        console.error('[authStore] fetchProfile failed:', res.status)
+        set({ profile: null })
+        return
+      }
+
+      const data = await res.json()
+      set({ profile: data.profile })
+
+    } catch (err) {
+      console.error('[authStore] fetchProfile error:', err.message)
       set({ profile: null })
-      return
     }
-    set({ profile: data })
   },
 }))
 
@@ -87,7 +97,8 @@ export { useAuthStore }
 // --- CHANGE LOG ---
 // [May 15, 2026] CREATED: Phase 4 — central auth store
 // [May 16, 2026] UPDATED: Added accessToken to state
-// [May 16, 2026] FIXED: Added getSession() fallback with 500ms delay
-// REASON: RLS auth.uid() not ready immediately on refresh —
-//   delay gives Supabase time to initialize before profile fetch
+// [May 16, 2026] FIXED: fetchProfile now calls /api/profile
+// REASON: Direct Supabase query with RLS caused race condition on
+//   refresh — auth.uid() not ready in time, profile returned null.
+//   API route uses service role, bypasses RLS entirely.
 // --- END CHANGE LOG ---
