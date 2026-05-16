@@ -79,10 +79,11 @@ export default function UsernameModal() {
         .eq('id', user.id)
 
       if (error) {
-        toast.error('Could not save username. Please try again.')
-        setSaving(false)
-        return
-      }
+  toast.error(error.message || 'Could not save username.')
+  console.error('[UsernameModal] Save error:', error)
+  setSaving(false)
+  return
+}
 
       // Refresh authStore profile so modal hides and rest of app updates
       await fetchProfile(user.id)
