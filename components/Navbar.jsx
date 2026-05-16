@@ -32,7 +32,10 @@ export default function Navbar() {
     e.target.style.backgroundColor = 'var(--accent-primary)'
   }
 
-  function handleOpenModal() {
+  function handleOpenModal()    {
+  window.location.href = '/auth'
+  }
+  handleOpenModal() {
     setModalOpen(true)
   }
 
