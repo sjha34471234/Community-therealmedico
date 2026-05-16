@@ -2,25 +2,26 @@
 // FILE: components/UsernameModal.jsx
 // PURPOSE: Forces logged-in users without a community_username
 //   to pick one before they can interact
-// LAST CHANGED: May 15, 2026
+// LAST CHANGED: May 16, 2026
 // WHY IT EXISTS: community_username is required for posting,
 //   answering, and voting. Without this modal, a user could
 //   submit content with no display name, breaking AnswerCard
 //   and QuestionCard rendering.
 // DEPENDENCIES: store/authStore.js, lib/supabase.js,
-//   react-hot-toast, lucide-react
+//   react-hot-toast, app/api/profile/route.js
 // ⚠️ DO NOT CHANGE: Modal must be undismissable — no close
 //   button, no backdrop click to close. fetchProfile() must be
 //   called after save so authStore updates immediately.
 //   Username validation must match the rules below exactly.
+//   Save must go through /api/profile — never direct Supabase
+//   browser client update (RLS blocks it silently).
 // ============================================================
 
 'use client'
 
 import { useState } from 'react'
 import toast from 'react-hot-toast'
-import useAuthStore from '@/store/authStore'
-import supabase from '@/lib/supabase'
+import { useAuthStore } from '@/store/authStore'
 
 // Username rules:
 // 3–20 characters, letters/numbers/underscores only, no spaces
@@ -35,13 +36,11 @@ export default function UsernameModal() {
   const [saving, setSaving] = useState(false)
 
   // Only show if logged in and no username set yet
-  // Also hide while profile is still loading (profile === null and user exists)
   const shouldShow = user && profile && !profile.community_username
 
   if (!shouldShow) return null
 
   function handleChange(e) {
-    // Strip spaces immediately as user types
     setUsername(e.target.value.replace(/\s/g, ''))
   }
 
@@ -56,36 +55,21 @@ export default function UsernameModal() {
     setSaving(true)
 
     try {
-      // Check if username is already taken
-      const { data: existing } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('community_username', trimmed)
-        .maybeSingle()
+      const res = await fetch(`${window.location.origin}/api/profile`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: trimmed }),
+      })
 
-      if (existing) {
-        toast.error('That username is already taken. Try another.')
+      const data = await res.json()
+
+      if (!res.ok) {
+        toast.error(data.error || 'Could not save username. Please try again.')
         setSaving(false)
         return
       }
 
-      // Save username + set joined_at
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          community_username: trimmed,
-          community_joined_at: new Date().toISOString(),
-        })
-        .eq('id', user.id)
-
-      if (error) {
-  toast.error(error.message || 'Could not save username.')
-  console.error('[UsernameModal] Save error:', error)
-  setSaving(false)
-  return
-}
-
-      // Refresh authStore profile so modal hides and rest of app updates
       await fetchProfile(user.id)
       toast.success(`Welcome to the community, ${trimmed}!`)
 
@@ -199,4 +183,7 @@ export default function UsernameModal() {
 // [May 15, 2026] CREATED: Phase 4 — username picker modal
 // REASON: Users need a community_username before interacting.
 //   Modal is undismissable to enforce this soft gate.
+// [May 16, 2026] UPDATED: Save now goes through /api/profile route
+// REASON: Browser Supabase client RLS was silently blocking the update.
+//   Service role in API route bypasses RLS correctly.
 // --- END CHANGE LOG ---
