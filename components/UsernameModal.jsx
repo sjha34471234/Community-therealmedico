@@ -7,13 +7,12 @@
 //   answering, and voting. Without this modal, a user could
 //   submit content with no display name, breaking AnswerCard
 //   and QuestionCard rendering.
-// DEPENDENCIES: store/authStore.js, lib/supabase.js,
-//   react-hot-toast, app/api/profile/route.js
+// DEPENDENCIES: store/authStore.js, react-hot-toast,
+//   app/api/profile/route.js
 // ⚠️ DO NOT CHANGE: Modal must be undismissable — no close
 //   button, no backdrop click to close. fetchProfile() must be
 //   called after save so authStore updates immediately.
-//   Save must go through /api/profile with accessToken.
-//   Never use direct Supabase browser client update — RLS blocks it.
+//   accessToken comes from authStore — never call getSession().
 // ============================================================
 
 'use client'
@@ -21,13 +20,13 @@
 import { useState } from 'react'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '@/store/authStore'
-import { createClient } from '@/lib/supabase'
 
 const USERNAME_REGEX = /^[a-zA-Z0-9_]{3,20}$/
 
 export default function UsernameModal() {
   const user = useAuthStore((state) => state.user)
   const profile = useAuthStore((state) => state.profile)
+  const accessToken = useAuthStore((state) => state.accessToken)
   const fetchProfile = useAuthStore((state) => state.fetchProfile)
 
   const [username, setUsername] = useState('')
@@ -49,26 +48,21 @@ export default function UsernameModal() {
       return
     }
 
+    if (!accessToken) {
+      toast.error('Session expired. Please sign out and sign in again.')
+      return
+    }
+
     setSaving(true)
 
     try {
-      // Get the current session access token
-      const supabase = createClient()
-      const { data: { session } } = await supabase.auth.getSession()
-
-      if (!session?.access_token) {
-        toast.error('Session expired. Please sign in again.')
-        setSaving(false)
-        return
-      }
-
       const res = await fetch(`${window.location.origin}/api/profile`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           username: trimmed,
-          accessToken: session.access_token,
+          accessToken,
         }),
       })
 
@@ -188,6 +182,7 @@ export default function UsernameModal() {
 // --- CHANGE LOG ---
 // [May 15, 2026] CREATED: Phase 4 — username picker modal
 // [May 16, 2026] UPDATED: Save goes through /api/profile route
-// [May 16, 2026] FIXED: Now sends accessToken in request body
-// REASON: Safari/iPad drops cookies — token auth is reliable
+// [May 16, 2026] FIXED: accessToken now read from authStore
+// REASON: Safari/iPad blocks getSession() — token stored in
+//   Zustand from onAuthStateChange is reliable on all devices
 // --- END CHANGE LOG ---
