@@ -42,6 +42,7 @@ export default function Navbar() {
 
   async function handleSignOut() {
     await supabase.auth.signOut()
+    window.location.href = '/'
   }
 
   return (
