@@ -7,6 +7,8 @@
 // ⚠️ DO NOT CHANGE: navbar-search class controls mobile hide via CSS
 //                   Logo uses <a> not <Link> — same domain but safe
 //                   Never use onMouseEnter in arrow functions in JSX
+//                   Sign out uses supabase imported at module level
+//                   — never inside the component, Safari drops session
 // ============================================================
 
 'use client'
@@ -14,7 +16,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { Search } from 'lucide-react'
-import { createClient } from '@/lib/supabase'
+import supabase from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
 import AuthModal from '@/components/AuthModal'
 
@@ -22,14 +24,20 @@ export default function Navbar() {
   const { user, profile } = useAuthStore()
   const [modalOpen, setModalOpen] = useState(false)
 
-  const supabase = createClient()
-
   function handleSignInEnter(e) {
     e.target.style.backgroundColor = 'var(--accent-hover)'
   }
 
   function handleSignInLeave(e) {
     e.target.style.backgroundColor = 'var(--accent-primary)'
+  }
+
+  function handleOpenModal() {
+    setModalOpen(true)
+  }
+
+  function handleCloseModal() {
+    setModalOpen(false)
   }
 
   async function handleSignOut() {
@@ -146,9 +154,8 @@ export default function Navbar() {
                 </button>
               </>
             ) : (
-              /* Sign In button — opens modal */
               <button
-                onClick={() => setModalOpen(true)}
+                onClick={handleOpenModal}
                 onMouseEnter={handleSignInEnter}
                 onMouseLeave={handleSignInLeave}
                 style={{
@@ -171,8 +178,7 @@ export default function Navbar() {
         </div>
       </header>
 
-      {/* Auth modal — rendered outside header so it overlays everything */}
-      {modalOpen && <AuthModal onClose={() => setModalOpen(false)} />}
+      {modalOpen && <AuthModal onClose={handleCloseModal} />}
     </>
   )
 }
@@ -181,6 +187,7 @@ export default function Navbar() {
 // [May 14, 2026] CREATED: Initial build
 // [May 14, 2026] FIXED: Replaced inline arrow functions with named handlers
 // [May 14, 2026] FIXED: Search bar now uses className="navbar-search" — hides on mobile
-// [May 16, 2026] UPDATED: Sign In button now opens AuthModal instead of linking to store
-//               Added signed-in state — shows username link + Sign Out button
+// [May 16, 2026] UPDATED: Sign In opens AuthModal, signed-in state shows username + sign out
+// [May 16, 2026] FIXED: supabase imported at module level — fixes sign out on Safari
+//               Modal open/close use named handlers — fixes Vercel JSX parser
 // --- END CHANGE LOG ---
