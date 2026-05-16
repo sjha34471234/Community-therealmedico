@@ -20,7 +20,7 @@ import supabase from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
 
 export default function Navbar() {
-  const { user, profile } = useAuthStore()
+  const { user, profile, loading } = useAuthStore()
 
   function handleSignInEnter(e) {
     e.target.style.backgroundColor = 'var(--accent-hover)'
