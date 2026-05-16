@@ -66,6 +66,7 @@ const useAuthStore = create((set, get) => ({
 }))
 
 export default useAuthStore
+export { useAuthStore }
 
 // --- CHANGE LOG ---
 // [May 15, 2026] CREATED: Phase 4 — central auth store
