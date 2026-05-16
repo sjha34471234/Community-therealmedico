@@ -8,6 +8,8 @@
 //               components/TagPill.jsx
 // ⚠️ DO NOT CHANGE: revalidate = 3600 — never force-dynamic here
 //                   params is NOT a Promise in Next.js 14
+//                   supabaseServer() must be called as a function
+//                   inside the handler — never at module level
 // ============================================================
 
 import { notFound } from 'next/navigation'
@@ -23,8 +25,9 @@ export const revalidate = 3600
 // --- Metadata ---
 export async function generateMetadata({ params }) {
   const username = params.username
+  const db = supabaseServer()
 
-  const { data: profile } = await supabaseServer
+  const { data: profile } = await db
     .from('profiles')
     .select('community_username, community_bio')
     .eq('community_username', username)
@@ -53,9 +56,10 @@ export async function generateMetadata({ params }) {
 // --- Page ---
 export default async function ProfilePage({ params }) {
   const username = params.username
+  const db = supabaseServer()
 
   // Fetch profile
-  const { data: profile, error: profileError } = await supabaseServer
+  const { data: profile, error: profileError } = await db
     .from('profiles')
     .select('id, community_username, community_bio, community_joined_at, community_flair, is_member')
     .eq('community_username', username)
@@ -64,7 +68,7 @@ export default async function ProfilePage({ params }) {
   if (profileError || !profile) notFound()
 
   // Fetch karma
-  const { data: karmaRow } = await supabaseServer
+  const { data: karmaRow } = await db
     .from('community_karma')
     .select('total_karma')
     .eq('user_id', profile.id)
@@ -74,7 +78,7 @@ export default async function ProfilePage({ params }) {
   const milestone = getMilestone(karma)
 
   // Fetch this user's questions (latest 10)
-  const { data: questions } = await supabaseServer
+  const { data: questions } = await db
     .from('community_questions')
     .select('id, slug, title, tags, upvotes, answer_count, created_at')
     .eq('user_id', profile.id)
@@ -82,7 +86,7 @@ export default async function ProfilePage({ params }) {
     .limit(10)
 
   // Fetch this user's answers (latest 10)
-  const { data: answers } = await supabaseServer
+  const { data: answers } = await db
     .from('community_answers')
     .select('id, body, upvotes, is_accepted, created_at, question_id, community_questions(slug, title)')
     .eq('user_id', profile.id)
@@ -321,7 +325,6 @@ export default async function ProfilePage({ params }) {
                   textDecoration: 'none',
                 }}
               >
-                {/* Question title this answer belongs to */}
                 <p
                   style={{
                     color: 'var(--text-muted)',
@@ -332,7 +335,6 @@ export default async function ProfilePage({ params }) {
                   on: {a.community_questions?.title}
                 </p>
 
-                {/* Answer preview */}
                 <p
                   style={{
                     color: 'var(--text-primary)',
@@ -379,5 +381,6 @@ export default async function ProfilePage({ params }) {
 
 // --- CHANGE LOG ---
 // [May 16, 2026] CREATED: Phase 5 — public profile page
-// REASON: Users need a public profile showing karma, questions, answers
+// [May 16, 2026] FIXED: supabaseServer() called as function via db variable
+// REASON: Proxy broke chained Supabase calls — now uses direct function call
 // --- END CHANGE LOG ---
