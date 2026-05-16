@@ -7,6 +7,8 @@
 // DEPENDENCIES: lib/supabaseServer.js
 // ⚠️ DO NOT CHANGE: Auth verified via Bearer token from client.
 //                   Never trust user_id from request body.
+//                   supabaseServer() must be called as a function
+//                   inside the handler — never at module level.
 // ============================================================
 
 import { supabaseServer } from '@/lib/supabaseServer'
@@ -41,8 +43,10 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Invalid username format' }, { status: 400 })
     }
 
+    const db = supabaseServer()
+
     // Check uniqueness
-    const { data: existing } = await supabaseServer
+    const { data: existing } = await db
       .from('profiles')
       .select('id')
       .eq('community_username', username)
@@ -53,7 +57,7 @@ export async function POST(request) {
     }
 
     // Save — service role bypasses RLS
-    const { error: updateError } = await supabaseServer
+    const { error: updateError } = await db
       .from('profiles')
       .update({
         community_username: username,
@@ -77,4 +81,6 @@ export async function POST(request) {
 // REASON: Browser client RLS was blocking username update silently
 // [May 16, 2026] FIXED: Auth now uses Bearer token instead of cookies
 // REASON: Safari/iPad drops cookies on API routes — token is more reliable
+// [May 16, 2026] FIXED: supabaseServer() called as function via db variable
+// REASON: Proxy broke chained Supabase calls — now uses direct function call
 // --- END CHANGE LOG ---
