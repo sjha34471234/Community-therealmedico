@@ -4,13 +4,11 @@
 // LAST CHANGED: May 16, 2026
 // WHY IT EXISTS: Users who land on /auth directly need a full page
 //               auth experience, not just a modal
-// DEPENDENCIES: components/AuthModal.jsx (reuses same form logic)
-// ⚠️ DO NOT CHANGE: redirect to / after auth is handled in AuthModal
-//                   This page is a server component — no 'use client'
+// DEPENDENCIES: components/AuthPageClient.jsx
+// ⚠️ DO NOT CHANGE: Must stay a server component with no Supabase calls.
+//                   Redirect after login is handled in AuthPageClient.
 // ============================================================
 
-import { redirect } from 'next/navigation'
-import { supabaseServer } from '@/lib/supabaseServer'
 import AuthPageClient from '@/components/AuthPageClient'
 
 export const metadata = {
@@ -21,11 +19,7 @@ export const metadata = {
   },
 }
 
-export default async function AuthPage() {
-  // If already logged in, send them to the feed immediately
-  const { data: { user } } = await supabaseServer.auth.getUser()
-  if (user) redirect('/')
-
+export default function AuthPage() {
   return (
     <main
       style={{
@@ -44,5 +38,6 @@ export default async function AuthPage() {
 
 // --- CHANGE LOG ---
 // [May 16, 2026] CREATED: Standalone auth page — Phase 5 auth flow
-// REASON: Users need a full page fallback for direct /auth links
+// [May 16, 2026] FIXED: Removed supabaseServer call — caused build crash
+//               Redirect now handled client-side in AuthPageClient
 // --- END CHANGE LOG ---
