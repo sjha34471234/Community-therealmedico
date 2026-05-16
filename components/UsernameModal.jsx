@@ -12,9 +12,8 @@
 // ⚠️ DO NOT CHANGE: Modal must be undismissable — no close
 //   button, no backdrop click to close. fetchProfile() must be
 //   called after save so authStore updates immediately.
-//   Username validation must match the rules below exactly.
-//   Save must go through /api/profile — never direct Supabase
-//   browser client update (RLS blocks it silently).
+//   Save must go through /api/profile with accessToken.
+//   Never use direct Supabase browser client update — RLS blocks it.
 // ============================================================
 
 'use client'
@@ -22,9 +21,8 @@
 import { useState } from 'react'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '@/store/authStore'
+import { createClient } from '@/lib/supabase'
 
-// Username rules:
-// 3–20 characters, letters/numbers/underscores only, no spaces
 const USERNAME_REGEX = /^[a-zA-Z0-9_]{3,20}$/
 
 export default function UsernameModal() {
@@ -35,7 +33,6 @@ export default function UsernameModal() {
   const [username, setUsername] = useState('')
   const [saving, setSaving] = useState(false)
 
-  // Only show if logged in and no username set yet
   const shouldShow = user && profile && !profile.community_username
 
   if (!shouldShow) return null
@@ -55,11 +52,24 @@ export default function UsernameModal() {
     setSaving(true)
 
     try {
+      // Get the current session access token
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+
+      if (!session?.access_token) {
+        toast.error('Session expired. Please sign in again.')
+        setSaving(false)
+        return
+      }
+
       const res = await fetch(`${window.location.origin}/api/profile`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: trimmed }),
+        body: JSON.stringify({
+          username: trimmed,
+          accessToken: session.access_token,
+        }),
       })
 
       const data = await res.json()
@@ -100,7 +110,6 @@ export default function UsernameModal() {
         boxShadow: '0 8px 40px rgba(0,0,0,0.18)',
       }}>
 
-        {/* Header */}
         <h2 style={{
           fontFamily: 'Merriweather, Georgia, serif',
           fontWeight: 700,
@@ -120,7 +129,6 @@ export default function UsernameModal() {
           This is how other members will see you. You can only set this once, so choose carefully.
         </p>
 
-        {/* Input */}
         <input
           type="text"
           value={username}
@@ -143,7 +151,6 @@ export default function UsernameModal() {
           }}
         />
 
-        {/* Hint */}
         <p style={{
           fontFamily: 'Inter, system-ui, sans-serif',
           fontSize: '0.78rem',
@@ -153,7 +160,6 @@ export default function UsernameModal() {
           3–20 characters. Letters, numbers, and underscores only.
         </p>
 
-        {/* Save button */}
         <button
           onClick={handleSave}
           disabled={saving || username.length < 3}
@@ -181,9 +187,7 @@ export default function UsernameModal() {
 
 // --- CHANGE LOG ---
 // [May 15, 2026] CREATED: Phase 4 — username picker modal
-// REASON: Users need a community_username before interacting.
-//   Modal is undismissable to enforce this soft gate.
-// [May 16, 2026] UPDATED: Save now goes through /api/profile route
-// REASON: Browser Supabase client RLS was silently blocking the update.
-//   Service role in API route bypasses RLS correctly.
+// [May 16, 2026] UPDATED: Save goes through /api/profile route
+// [May 16, 2026] FIXED: Now sends accessToken in request body
+// REASON: Safari/iPad drops cookies — token auth is reliable
 // --- END CHANGE LOG ---
