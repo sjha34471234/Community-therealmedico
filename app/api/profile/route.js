@@ -5,7 +5,7 @@
 // WHY IT EXISTS: Browser client RLS blocks username save.
 //               Service role bypasses RLS safely server-side.
 // DEPENDENCIES: lib/supabaseServer.js
-// ⚠️ DO NOT CHANGE: Always verify auth before updating.
+// ⚠️ DO NOT CHANGE: Auth verified via Bearer token from client.
 //                   Never trust user_id from request body.
 // ============================================================
 
@@ -17,25 +17,25 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(request) {
   try {
-    // Verify auth using anon client + cookie
-    const anonClient = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-      {
-        global: {
-          headers: { cookie: request.headers.get('cookie') || '' },
-        },
-      }
-    )
+    const { username, accessToken } = await request.json()
 
-    const { data: { user }, error: authError } = await anonClient.auth.getUser()
-    if (authError || !user) {
+    if (!accessToken) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
 
-    const { username } = await request.json()
+    // Verify the token by getting the user from Supabase
+    const anonClient = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    )
 
-    // Validate
+    const { data: { user }, error: authError } = await anonClient.auth.getUser(accessToken)
+
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Invalid session' }, { status: 401 })
+    }
+
+    // Validate username format
     const USERNAME_REGEX = /^[a-zA-Z0-9_]{3,20}$/
     if (!USERNAME_REGEX.test(username)) {
       return NextResponse.json({ error: 'Invalid username format' }, { status: 400 })
@@ -75,4 +75,6 @@ export async function POST(request) {
 // --- CHANGE LOG ---
 // [May 16, 2026] CREATED: Server-side username save
 // REASON: Browser client RLS was blocking username update silently
+// [May 16, 2026] FIXED: Auth now uses Bearer token instead of cookies
+// REASON: Safari/iPad drops cookies on API routes — token is more reliable
 // --- END CHANGE LOG ---
