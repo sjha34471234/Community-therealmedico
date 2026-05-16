@@ -111,7 +111,7 @@ export default function Navbar() {
             flexShrink: 0,
           }}
         >
-          {user && profile ? (
+          {loading ? null : user && profile ? (
             <>
               {/* Profile link */}
               {profile?.community_username && (
