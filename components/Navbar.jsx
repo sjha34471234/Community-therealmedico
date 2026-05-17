@@ -1,87 +1,67 @@
 // ============================================================
 // FILE: components/Navbar.jsx
-// PURPOSE: Top navigation bar — logo, search, auth button, tags link
+// PURPOSE: Top navigation bar — logo, tags link, search bar,
+//          gear icon (logged in), sign in link (logged out)
 // LAST CHANGED: May 17, 2026
-// WHY IT EXISTS: Appears on every page via app/layout.js
-// DEPENDENCIES: lucide-react, authStore, SearchBar
-// ⚠️ DO NOT CHANGE: navbar-search class controls mobile hide via CSS
-//                   Logo uses <a> not <Link> — same domain but safe
-//                   Never use onMouseEnter in arrow functions in JSX
-//                   Sign In navigates to /auth — never reopen modal. Crashed Chrome iPad.
-//                   Sign Out calls signOut() then window.location.href = '/' — force reload
+// WHY IT EXISTS: App-wide navigation. Sign Out was removed in Phase 8
+//                and moved to components/settings/AccountSettings.jsx.
+//                Gear icon added linking to /settings.
+// DEPENDENCIES: components/SearchBar.jsx, store/authStore.js,
+//               app/globals.css (navbar styles)
+// ⚠️ DO NOT CHANGE: Sign In navigates to /auth — never a modal.
+//                   Sign Out does NOT live here — AccountSettings only.
+//                   .navbar-search hides SearchBar below 640px.
+//                   External links use <a> — never Next.js <Link>.
+//                   Phase 10 adds NotificationBell between search and gear.
 // ============================================================
 
-'use client'
+'use client';
 
-import supabase from '@/lib/supabase'
-import { useAuthStore } from '@/store/authStore'
-import SearchBar from '@/components/SearchBar'
+import Link from 'next/link';
+import { Settings } from 'lucide-react';
+import useAuthStore from '@/store/authStore';
+import SearchBar from '@/components/SearchBar';
 
 export default function Navbar() {
-  const { user, profile, loading } = useAuthStore()
-
-  function handleSignInEnter(e) {
-    e.target.style.backgroundColor = 'var(--accent-hover)'
-  }
-
-  function handleSignInLeave(e) {
-    e.target.style.backgroundColor = 'var(--accent-primary)'
-  }
-
-  async function handleSignOut() {
-    await supabase.auth.signOut()
-    window.location.href = '/'
-  }
+  const { user, loading } = useAuthStore();
 
   return (
-    <header style={{ backgroundColor: 'var(--bg-primary)', borderBottom: '1px solid var(--bg-tertiary)', position: 'sticky', top: 0, zIndex: 50 }}>
-      <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '0 1rem', height: '56px', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+    <nav className="navbar">
+      <div className="navbar-inner">
 
-        {/* Logo */}
-        <a href="/" style={{ fontFamily: 'Merriweather, Georgia, serif', fontWeight: 700, fontSize: '1.05rem', color: 'var(--accent-primary)', textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0 }}>
+        <Link href="/" className="navbar-logo">
           The Real Medico
-          <span style={{ fontFamily: 'Inter, system-ui, sans-serif', fontWeight: 500, fontSize: '0.75rem', color: 'var(--text-muted)', marginLeft: '6px', letterSpacing: '0.04em' }}>Community</span>
-        </a>
+        </Link>
 
-        {/* Search bar — live from Phase 6, hidden on mobile below 640px */}
+        <div className="navbar-links">
+          <Link href="/tags" className="navbar-link">
+            Tags
+          </Link>
+        </div>
+
         <div className="navbar-search">
           <SearchBar />
         </div>
 
-        {/* Right side */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginLeft: 'auto', flexShrink: 0 }}>
-
-          {/* Tags link */}
-          <a href="/tags" style={{ fontFamily: 'Inter, system-ui, sans-serif', fontWeight: 500, fontSize: '0.875rem', color: 'var(--text-secondary)', textDecoration: 'none', whiteSpace: 'nowrap' }}>Tags</a>
-
-          {!loading && (
-            <>
-              {user && profile ? (
-                <>
-                  {profile.community_username && (
-                    <a href={`/profile/${profile.community_username}`} style={{ fontFamily: 'Inter, system-ui, sans-serif', fontWeight: 500, fontSize: '0.875rem', color: 'var(--accent-primary)', textDecoration: 'none' }}>{profile.community_username}</a>
-                  )}
-                  <button onClick={handleSignOut} style={{ backgroundColor: 'transparent', color: 'var(--text-muted)', fontFamily: 'Inter, system-ui, sans-serif', fontWeight: 500, fontSize: '0.875rem', padding: '7px 16px', borderRadius: '6px', border: '1px solid var(--bg-tertiary)', cursor: 'pointer' }}>
-                    Sign Out
-                  </button>
-                </>
-              ) : (
-                <a href="/auth" onMouseEnter={handleSignInEnter} onMouseLeave={handleSignInLeave} style={{ backgroundColor: 'var(--accent-primary)', color: '#FFFFFF', fontFamily: 'Inter, system-ui, sans-serif', fontWeight: 500, fontSize: '0.875rem', padding: '7px 16px', borderRadius: '6px', border: 'none', cursor: 'pointer', textDecoration: 'none', transition: 'background-color 0.15s ease', display: 'inline-block' }}>Sign In</a>
-              )}
-            </>
-          )}
+        <div className="navbar-actions">
+          {!loading && user ? (
+            <Link href="/settings" className="navbar-gear" aria-label="Settings">
+              <Settings size={20} strokeWidth={1.75} />
+            </Link>
+          ) : !loading ? (
+            <Link href="/auth" className="navbar-signin">
+              Sign in
+            </Link>
+          ) : null}
         </div>
 
       </div>
-    </header>
-  )
+    </nav>
+  );
 }
 
 // --- CHANGE LOG ---
-// [May 14, 2026] CREATED: Initial build
-// [May 14, 2026] FIXED: Replaced inline arrow functions with named handlers
-// [May 14, 2026] FIXED: Search bar now uses className="navbar-search" — hides on mobile
-// [May 16, 2026] UPDATED: Sign In opens AuthModal, signed-in state shows username + sign out
-// [May 16, 2026] FIXED: supabase imported at module level — fixes sign out on Safari
-// [May 17, 2026] UPDATED: Phase 6 — SearchBar live, Tags link added, Sign In navigates to /auth
+// [May 17, 2026] UPDATED: Phase 8 — replaced Sign Out button with gear icon
+// REASON: Sign Out moved to AccountSettings.jsx per architectural rule.
+//         Gear icon links to /settings for logged-in users.
 // --- END CHANGE LOG ---
