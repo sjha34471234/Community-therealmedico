@@ -17,7 +17,7 @@
 
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import supabaseServer from '@/lib/supabaseServer';
+import { supabaseServer } from '@/lib/supabaseServer';
 import UserBadge from '@/components/UserBadge';
 import KarmaTag from '@/components/KarmaTag';
 import FollowButton from '@/components/FollowButton';
