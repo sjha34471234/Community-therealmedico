@@ -1,0 +1,333 @@
+/* ============================================================
+   FILE: app/search/search.css
+   PURPOSE: Styles for the Search results page and SearchBar dropdown
+   LAST CHANGED: May 17, 2026
+   WHY IT EXISTS: Imported by app/search/page.js and SearchBar.jsx
+   DEPENDENCIES: CSS variables from globals.css
+   ============================================================ */
+
+/* ─── SEARCH PAGE ───────────────────────────────────────────── */
+
+.search-page {
+  max-width: 768px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+.search-page__header {
+  margin-bottom: 1.5rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--bg-tertiary);
+}
+
+.search-page__title {
+  font-family: 'Merriweather', Georgia, serif;
+  font-weight: 700;
+  font-size: 1.25rem;
+  color: var(--text-primary);
+  margin: 0 0 0.25rem 0;
+}
+
+.search-page__count {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.search-page__empty {
+  text-align: center;
+  padding: 4rem 1rem;
+}
+
+.search-page__empty-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 0.5rem 0;
+}
+
+.search-page__empty-sub {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.search-page__prompt {
+  text-align: center;
+  padding: 4rem 1rem;
+  color: var(--text-muted);
+  font-size: 0.9375rem;
+}
+
+/* ─── FILTER TABS ───────────────────────────────────────────── */
+
+.search-filters {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.search-filter-btn {
+  padding: 6px 16px;
+  border-radius: 20px;
+  border: 1px solid var(--bg-tertiary);
+  background-color: var(--bg-primary);
+  color: var(--text-secondary);
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.search-filter-btn:hover {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.search-filter-btn--active {
+  background-color: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: #ffffff;
+}
+
+.search-filter-btn--active:hover {
+  background-color: var(--accent-hover);
+  border-color: var(--accent-hover);
+  color: #ffffff;
+}
+
+/* ─── SEARCH RESULTS ────────────────────────────────────────── */
+
+.search-results {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.search-section__title {
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0 0 0.75rem 0;
+}
+
+.search-question-card {
+  padding: 1rem;
+  border: 1px solid var(--bg-tertiary);
+  border-radius: 8px;
+  background-color: var(--bg-primary);
+  margin-bottom: 0.625rem;
+  transition: border-color 0.15s ease;
+}
+
+.search-question-card:hover { border-color: var(--accent-primary); }
+
+.search-question-card__title {
+  font-family: 'Merriweather', Georgia, serif;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--accent-primary);
+  margin: 0 0 0.375rem 0;
+  text-decoration: none;
+  display: block;
+}
+
+.search-question-card__title:hover {
+  color: var(--accent-hover);
+  text-decoration: underline;
+}
+
+.search-question-card__meta {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.search-tags-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.625rem;
+}
+
+.search-tag-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+}
+
+.search-tag-item__count {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  padding-left: 2px;
+}
+
+.search-users-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.search-user-card {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--bg-tertiary);
+  border-radius: 8px;
+  text-decoration: none;
+  transition: border-color 0.15s ease;
+}
+
+.search-user-card:hover {
+  border-color: var(--accent-primary);
+  text-decoration: none;
+}
+
+.search-user-card__avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background-color: var(--accent-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--accent-primary);
+  flex-shrink: 0;
+}
+
+.search-user-card__name {
+  font-weight: 500;
+  font-size: 0.9375rem;
+  color: var(--accent-primary);
+}
+
+.search-user-card__bio {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+
+/* ─── SEARCHBAR DROPDOWN ────────────────────────────────────── */
+
+.searchbar-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.searchbar-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.searchbar-icon {
+  position: absolute;
+  left: 10px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.searchbar-input {
+  width: 100%;
+  padding: 7px 12px 7px 32px;
+  border-radius: 6px;
+  border: 1px solid var(--bg-tertiary);
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 0.875rem;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.searchbar-input:focus {
+  border-color: var(--accent-primary);
+  background-color: var(--bg-primary);
+}
+
+.searchbar-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--bg-tertiary);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+  z-index: 100;
+  overflow: hidden;
+}
+
+.searchbar-section { padding: 0.5rem 0; }
+
+.searchbar-section-title {
+  padding: 0.25rem 0.875rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.searchbar-item {
+  display: block;
+  padding: 0.5rem 0.875rem;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 0.1s ease;
+}
+
+.searchbar-item:hover {
+  background-color: var(--bg-secondary);
+  text-decoration: none;
+  color: var(--text-primary);
+}
+
+.searchbar-item__sub {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+
+.searchbar-divider {
+  height: 1px;
+  background-color: var(--bg-tertiary);
+  margin: 0.25rem 0;
+}
+
+.searchbar-see-all {
+  display: block;
+  padding: 0.625rem 0.875rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--accent-primary);
+  text-decoration: none;
+  border-top: 1px solid var(--bg-tertiary);
+  text-align: center;
+}
+
+.searchbar-see-all:hover {
+  background-color: var(--accent-light);
+  text-decoration: none;
+  color: var(--accent-hover);
+}
+
+.searchbar-loading,
+.searchbar-empty {
+  padding: 1rem 0.875rem;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* --- CHANGE LOG ---
+   [May 17, 2026] CREATED: Split from globals.css for maintainability
+   --- END CHANGE LOG --- */
