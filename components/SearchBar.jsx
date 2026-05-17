@@ -12,6 +12,7 @@
 
 'use client'
 
+import '@/app/search/search.css'
 import { useState, useEffect, useRef, useCallback } from 'react'
 
 export default function SearchBar({ placeholder = 'Search questions, tags, people…' }) {
