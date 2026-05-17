@@ -1,16 +1,14 @@
 // ============================================================
 // FILE: components/QuestionDetail.jsx
 // PURPOSE: Client component — renders full question + answers, upserts view record
-// LAST CHANGED: May 14, 2026
+// LAST CHANGED: May 17, 2026
 // WHY IT EXISTS: The question detail page needs client-side auth to:
 //   1. Upsert community_post_views when a logged-in user opens the page
-//      (this is what powers the "new reply" feed resurfacing logic)
 //   2. Show the answer form for logged-in users
-//   3. Show vote buttons (wired up in Phase 4 API)
+//   3. Show vote buttons
 // DEPENDENCIES: lib/supabase.js, components/TagPill.jsx, lucide-react
 // ⚠️ DO NOT CHANGE:
 //   - The view upsert MUST use activity_snapshot = question.last_activity_at
-//     This is the value the feed compares against to detect new replies.
 //   - onAuthStateChange must be used — never getUser() or getSession() on mount.
 //   - credentials: 'include' on ALL fetch calls.
 //   - window.location.origin for API URLs — never relative paths.
@@ -53,6 +51,10 @@ function getUsername(profile) {
   return profile.community_username || 'Anonymous User'
 }
 
+function isMember(profile) {
+  return profile && profile.is_member === true
+}
+
 export default function QuestionDetail({ question, answers, authorProfile, answerProfiles }) {
   const router = useRouter()
   const [userId, setUserId] = useState(null)
@@ -73,7 +75,6 @@ export default function QuestionDetail({ question, answers, authorProfile, answe
         const uid = session?.user?.id ?? null
         setUserId(uid)
 
-        // Upsert view record so feed knows this user has seen this question
         if (uid && question?.id && question?.last_activity_at) {
           await supabase
             .from('community_post_views')
@@ -159,7 +160,9 @@ export default function QuestionDetail({ question, answers, authorProfile, answe
         <div className="qd-meta-row">
           <span className="qd-meta-item">
             <User size={13} />
-            {getUsername(authorProfile)}
+            <span style={{ color: isMember(authorProfile) ? 'var(--member-gold)' : 'inherit', fontWeight: isMember(authorProfile) ? 600 : 400 }}>
+              {isMember(authorProfile) ? '👑 ' : ''}{getUsername(authorProfile)}
+            </span>
           </span>
           <span className="qd-meta-item">
             <Clock size={13} />
@@ -217,11 +220,13 @@ export default function QuestionDetail({ question, answers, authorProfile, answe
 
         {answers.map(function renderAnswer(answer) {
           const aProfile = profileMap[answer.user_id] || null
+          const answerIsMember = isMember(aProfile)
           return (
             <div
               key={answer.id}
               id={'answer-' + answer.id}
               className={answer.is_accepted ? 'qd-answer-card qd-answer-accepted' : 'qd-answer-card'}
+              style={{ borderLeft: answerIsMember && !answer.is_accepted ? '4px solid var(--member-border)' : undefined, backgroundColor: answerIsMember && !answer.is_accepted ? 'var(--member-bg)' : undefined }}
             >
               {answer.is_accepted && (
                 <div className="qd-accepted-banner">
@@ -244,7 +249,9 @@ export default function QuestionDetail({ question, answers, authorProfile, answe
                 <div className="qd-answer-meta">
                   <span className="qd-meta-item">
                     <User size={12} />
-                    {getUsername(aProfile)}
+                    <span style={{ color: answerIsMember ? 'var(--member-gold)' : 'inherit', fontWeight: answerIsMember ? 600 : 400 }}>
+                      {answerIsMember ? '👑 ' : ''}{getUsername(aProfile)}
+                    </span>
                   </span>
                   <span className="qd-meta-item">
                     <Clock size={12} />
@@ -302,7 +309,6 @@ export default function QuestionDetail({ question, answers, authorProfile, answe
       </section>
 
       <style>{`
-        /* ── Question card ── */
         .qd-question-card {
           background: var(--bg-primary);
           border: 1px solid var(--bg-tertiary);
@@ -335,8 +341,6 @@ export default function QuestionDetail({ question, answers, authorProfile, answe
         @media (max-width: 600px) {
           .qd-title { font-size: 1.2rem; }
         }
-
-        /* ── Meta ── */
         .qd-meta-row {
           display: flex;
           flex-wrap: wrap;
@@ -351,16 +355,12 @@ export default function QuestionDetail({ question, answers, authorProfile, answe
           font-size: 0.78rem;
           color: var(--text-muted);
         }
-
-        /* ── Tags ── */
         .qd-tags-row {
           display: flex;
           flex-wrap: wrap;
           gap: 6px;
           margin-bottom: 20px;
         }
-
-        /* ── Body ── */
         .qd-body {
           font-family: 'Inter', system-ui, sans-serif;
           font-size: 0.95rem;
@@ -370,8 +370,6 @@ export default function QuestionDetail({ question, answers, authorProfile, answe
           word-break: break-word;
           margin-bottom: 24px;
         }
-
-        /* ── Votes ── */
         .qd-vote-row {
           display: flex;
           align-items: center;
@@ -412,8 +410,6 @@ export default function QuestionDetail({ question, answers, authorProfile, answe
           border-radius: 20px;
           padding: 3px 10px;
         }
-
-        /* ── Answers section ── */
         .qd-answers-section { margin-bottom: 40px; }
         .qd-answers-heading {
           font-family: 'Inter', system-ui, sans-serif;
@@ -424,8 +420,6 @@ export default function QuestionDetail({ question, answers, authorProfile, answe
           padding-bottom: 10px;
           border-bottom: 2px solid var(--bg-tertiary);
         }
-
-        /* ── Answer card ── */
         .qd-answer-card {
           background: var(--bg-primary);
           border: 1px solid var(--bg-tertiary);
@@ -434,8 +428,8 @@ export default function QuestionDetail({ question, answers, authorProfile, answe
           margin-bottom: 16px;
         }
         .qd-answer-accepted {
-          border-color: var(--success);
-          background: #F9FFF9;
+          border-color: var(--success) !important;
+          background: #F9FFF9 !important;
         }
         .qd-accepted-banner {
           display: inline-flex;
@@ -475,8 +469,6 @@ export default function QuestionDetail({ question, answers, authorProfile, answe
           gap: 12px;
           flex-wrap: wrap;
         }
-
-        /* ── Answer form ── */
         .qd-answer-form-section { }
         .qd-auth-gate {
           display: flex;
@@ -571,4 +563,7 @@ export default function QuestionDetail({ question, answers, authorProfile, answe
 // [May 14, 2026] CREATED: Phase 3
 // REASON: Question detail client component. Handles view upsert, answer form,
 //   vote button shells, and renders question + answers passed from server page.
+// [May 17, 2026] UPDATED: Real Medico+ gold username + crown on question author
+//   and answer authors. Gold left border + bg on member answer cards.
+// REASON: Phase 7 — member cosmetics on question detail page
 // --- END CHANGE LOG ---
