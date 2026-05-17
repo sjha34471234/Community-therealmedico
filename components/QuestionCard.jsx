@@ -2,13 +2,15 @@
 // FILE: components/QuestionCard.jsx
 // PURPOSE: Renders a single question in the feed
 //          Shows new-reply badge + left border for resurfaced posts
-// LAST CHANGED: May 14, 2026
+//          Shows gold left border for Real Medico+ member posts
+// LAST CHANGED: May 17, 2026
 // WHY IT EXISTS: Homepage feed, tag pages, search results all
 //               reuse this single card component
 // DEPENDENCIES: components/TagPill.jsx, app/globals.css CSS variables
 // ⚠️ DO NOT CHANGE: <a> tags must stay on single lines — iPad rule
 //                   hasNewActivity border + badge must stay together
 //                   body preview is capped at 200 chars by the API
+//                   is_member_post border must not override hasNewActivity border
 // ============================================================
 
 'use client';
@@ -36,16 +38,23 @@ export default function QuestionCard({ question }) {
   if (!question) return null;
 
   const hasNewActivity = question.hasNewActivity === true;
+  const isMemberPost = question.is_member_post === true;
+
+  // Priority: new activity (blue) > member post (gold) > default
+  let borderLeft = '1px solid var(--bg-tertiary)';
+  if (hasNewActivity) {
+    borderLeft = '4px solid var(--accent-primary)';
+  } else if (isMemberPost) {
+    borderLeft = '4px solid var(--member-border)';
+  }
 
   const cardStyle = {
-    backgroundColor: 'var(--bg-primary)',
+    backgroundColor: isMemberPost && !hasNewActivity ? 'var(--member-bg)' : 'var(--bg-primary)',
     border: '1px solid var(--bg-tertiary)',
     borderRadius: '10px',
     padding: '1rem 1.25rem',
     marginBottom: '0.75rem',
-    borderLeft: hasNewActivity
-      ? '4px solid var(--accent-primary)'
-      : '1px solid var(--bg-tertiary)',
+    borderLeft: borderLeft,
     transition: 'box-shadow 0.15s ease',
   };
 
@@ -55,18 +64,14 @@ export default function QuestionCard({ question }) {
       {/* New activity badge */}
       {hasNewActivity && (
         <div style={{ marginBottom: '0.5rem' }}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', backgroundColor: 'var(--accent-light)', color: 'var(--accent-primary)', fontFamily: 'Inter, system-ui, sans-serif', fontWeight: 600, fontSize: '0.7rem', padding: '2px 8px', borderRadius: '20px', letterSpacing: '0.03em' }}>
-            ● New reply
-          </span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', backgroundColor: 'var(--accent-light)', color: 'var(--accent-primary)', fontFamily: 'Inter, system-ui, sans-serif', fontWeight: 600, fontSize: '0.7rem', padding: '2px 8px', borderRadius: '20px', letterSpacing: '0.03em' }}>● New reply</span>
         </div>
       )}
 
       {/* Pinned badge */}
       {question.is_pinned && (
         <div style={{ marginBottom: '0.5rem' }}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', backgroundColor: '#FEF9C3', color: '#854D0E', fontFamily: 'Inter, system-ui, sans-serif', fontWeight: 600, fontSize: '0.7rem', padding: '2px 8px', borderRadius: '20px', letterSpacing: '0.03em' }}>
-            📌 Pinned
-          </span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', backgroundColor: '#FEF9C3', color: '#854D0E', fontFamily: 'Inter, system-ui, sans-serif', fontWeight: 600, fontSize: '0.7rem', padding: '2px 8px', borderRadius: '20px', letterSpacing: '0.03em' }}>📌 Pinned</span>
         </div>
       )}
 
@@ -99,20 +104,16 @@ export default function QuestionCard({ question }) {
 
         {/* Stats */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <span style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.78rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '3px' }}>
-            ▲ {question.upvotes || 0}
-          </span>
-          <span style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.78rem', color: question.answer_count > 0 ? 'var(--success)' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '3px' }}>
-            💬 {question.answer_count || 0} {question.answer_count === 1 ? 'answer' : 'answers'}
-          </span>
-          <span style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-            👁 {question.view_count || 0}
-          </span>
+          <span style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.78rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '3px' }}>▲ {question.upvotes || 0}</span>
+          <span style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.78rem', color: question.answer_count > 0 ? 'var(--success)' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '3px' }}>💬 {question.answer_count || 0} {question.answer_count === 1 ? 'answer' : 'answers'}</span>
+          <span style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.78rem', color: 'var(--text-muted)' }}>👁 {question.view_count || 0}</span>
         </div>
 
         {/* Author + time */}
         <div style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-          <span style={{ color: 'var(--accent-primary)', fontWeight: 500 }}>{question.author || 'Anonymous'}</span>
+          <span style={{ color: isMemberPost ? 'var(--member-gold)' : 'var(--accent-primary)', fontWeight: 500 }}>
+            {isMemberPost ? '👑 ' : ''}{question.author_username || 'Anonymous'}
+          </span>
           <span style={{ margin: '0 4px' }}>·</span>
           <span>{timeAgo(question.created_at)}</span>
         </div>
@@ -125,4 +126,6 @@ export default function QuestionCard({ question }) {
 // --- CHANGE LOG ---
 // [May 14, 2026] CREATED: Initial build
 // REASON: Homepage feed needs a card component for each question
+// [May 17, 2026] UPDATED: Real Medico+ gold border + subtle bg + gold author name
+// REASON: Phase 7 — member cosmetics on question cards
 // --- END CHANGE LOG ---
