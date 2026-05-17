@@ -1,7 +1,7 @@
 // ============================================================
 // FILE: app/q/[slug]/page.js
 // PURPOSE: Question detail page — full question + answers, ISR, SEO
-// LAST CHANGED: May 14, 2026
+// LAST CHANGED: May 17, 2026
 // WHY IT EXISTS: Each question needs its own URL for SEO and sharing.
 //   Server component so it can use ISR revalidation and generateMetadata.
 //   Renders QuestionDetail (client) for interactivity.
@@ -98,14 +98,14 @@ export default async function QuestionPage({ params }) {
     .order('upvotes', { ascending: false })
     .order('created_at', { ascending: true })
 
-  // Fetch author profile
+  // Fetch author profile — include is_member for Phase 7 cosmetics
   const { data: authorProfile } = await supabase
     .from('profiles')
-    .select('community_username, community_flair')
+    .select('community_username, community_flair, is_member')
     .eq('id', question.user_id)
     .single()
 
-  // Fetch answer author profiles
+  // Fetch answer author profiles — include is_member for Phase 7 cosmetics
   const answerUserIds = answers
     ? Array.from(new Set(answers.map(function getId(a) { return a.user_id }).filter(Boolean)))
     : []
@@ -114,7 +114,7 @@ export default async function QuestionPage({ params }) {
   if (answerUserIds.length > 0) {
     const { data: profiles } = await supabase
       .from('profiles')
-      .select('id, community_username, community_flair')
+      .select('id, community_username, community_flair, is_member')
       .in('id', answerUserIds)
     answerProfiles = profiles || []
   }
@@ -174,6 +174,6 @@ export default async function QuestionPage({ params }) {
 // --- CHANGE LOG ---
 // [May 14, 2026] CREATED: Phase 3
 // REASON: Question detail page with ISR, generateMetadata, QAPage JSON-LD.
-//   Fetches question, answers, and author profiles server-side.
-//   Passes data to QuestionDetail client component for interactivity.
+// [May 17, 2026] UPDATED: profiles SELECT now includes is_member — Phase 7
+// REASON: Pass member status to QuestionDetail for gold author cosmetics
 // --- END CHANGE LOG ---
