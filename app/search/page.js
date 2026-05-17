@@ -10,6 +10,7 @@
 
 'use client'
 
+import '@/app/search/search.css'
 import { useState, useEffect } from 'react'
 import TagBadge from '@/components/TagBadge'
 
