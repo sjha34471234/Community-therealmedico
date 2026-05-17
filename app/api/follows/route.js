@@ -13,7 +13,7 @@
 // ============================================================
 
 import { NextResponse } from 'next/server';
-import supabaseServer from '@/lib/supabaseServer';
+import { supabaseServer } from '@/lib/supabaseServer';
 
 // ─── Helper: extract and verify Bearer token ─────────────────
 async function getAuthUser(request) {
