@@ -166,9 +166,29 @@ a:hover {
   }
 }
 
+/* ─── NAVBAR GEAR ICON ──────────────────────────────────────── */
+
+.navbar-gear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  padding: 6px;
+  border-radius: 6px;
+  transition: color 0.15s ease, background 0.15s ease;
+  text-decoration: none;
+}
+
+.navbar-gear:hover {
+  color: var(--accent-primary);
+  background: var(--accent-light);
+}
+
 /* --- CHANGE LOG ---
    [May 14, 2026] CREATED: Initial build
    [May 14, 2026] FIXED: Missing body { brace, duplicate box-sizing, mobile overflow
    [May 17, 2026] REFACTORED: Page-specific styles moved to separate CSS files
    REASON: File was growing too large — split for maintainability
+   [May 17, 2026] ADDED: .navbar-gear styles for Phase 8 gear icon
+   REASON: Gear icon links to /settings — replaces Sign Out button in Navbar
    --- END CHANGE LOG --- */
