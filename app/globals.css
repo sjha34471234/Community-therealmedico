@@ -151,22 +151,93 @@ a:hover {
 ::-webkit-scrollbar-track { background: var(--bg-secondary); }
 ::-webkit-scrollbar-thumb { background: var(--bg-tertiary); border-radius: 3px; }
 
-/* ─── NAVBAR RESPONSIVE ─────────────────────────────────────── */
+/* ─── NAVBAR ────────────────────────────────────────────────── */
 
-.navbar-search {
-  display: none;
+.navbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--bg-tertiary);
+  width: 100%;
 }
 
-@media (min-width: 640px) {
-  .navbar-search {
-    display: block;
-    flex: 1;
-    max-width: 480px;
-    position: relative;
-  }
+.navbar-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 16px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
 }
 
-/* ─── NAVBAR GEAR ICON ──────────────────────────────────────── */
+.navbar-logo {
+  font-family: 'Merriweather', Georgia, serif;
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--text-primary);
+  text-decoration: none;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.navbar-logo:hover {
+  color: var(--accent-primary);
+  text-decoration: none;
+}
+
+.navbar-links {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.navbar-link {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  padding: 6px 10px;
+  border-radius: 6px;
+  text-decoration: none;
+  transition: color 0.15s ease, background 0.15s ease;
+  white-space: nowrap;
+}
+
+.navbar-link:hover {
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  text-decoration: none;
+}
+
+.navbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.navbar-signin {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #ffffff;
+  background: var(--accent-primary);
+  padding: 7px 16px;
+  border-radius: 7px;
+  text-decoration: none;
+  transition: background 0.15s ease;
+  white-space: nowrap;
+}
+
+.navbar-signin:hover {
+  background: var(--accent-hover);
+  color: #ffffff;
+  text-decoration: none;
+}
 
 .navbar-gear {
   display: flex;
@@ -184,11 +255,29 @@ a:hover {
   background: var(--accent-light);
 }
 
+/* ─── NAVBAR SEARCH (responsive) ────────────────────────────── */
+
+.navbar-search {
+  display: none;
+}
+
+@media (min-width: 640px) {
+  .navbar-search {
+    display: block;
+    flex: 1;
+    max-width: 480px;
+    position: relative;
+  }
+}
+
 /* --- CHANGE LOG ---
    [May 14, 2026] CREATED: Initial build
-   [May 14, 2026] FIXED: Missing body { brace, duplicate box-sizing, mobile overflow
+   [May 14, 2026] FIXED: Missing body brace, duplicate box-sizing, mobile overflow
    [May 17, 2026] REFACTORED: Page-specific styles moved to separate CSS files
    REASON: File was growing too large — split for maintainability
    [May 17, 2026] ADDED: .navbar-gear styles for Phase 8 gear icon
-   REASON: Gear icon links to /settings — replaces Sign Out button in Navbar
+   [May 17, 2026] FIXED: Full navbar CSS restored — lost during refactor
+   REASON: .navbar, .navbar-inner, .navbar-logo etc were missing,
+           causing vertical stacking layout break
    --- END CHANGE LOG --- */
+
