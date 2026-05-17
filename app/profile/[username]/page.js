@@ -1,7 +1,7 @@
 // ============================================================
 // FILE: app/profile/[username]/page.js
-// PURPOSE: Public profile page — shows user info, karma, stats,
-//          follower/following counts, follow button, and recent posts
+// PURPOSE: Public profile page — user info, karma, follower/following
+//          counts, follow button, and recent questions
 // LAST CHANGED: May 17, 2026
 // WHY IT EXISTS: Each user has a public profile at /profile/[username].
 //                Updated in Phase 9 to add follower/following counts
@@ -10,8 +10,8 @@
 //               components/FollowButton.jsx, lib/supabaseServer.js,
 //               app/profile/profile.css
 // ⚠️ DO NOT CHANGE: ISR revalidate = 3600 — never force-dynamic (rule #27).
-//                   Follower/following counts fetched server-side for SEO.
-//                   FollowButton is client-side only — hydrates after load.
+//                   UserBadge takes a profile object — NOT separate props.
+//                   KarmaTag takes karma as a number — NOT an object.
 //                   params is { username: string } — NOT a Promise (rule #5).
 // ============================================================
 
@@ -98,86 +98,91 @@ export default async function ProfilePage({ params }) {
       })
     : null;
 
+  const initial = (profile.community_username || '?')[0].toUpperCase();
+
   return (
     <div className="profile-page">
 
-      {/* ─── Profile card ─────────────────────────────────── */}
-      <div className={`profile-card ${profile.is_member ? 'profile-card--member' : ''}`}>
+      {/* ─── Profile header ───────────────────────────────── */}
+      <div className="profile-header">
 
-        {/* Avatar */}
-        <div className={`profile-avatar ${profile.is_member ? 'profile-avatar--member' : ''}`}>
-          {(profile.community_username || '?')[0].toUpperCase()}
+        {/* Avatar circle with initial */}
+        <div className="profile-avatar-wrap">
+          <div className={`profile-avatar${profile.is_member ? ' member-avatar' : ''}`}>
+            {initial}
+          </div>
         </div>
 
-        {/* Name + flair */}
-        <div className="profile-identity">
-          <UserBadge
-            username={profile.community_username}
-            isMember={profile.is_member}
-            flair={profile.community_flair}
-            size="large"
-          />
+        {/* Info: name, bio, meta */}
+        <div className="profile-info">
+          <div className="profile-username-row">
+            <UserBadge profile={profile} showKarma={false} />
+          </div>
+
           {profile.community_bio && (
             <p className="profile-bio">{profile.community_bio}</p>
           )}
-        </div>
 
-        {/* Follow button — client component, hydrates after load */}
-        <div className="profile-follow-action">
-          <FollowButton
-            targetUserId={profile.id}
-            initialFollowerCount={followerCount ?? 0}
-          />
-        </div>
+          <div className="profile-meta">
+            {joinedDate && (
+              <span className="profile-meta-item">
+                📅 Joined {joinedDate}
+              </span>
+            )}
+            <span className="profile-meta-item">
+              💬 <strong>{questionCount ?? 0}</strong> questions
+            </span>
+          </div>
 
-        {/* Stats row */}
-        <div className="profile-stats">
-          <div className="profile-stat">
-            <span className="profile-stat-value">{followerCount ?? 0}</span>
-            <span className="profile-stat-label">followers</span>
+          {/* Follower / following counts */}
+          <div className="profile-stats">
+            <div className="profile-stat">
+              <span className="profile-stat-value">{followerCount ?? 0}</span>
+              <span className="profile-stat-label">followers</span>
+            </div>
+            <div className="profile-stat-divider" />
+            <div className="profile-stat">
+              <span className="profile-stat-value">{followingCount ?? 0}</span>
+              <span className="profile-stat-label">following</span>
+            </div>
           </div>
-          <div className="profile-stat-divider" />
-          <div className="profile-stat">
-            <span className="profile-stat-value">{followingCount ?? 0}</span>
-            <span className="profile-stat-label">following</span>
-          </div>
-          <div className="profile-stat-divider" />
-          <div className="profile-stat">
-            <span className="profile-stat-value">{questionCount ?? 0}</span>
-            <span className="profile-stat-label">questions</span>
-          </div>
-          <div className="profile-stat-divider" />
-          <div className="profile-stat">
-            <KarmaTag karma={totalKarma} />
+
+          {/* Follow button */}
+          <div className="profile-follow-action">
+            <FollowButton
+              targetUserId={profile.id}
+              initialFollowerCount={followerCount ?? 0}
+            />
           </div>
         </div>
-
-        {/* Joined date */}
-        {joinedDate && (
-          <p className="profile-joined">Joined {joinedDate}</p>
-        )}
 
       </div>
 
+      {/* ─── Karma block ──────────────────────────────────── */}
+      <div className={`profile-karma-block${profile.is_member ? ' member-karma' : ''}`}>
+        <KarmaTag karma={totalKarma} size="lg" />
+      </div>
+
       {/* ─── Recent questions ──────────────────────────────── */}
-      {recentQuestions && recentQuestions.length > 0 && (
-        <div className="profile-section">
-          <h2 className="profile-section-title">Recent questions</h2>
-          <ul className="profile-question-list">
-            {recentQuestions.map((q) => (
-              <li key={q.id} className="profile-question-item">
-                <Link href={`/q/${q.slug}`} className="profile-question-title">
-                  {q.title}
-                </Link>
-                <div className="profile-question-meta">
-                  <span>{q.upvotes ?? 0} upvotes</span>
-                  <span>·</span>
-                  <span>{q.answer_count ?? 0} answers</span>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
+      <p className="profile-section-title">Questions</p>
+
+      {recentQuestions && recentQuestions.length > 0 ? (
+        <ul className="profile-question-list">
+          {recentQuestions.map((q) => (
+            <li key={q.id} className="profile-question-item">
+              <Link href={`/q/${q.slug}`} className="profile-question-title">
+                {q.title}
+              </Link>
+              <div className="profile-question-meta">
+                <span>{q.upvotes ?? 0} upvotes</span>
+                <span>·</span>
+                <span>{q.answer_count ?? 0} answers</span>
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="profile-empty">No questions yet.</p>
       )}
 
     </div>
@@ -185,7 +190,10 @@ export default async function ProfilePage({ params }) {
 }
 
 // --- CHANGE LOG ---
-// [May 17, 2026] UPDATED: Phase 9 — added follower/following counts + FollowButton
-// REASON: Phase 9 follow system requires counts on profile page.
-//         Counts fetched server-side for SEO. FollowButton hydrates client-side.
+// [May 17, 2026] UPDATED: Phase 9 — fixed prop mismatch crash
+// REASON: Previous version passed wrong props to UserBadge and KarmaTag
+//         causing server-side crash. UserBadge takes profile object.
+//         KarmaTag takes karma as a number. Both corrected.
+//         Restored original layout from Phase 7 + added follower/following
+//         counts and FollowButton.
 // --- END CHANGE LOG ---
