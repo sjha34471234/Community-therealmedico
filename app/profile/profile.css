@@ -1,0 +1,230 @@
+/* ============================================================
+   FILE: app/profile/profile.css
+   PURPOSE: Profile page styles + Real Medico+ cosmetic styles
+   LAST CHANGED: May 17, 2026
+   WHY IT EXISTS: Per-page CSS rule — Phase 7
+   DEPENDENCIES: app/globals.css (variables)
+   ⚠️ DO NOT CHANGE: --member-gold, --member-border, --member-bg variable names
+   ============================================================ */
+
+/* ── Profile Page Layout ── */
+
+.profile-page {
+  max-width: 768px;
+  margin: 0 auto;
+  padding: 32px 16px 64px;
+}
+
+.profile-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+  margin-bottom: 32px;
+}
+
+.profile-avatar-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.profile-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: var(--bg-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--accent-primary);
+  border: 3px solid var(--bg-tertiary);
+  overflow: hidden;
+}
+
+.profile-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ── Real Medico+ Avatar Border ── */
+
+.profile-avatar.member-avatar {
+  border: 3px solid var(--member-border);
+  box-shadow: 0 0 0 2px var(--member-bg);
+}
+
+/* ── Profile Info ── */
+
+.profile-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.profile-username-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.profile-username {
+  font-family: 'Inter', sans-serif;
+  font-weight: 700;
+  font-size: 1.4rem;
+  color: var(--text-primary);
+}
+
+.profile-username.member-username {
+  color: var(--member-gold);
+}
+
+/* ── Real Medico+ Crown Icon ── */
+
+.member-crown {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+/* ── Real Medico+ Flair Badge ── */
+
+.member-flair-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--member-bg);
+  color: var(--member-gold);
+  border: 1px solid var(--member-border);
+  border-radius: 20px;
+  padding: 2px 10px;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+/* ── Profile Bio + Meta ── */
+
+.profile-bio {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  white-space: pre-wrap;
+}
+
+.profile-meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.profile-meta-item {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.profile-meta-item strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* ── Karma Block ── */
+
+.profile-karma-block {
+  background: var(--bg-secondary);
+  border: 1px solid var(--bg-tertiary);
+  border-radius: 12px;
+  padding: 20px 24px;
+  margin-bottom: 32px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.profile-karma-block.member-karma {
+  background: var(--member-bg);
+  border-color: var(--member-border);
+}
+
+.profile-karma-score {
+  font-family: 'Inter', sans-serif;
+  font-weight: 700;
+  font-size: 2rem;
+  color: var(--accent-primary);
+  line-height: 1;
+}
+
+.profile-karma-block.member-karma .profile-karma-score {
+  color: var(--member-gold);
+}
+
+.profile-karma-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.profile-karma-milestone {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+/* ── Questions Section ── */
+
+.profile-section-title {
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--bg-tertiary);
+}
+
+.profile-empty {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 32px 0;
+}
+
+/* ── Responsive ── */
+
+@media (max-width: 480px) {
+  .profile-header {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  .profile-username-row {
+    justify-content: center;
+  }
+
+  .profile-meta {
+    justify-content: center;
+  }
+
+  .profile-karma-block {
+    flex-direction: column;
+    text-align: center;
+  }
+}
+
+/* --- CHANGE LOG ---
+   [May 17, 2026] CREATED: Profile page styles + Real Medico+ cosmetics
+   REASON: Phase 7 — per-page CSS rule, member gold styles
+   --- END CHANGE LOG --- */
