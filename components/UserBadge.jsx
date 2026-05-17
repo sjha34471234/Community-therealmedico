@@ -1,71 +1,52 @@
 // ============================================================
 // FILE: components/UserBadge.jsx
-// PURPOSE: Displays a user's community username + flair badge
-// LAST CHANGED: May 15, 2026
-// WHY IT EXISTS: Username display is needed in AnswerCard,
-//   QuestionCard, and future profile pages. Centralising it
-//   here means member gold styling is applied consistently
-//   everywhere from one place.
-// DEPENDENCIES: None — pure display component
-// ⚠️ DO NOT CHANGE: Member gold colour must use --member-gold
-//   CSS variable. Anonymous fallback must always show safely.
-//   Never add 'use client' — this is a server-safe display component.
+// PURPOSE: Displays username + karma tag + Real Medico+ gold colour and crown
+// LAST CHANGED: May 17, 2026
+// WHY IT EXISTS: Single place to control how usernames render everywhere
+// DEPENDENCIES: components/KarmaTag.jsx, app/profile/profile.css
+// ⚠️ DO NOT CHANGE: member-username and member-crown class names — used in profile.css
 // ============================================================
 
-export default function UserBadge({ username, flair, isMember = false, size = 'md' }) {
+import Link from 'next/link';
+import KarmaTag from './KarmaTag';
+import '../app/profile/profile.css';
 
-  // Fallback if no username set yet
-  const displayName = username ?? 'Anonymous User'
+export default function UserBadge({ profile, showKarma = false }) {
+  if (!profile) return null;
 
-  const sizeStyles = {
-    sm: { fontSize: '0.78rem', flairSize: '0.65rem' },
-    md: { fontSize: '0.88rem', flairSize: '0.72rem' },
-    lg: { fontSize: '1.05rem', flairSize: '0.78rem' },
-  }
-
-  const { fontSize, flairSize } = sizeStyles[size] ?? sizeStyles.md
+  const username = profile.community_username || 'Anonymous';
+  const isMember = profile.is_member === true;
 
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-
-      {/* Username */}
-      <span style={{
-        fontFamily: 'Inter, system-ui, sans-serif',
-        fontWeight: 600,
-        fontSize,
-        color: isMember ? 'var(--member-gold)' : 'var(--text-primary)',
-        letterSpacing: '-0.01em',
-      }}>
-        {isMember && (
-          <span style={{ marginRight: '3px' }} aria-label="Real Medico+ member">👑</span>
-        )}
-        {displayName}
-      </span>
-
-      {/* Flair badge — only shown if flair is set */}
-      {flair && (
-        <span style={{
-          display: 'inline-block',
-          fontSize: flairSize,
-          fontWeight: 500,
-          fontFamily: 'Inter, system-ui, sans-serif',
+    <span className="user-badge" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+      <Link
+        href={`/profile/${username}`}
+        style={{
+          fontFamily: 'Inter, sans-serif',
+          fontWeight: 600,
+          fontSize: '0.9rem',
           color: isMember ? 'var(--member-gold)' : 'var(--accent-primary)',
-          background: isMember ? 'var(--member-bg)' : 'var(--accent-light)',
-          border: `1px solid ${isMember ? 'var(--member-border)' : 'var(--accent-primary)'}`,
-          borderRadius: '4px',
-          padding: '1px 6px',
-          lineHeight: 1.5,
-          whiteSpace: 'nowrap',
-        }}>
-          {flair}
+          textDecoration: 'none',
+        }}
+      >
+        {isMember && <span className="member-crown" aria-label="Real Medico+ member">👑</span>}
+        {' '}{username}
+      </Link>
+
+      {isMember && (
+        <span className="member-flair-badge">
+          ✦ Real Medico+
         </span>
       )}
 
+      {showKarma && profile.karma !== undefined && (
+        <KarmaTag karma={profile.karma} />
+      )}
     </span>
-  )
+  );
 }
 
 // --- CHANGE LOG ---
-// [May 15, 2026] CREATED: Phase 4 — username + flair display
-// REASON: Consistent username rendering across all cards and pages
+// [May 17, 2026] UPDATED: Added Real Medico+ gold colour, crown icon, flair badge
+// REASON: Phase 7 — member cosmetics
 // --- END CHANGE LOG ---
