@@ -1,0 +1,122 @@
+/* ============================================================
+   FILE: app/tags/tags.css
+   PURPOSE: Styles for the Browse Tags page and tag badges
+   LAST CHANGED: May 17, 2026
+   WHY IT EXISTS: Imported by app/tags/page.js — keeps globals.css slim
+   DEPENDENCIES: CSS variables from globals.css
+   ============================================================ */
+
+/* ─── TAGS PAGE ─────────────────────────────────────────────── */
+
+.tags-page {
+  max-width: 768px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+.tags-page__header {
+  margin-bottom: 2rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--bg-tertiary);
+}
+
+.tags-page__title {
+  font-family: 'Merriweather', Georgia, serif;
+  font-weight: 700;
+  font-size: 1.5rem;
+  color: var(--text-primary);
+  margin: 0 0 0.5rem 0;
+}
+
+.tags-page__subtitle {
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.tags-page__empty {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--text-muted);
+  font-size: 0.9375rem;
+}
+
+.tags-page__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2.5rem;
+}
+
+/* ─── TAG CATEGORY SECTION ──────────────────────────────────── */
+
+.tags-category {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.tags-category__header {
+  margin-bottom: 0.25rem;
+}
+
+.tags-category__label {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--text-primary);
+  margin: 0 0 0.25rem 0;
+}
+
+.tags-category__desc {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.tags-category__grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.625rem;
+}
+
+.tags-category__card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+}
+
+.tags-category__count {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  padding-left: 2px;
+}
+
+/* ─── TAG BADGE ─────────────────────────────────────────────── */
+
+.tag-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 4px;
+  background-color: var(--accent-light);
+  color: var(--accent-primary);
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background-color 0.15s ease;
+  white-space: nowrap;
+}
+
+.tag-badge:hover {
+  background-color: #d6eaf8;
+  color: var(--accent-hover);
+  text-decoration: none;
+}
+
+.tag-badge--sm { font-size: 0.75rem; padding: 3px 8px; }
+.tag-badge--lg { font-size: 0.9375rem; padding: 6px 14px; }
+
+/* --- CHANGE LOG ---
+   [May 17, 2026] CREATED: Split from globals.css for maintainability
+   --- END CHANGE LOG --- */
