@@ -1,7 +1,7 @@
 // ============================================================
 // FILE: app/api/questions/route.js
 // PURPOSE: API route for community questions — GET feed + POST new question
-// LAST CHANGED: May 14, 2026
+// LAST CHANGED: May 17, 2026
 // WHY IT EXISTS: GET powers the live question feed (Phase 2).
 //   POST added in Phase 3 — handles new question submission with auth,
 //   rate limiting, slug generation, and Supabase insert.
@@ -127,13 +127,13 @@ export async function GET(request) {
       })
     }
 
-    // Fetch author usernames
+    // Fetch author usernames + member status
     const userIds = Array.from(new Set(processed.map(function getId(q) { return q.user_id }).filter(Boolean)))
     let profileMap = {}
     if (userIds.length > 0) {
       const { data: profiles } = await supabase
         .from('profiles')
-        .select('id, community_username')
+        .select('id, community_username, is_member')
         .in('id', userIds)
       if (profiles) {
         profiles.forEach(function mapP(p) { profileMap[p.id] = p })
@@ -145,6 +145,7 @@ export async function GET(request) {
       return {
         ...q,
         author_username: profile ? (profile.community_username || 'Anonymous User') : 'Anonymous User',
+        is_member_post: profile ? (profile.is_member === true) : false,
       }
     })
 
@@ -194,7 +195,6 @@ export async function POST(request) {
       : []
 
     // Verify auth server-side using anon key + cookie session
-    // We use the anon client with the cookie so getUser() works correctly
     const anonClient = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
@@ -266,6 +266,6 @@ export async function POST(request) {
 // --- CHANGE LOG ---
 // [May 14, 2026] CREATED: GET handler — Phase 2 feed
 // [May 14, 2026] UPDATED: POST handler added — Phase 3
-// REASON: New question submission. Auth verified server-side. Rate limit 5/hour.
-//   Slug generated from title. last_activity_at set on insert.
+// [May 17, 2026] UPDATED: profiles SELECT now includes is_member — Phase 7
+// REASON: is_member_post flag needed by QuestionCard for gold border cosmetic
 // --- END CHANGE LOG ---
