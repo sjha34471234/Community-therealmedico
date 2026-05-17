@@ -7,6 +7,7 @@
 // ⚠️ DO NOT CHANGE: revalidate = 3600 — tag post_counts change slowly
 // ============================================================
 
+import '@/app/tags/tags.css'
 import TagBadge from '@/components/TagBadge'
 
 export const revalidate = 3600
