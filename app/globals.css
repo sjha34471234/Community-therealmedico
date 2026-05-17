@@ -8,6 +8,8 @@
                      Never add overflow:hidden — breaks all pages
                      Never add @import for fonts — use @font-face only
                      Never add page-specific styles here — use per-page CSS files
+                     Never remove navbar CSS block — causes vertical stacking
+                     Every className in Navbar.jsx must have a rule here
    ============================================================ */
 
 /* ─── FONTS ─────────────────────────────────────────────────── */
@@ -220,6 +222,24 @@ a:hover {
   margin-left: auto;
 }
 
+.navbar-username {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--accent-primary);
+  text-decoration: none;
+  white-space: nowrap;
+  padding: 4px 6px;
+  border-radius: 6px;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.navbar-username:hover {
+  color: var(--accent-hover);
+  background: var(--accent-light);
+  text-decoration: none;
+}
+
 .navbar-signin {
   font-family: 'Inter', sans-serif;
   font-size: 0.875rem;
@@ -277,7 +297,7 @@ a:hover {
    REASON: File was growing too large — split for maintainability
    [May 17, 2026] ADDED: .navbar-gear styles for Phase 8 gear icon
    [May 17, 2026] FIXED: Full navbar CSS restored — lost during refactor
-   REASON: .navbar, .navbar-inner, .navbar-logo etc were missing,
-           causing vertical stacking layout break
+   REASON: .navbar, .navbar-inner, .navbar-logo etc were missing
+   [May 17, 2026] ADDED: .navbar-username — username link next to gear icon
+   REASON: Username was missing from navbar after Phase 8 rewrite
    --- END CHANGE LOG --- */
-
