@@ -1,11 +1,11 @@
 // ============================================================
 // FILE: components/Navbar.jsx
 // PURPOSE: Top navigation bar — logo, tags link, search bar,
-//          gear icon (logged in), sign in link (logged out)
+//          username link, gear icon (logged in), sign in (logged out)
 // LAST CHANGED: May 17, 2026
 // WHY IT EXISTS: App-wide navigation. Sign Out was removed in Phase 8
 //                and moved to components/settings/AccountSettings.jsx.
-//                Gear icon added linking to /settings.
+//                Gear icon links to /settings. Username links to profile.
 // DEPENDENCIES: components/SearchBar.jsx, store/authStore.js,
 //               app/globals.css (navbar styles)
 // ⚠️ DO NOT CHANGE: Sign In navigates to /auth — never a modal.
@@ -13,6 +13,8 @@
 //                   .navbar-search hides SearchBar below 640px.
 //                   External links use <a> — never Next.js <Link>.
 //                   Phase 10 adds NotificationBell between search and gear.
+//                   All navbar classes must exist in globals.css —
+//                   verify every className has a matching CSS rule.
 // ============================================================
 
 'use client';
@@ -23,7 +25,7 @@ import useAuthStore from '@/store/authStore';
 import SearchBar from '@/components/SearchBar';
 
 export default function Navbar() {
-  const { user, loading } = useAuthStore();
+  const { user, loading, profile } = useAuthStore();
 
   return (
     <nav className="navbar">
@@ -45,9 +47,14 @@ export default function Navbar() {
 
         <div className="navbar-actions">
           {!loading && user ? (
-            <Link href="/settings" className="navbar-gear" aria-label="Settings">
-              <Settings size={20} strokeWidth={1.75} />
-            </Link>
+            <>
+              <Link href={`/profile/${profile?.community_username}`} className="navbar-username">
+                {profile?.community_username}
+              </Link>
+              <Link href="/settings" className="navbar-gear" aria-label="Settings">
+                <Settings size={20} strokeWidth={1.75} />
+              </Link>
+            </>
           ) : !loading ? (
             <Link href="/auth" className="navbar-signin">
               Sign in
@@ -61,7 +68,8 @@ export default function Navbar() {
 }
 
 // --- CHANGE LOG ---
-// [May 17, 2026] UPDATED: Phase 8 — replaced Sign Out button with gear icon
+// [May 17, 2026] UPDATED: Phase 8 — replaced Sign Out with gear icon
 // REASON: Sign Out moved to AccountSettings.jsx per architectural rule.
-//         Gear icon links to /settings for logged-in users.
+// [May 17, 2026] UPDATED: Restored username link next to gear icon
+// REASON: Username was missing from navbar after Phase 8 rewrite.
 // --- END CHANGE LOG ---
