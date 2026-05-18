@@ -1,39 +1,31 @@
 // ============================================================
 // FILE: components/FollowButton.jsx
 // PURPOSE: Follow/unfollow toggle button for profile pages
-// LAST CHANGED: May 17, 2026
+// LAST CHANGED: May 19, 2026
 // WHY IT EXISTS: Phase 9 — users can follow each other.
-//                Encapsulates follow state, optimistic UI, and API call.
 // DEPENDENCIES: store/authStore.js, app/api/follows/route.js
-// ⚠️ DO NOT CHANGE: Button is hidden on own profile — never show to self.
+// ⚠️ DO NOT CHANGE: Button hidden on own profile — never show to self.
 //                   Optimistic UI updates instantly, reverts on error.
 //                   Auth-gated — shows sign in prompt if not logged in.
 //                   Always uses window.location.origin in fetch (rule #22).
 //                   credentials: 'include' required on all fetches (rule #22).
+//                   onCountChange callback — called with server-confirmed count.
 // ============================================================
-
 'use client';
-
 import { useState, useEffect } from 'react';
 import useAuthStore from '@/store/authStore';
-
-export default function FollowButton({ targetUserId, initialFollowerCount = 0 }) {
+export default function FollowButton({ targetUserId, initialFollowerCount = 0, onCountChange }) {
   const { user, accessToken } = useAuthStore();
-
   const [following, setFollowing] = useState(false);
   const [followerCount, setFollowerCount] = useState(initialFollowerCount);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-
   const isOwnProfile = user?.id === targetUserId;
-
-  // Check current follow status on mount
   useEffect(() => {
     if (!user || isOwnProfile || !targetUserId) {
       setLoading(false);
       return;
     }
-
     async function checkFollowStatus() {
       try {
         const res = await fetch(
@@ -48,32 +40,22 @@ export default function FollowButton({ targetUserId, initialFollowerCount = 0 })
         setLoading(false);
       }
     }
-
     checkFollowStatus();
   }, [user, targetUserId, isOwnProfile]);
-
-  // Don't render anything on own profile
   if (isOwnProfile) return null;
-
-  // Not logged in — show prompt
   if (!user) {
     return (
-      <a href="/auth" className="follow-btn follow-btn--guest">
-        Sign in to follow
-      </a>
+      <a href="/auth" className="follow-btn follow-btn--guest">Sign in to follow</a>
     );
   }
-
   async function handleToggle() {
     if (busy) return;
     setBusy(true);
-
-    // Optimistic update
     const wasFollowing = following;
     const prevCount = followerCount;
     setFollowing(!wasFollowing);
     setFollowerCount(wasFollowing ? prevCount - 1 : prevCount + 1);
-
+    if (onCountChange) onCountChange(wasFollowing ? prevCount - 1 : prevCount + 1);
     try {
       const res = await fetch(`${window.location.origin}/api/follows`, {
         method: 'POST',
@@ -84,35 +66,29 @@ export default function FollowButton({ targetUserId, initialFollowerCount = 0 })
         },
         body: JSON.stringify({ following_id: targetUserId }),
       });
-
       const data = await res.json();
-
       if (!res.ok) {
-        // Revert on error
         setFollowing(wasFollowing);
         setFollowerCount(prevCount);
+        if (onCountChange) onCountChange(prevCount);
         console.error('Follow toggle error:', data.error);
         return;
       }
-
-      // Sync with server truth
       setFollowing(data.following);
       setFollowerCount(data.follower_count);
-
+      if (onCountChange) onCountChange(data.follower_count);
     } catch (err) {
-      // Revert on network error
       setFollowing(wasFollowing);
       setFollowerCount(prevCount);
+      if (onCountChange) onCountChange(prevCount);
       console.error('FollowButton toggle error:', err);
     } finally {
       setBusy(false);
     }
   }
-
   if (loading) {
     return <button className="follow-btn follow-btn--loading" disabled>…</button>;
   }
-
   return (
     <button
       className={`follow-btn ${following ? 'follow-btn--following' : 'follow-btn--follow'}`}
@@ -123,9 +99,9 @@ export default function FollowButton({ targetUserId, initialFollowerCount = 0 })
     </button>
   );
 }
-
 // --- CHANGE LOG ---
 // [May 17, 2026] CREATED: Phase 9 — follow/unfollow button
-// REASON: Profile pages need a follow toggle. Optimistic UI gives
-//         instant feedback. Hidden on own profile. Auth-gated.
+// [May 19, 2026] UPDATED: Added onCountChange callback prop.
+// REASON: ProfileFollowBlock needs to receive the server-confirmed
+//         follower count after each toggle to update the stats row live.
 // --- END CHANGE LOG ---
