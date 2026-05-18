@@ -77,15 +77,11 @@ export default function RootLayout({ children }) {
             }}
           />
           <Navbar />
-          <div style={{ minHeight: '100vh' }}>
+          <div id="page-scroll-container">
             {children}
+            <Footer />
           </div>
-          <Footer />
         </AuthProvider>
-        {/* BottomNav is outside AuthProvider wrapper div but inside body.
-            It uses its own useAuthStore hook internally.
-            Keeping it as a direct child of body prevents any parent
-            transform/filter/overflow from breaking position:fixed */}
         <AuthProvider>
           <BottomNav />
         </AuthProvider>
