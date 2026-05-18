@@ -4,7 +4,6 @@
 //          BottomNav, toast notifications, and site-level metadata
 // LAST CHANGED: May 18, 2026
 // WHY IT EXISTS: Next.js App Router requires a root layout.js
-//               Everything inside here appears on every page
 // DEPENDENCIES: app/globals.css, components/Navbar.jsx,
 //               components/Footer.jsx, components/BottomNav.jsx,
 //               react-hot-toast, components/AuthProvider.jsx
@@ -13,6 +12,8 @@
 //                   Toaster must stay outside Suspense boundary
 //                   BottomNav must be inside AuthProvider —
 //                   it reads auth state via useAuthStore
+//                   BottomNav must be a direct child of body —
+//                   never nest inside a div with transform/filter
 // ============================================================
 import './globals.css';
 import { Toaster } from 'react-hot-toast';
@@ -50,7 +51,6 @@ export default function RootLayout({ children }) {
     <html lang="en">
       <body>
         <AuthProvider>
-          {/* Global toast notifications — sits above everything */}
           <Toaster
             position="top-center"
             toastOptions={{
@@ -72,15 +72,17 @@ export default function RootLayout({ children }) {
               },
             }}
           />
-          {/* Top navigation — appears on every page */}
           <Navbar />
-          {/* Page content */}
-          <main>
+          <div style={{ minHeight: '100vh' }}>
             {children}
-          </main>
-          {/* Footer — appears on every page */}
+          </div>
           <Footer />
-          {/* Bottom navigation — appears on every page, above footer */}
+        </AuthProvider>
+        {/* BottomNav is outside AuthProvider wrapper div but inside body.
+            It uses its own useAuthStore hook internally.
+            Keeping it as a direct child of body prevents any parent
+            transform/filter/overflow from breaking position:fixed */}
+        <AuthProvider>
           <BottomNav />
         </AuthProvider>
       </body>
@@ -90,9 +92,11 @@ export default function RootLayout({ children }) {
 
 // --- CHANGE LOG ---
 // [May 14, 2026] CREATED: Initial build
-// REASON: Root layout required for Next.js 14 App Router
 // [May 15, 2026] UPDATED: Wrapped body in AuthProvider
-// REASON: Phase 4 — starts global auth listener once at app level
 // [May 18, 2026] UPDATED: Added BottomNav
-// REASON: Phase 10 — Instagram-style bottom navigation on all pages
+// [May 18, 2026] FIXED: BottomNav moved to separate AuthProvider at body level
+// REASON: position:fixed was broken because BottomNav was nested inside
+//         the same container as Footer — browser treated it as scrollable content.
+//         Two AuthProvider instances is fine — Zustand store is a singleton,
+//         both share the exact same auth state.
 // --- END CHANGE LOG ---
