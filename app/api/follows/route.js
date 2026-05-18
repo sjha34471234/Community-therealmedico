@@ -1,15 +1,17 @@
 // ============================================================
 // FILE: app/api/follows/route.js
 // PURPOSE: Follow/unfollow toggle + follower/following list endpoints
-// LAST CHANGED: May 17, 2026
+// LAST CHANGED: May 18, 2026
 // WHY IT EXISTS: Phase 9 — follows system. Single route handles
 //                all follow operations for the community_follows table.
+//                Phase 10: inserts new_follower notification on follow.
 // DEPENDENCIES: lib/supabaseServer.js
 // ⚠️ DO NOT CHANGE: Users cannot follow themselves — enforced here
 //                   server-side AND hidden client-side (rule #48).
 //                   POST is auth-required. GET is public.
 //                   Always call supabaseServer() inside handler —
 //                   never at module level (rule #34).
+//                   Never notify yourself — skip if actor_id === user_id.
 // ============================================================
 
 import { NextResponse } from 'next/server';
@@ -25,6 +27,22 @@ async function getAuthUser(request) {
   const { data, error } = await supabase.auth.getUser(token);
   if (error || !data?.user) return null;
   return data.user;
+}
+
+// ─── Insert notification (safe — never throws) ───────────────
+async function insertNotification(db, { userId, type, actorId }) {
+  if (!userId || userId === actorId) return;
+  try {
+    await db.from('community_notifications').insert({
+      user_id: userId,
+      type,
+      actor_id: actorId,
+      question_id: null,
+      answer_id: null,
+    });
+  } catch (err) {
+    console.error('insertNotification error:', err);
+  }
 }
 
 // ─── POST /api/follows ───────────────────────────────────────
@@ -80,6 +98,13 @@ export async function POST(request) {
 
       if (insertError) throw insertError;
       following = true;
+
+      // Notify the person being followed
+      await insertNotification(supabase, {
+        userId: following_id,
+        type: 'new_follower',
+        actorId: user.id,
+      });
     }
 
     // Return updated follower count for the target user
@@ -129,7 +154,6 @@ export async function GET(request) {
     }
 
     if (type === 'followers') {
-      // People who follow this user
       const { data, error } = await supabase
         .from('community_follows')
         .select(`
@@ -152,7 +176,6 @@ export async function GET(request) {
     }
 
     if (type === 'following') {
-      // People this user follows
       const { data, error } = await supabase
         .from('community_follows')
         .select(`
@@ -187,4 +210,8 @@ export async function GET(request) {
 // REASON: Community needs follow/unfollow functionality.
 //         Single route handles toggle, list, and status check.
 //         Self-follow blocked server-side per rule #48.
+// [May 18, 2026] UPDATED: Phase 10
+// REASON: Added new_follower notification insert on follow.
+//         Notification only fires on follow — not on unfollow.
+//         Never notifies yourself — skipped if userId === actorId.
 // --- END CHANGE LOG ---
