@@ -55,7 +55,7 @@ export default function FollowButton({ targetUserId, initialFollowerCount = 0, o
     const prevCount = followerCount;
     setFollowing(!wasFollowing);
     setFollowerCount(wasFollowing ? prevCount - 1 : prevCount + 1);
-    if (onCountChange) onCountChange(wasFollowing ? prevCount - 1 : prevCount + 1);
+    if (onCountChange) onCountChange(wasFollowing ? prevCount - 1 : prevCount + 1, wasFollowing ? -1 : 1);
     try {
       const res = await fetch(`${window.location.origin}/api/follows`, {
         method: 'POST',
@@ -76,11 +76,11 @@ export default function FollowButton({ targetUserId, initialFollowerCount = 0, o
       }
       setFollowing(data.following);
       setFollowerCount(data.follower_count);
-      if (onCountChange) onCountChange(data.follower_count);
+      if (onCountChange) onCountChange(data.follower_count, data.following ? 1 : -1);
     } catch (err) {
       setFollowing(wasFollowing);
       setFollowerCount(prevCount);
-      if (onCountChange) onCountChange(prevCount);
+      if (onCountChange) onCountChange(prevCount, 0);
       console.error('FollowButton toggle error:', err);
     } finally {
       setBusy(false);
