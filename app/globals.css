@@ -107,18 +107,17 @@ html, body {
   overflow-x: hidden;
 }
 
-body {
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
-  font-family: 'Inter', system-ui, sans-serif;
-  font-size: 16px;
-  line-height: 1.6;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  /* Push content below fixed top navbar */
-  padding-top: 56px;
-  /* Push content above fixed bottom nav */
-  padding-bottom: 80px;
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  background: var(--bg-primary);
+  border-top: 1px solid var(--bg-tertiary);
+  width: 100%;
+  /* Anchor to real bottom edge including browser UI safe area */
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 /* ─── TYPOGRAPHY HELPERS ────────────────────────────────────── */
