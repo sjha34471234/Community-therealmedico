@@ -1,18 +1,20 @@
 // ============================================================
 // FILE: components/BottomNav.jsx
-// PURPOSE: Bottom navigation bar — Home, Search, Ask, Profile
+// PURPOSE: Bottom navigation bar — Home, Search, Ask, Chat, Profile
 // LAST CHANGED: May 18, 2026
 // WHY IT EXISTS: Phase 10 — Instagram-style bottom nav for all screen sizes
 // DEPENDENCIES: store/authStore.js, app/globals.css (bottom nav styles)
 // ⚠️ DO NOT CHANGE: Auth gate pattern — never redirect, always prompt.
 //                   Ask is always centred with raised style.
-//                   Chat will be added between Ask and Profile in Phase 11.
+//                   Chat shows "Coming soon" toast — Phase 11 will make it real.
+//                   5 items keeps layout balanced around the Ask pill.
 // ============================================================
 'use client';
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Home, Search, PlusCircle, User } from 'lucide-react';
+import { Home, Search, PlusCircle, MessageCircle, User } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 import useAuthStore from '@/store/authStore';
 
 const NAV_ITEMS = [
@@ -39,6 +41,14 @@ const NAV_ITEMS = [
     isAsk: true,
   },
   {
+    key: 'chat',
+    label: 'Chat',
+    href: null,
+    icon: MessageCircle,
+    authRequired: false,
+    isComingSoon: true,
+  },
+  {
     key: 'profile',
     label: 'Profile',
     href: null,
@@ -54,29 +64,35 @@ export default function BottomNav() {
 
   function isActive(item) {
     if (item.key === 'home') return pathname === '/';
-    if (item.key === 'profile') return pathname.startsWith('/profile');
+    if (item.key === 'search') return pathname.startsWith('/search');
     if (item.key === 'ask') return pathname === '/ask';
-    if (item.key === 'search') return pathname === '/search' || pathname.startsWith('/search');
+    if (item.key === 'chat') return pathname.startsWith('/chat');
+    if (item.key === 'profile') return pathname.startsWith('/profile');
     return false;
   }
 
   function handleTap(e, item) {
-    // If auth required and not logged in — go to sign in page
+    // Coming soon — show toast, go nowhere
+    if (item.isComingSoon) {
+      e.preventDefault();
+      toast('Chat is coming soon! 💬', {
+        icon: '🚧',
+        duration: 2500,
+      });
+      return;
+    }
+
+    // Auth required and not logged in — send to sign in
     if (item.authRequired && !user && !loading) {
       e.preventDefault();
       router.push('/auth');
       return;
     }
+
     // Profile tab — go to own profile
     if (item.key === 'profile' && user && profile?.community_username) {
       e.preventDefault();
       router.push(`/profile/${profile.community_username}`);
-      return;
-    }
-    // Settings tab — go to settings (Account tab)
-    if (item.key === 'account') {
-      e.preventDefault();
-      router.push('/settings');
       return;
     }
   }
@@ -89,9 +105,14 @@ export default function BottomNav() {
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
           const active = isActive(item);
-          const href = item.key === 'profile' && user && profile?.community_username
-            ? `/profile/${profile.community_username}`
-            : item.href || '/auth';
+
+          let href = item.href || '#';
+          if (item.key === 'profile' && user && profile?.community_username) {
+            href = `/profile/${profile.community_username}`;
+          }
+          if (item.key === 'profile' && !user) {
+            href = '/auth';
+          }
 
           return (
             <Link
@@ -101,13 +122,13 @@ export default function BottomNav() {
               className={[
                 'bottom-nav-item',
                 item.isAsk ? 'bottom-nav-ask' : '',
-                active ? 'bottom-nav-item--active' : '',
+                active && !item.isAsk ? 'bottom-nav-item--active' : '',
               ].filter(Boolean).join(' ')}
               aria-label={item.label}
             >
               <Icon
                 size={item.isAsk ? 28 : 22}
-                strokeWidth={active ? 2.25 : 1.75}
+                strokeWidth={active && !item.isAsk ? 2.25 : 1.75}
               />
               {!item.isAsk && (
                 <span className="bottom-nav-label">{item.label}</span>
@@ -122,6 +143,8 @@ export default function BottomNav() {
 
 // --- CHANGE LOG ---
 // [May 18, 2026] CREATED: Phase 10 — bottom navigation
-// REASON: Instagram-style bottom nav requested.
-//         Chat tab will be inserted between Ask and Profile in Phase 11.
+// [May 18, 2026] UPDATED: Added Chat tab between Ask and Profile
+// REASON: 4 items looked unbalanced. 5 items (Home·Search·Ask·Chat·Profile)
+//         centres the Ask pill perfectly with 2 items on each side.
+//         Chat shows "Coming soon" toast until Phase 11 is built.
 // --- END CHANGE LOG ---
