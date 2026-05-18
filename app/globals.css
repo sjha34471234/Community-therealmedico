@@ -172,6 +172,8 @@ a:hover {
   background: var(--bg-primary);
   border-bottom: 1px solid var(--bg-tertiary);
   width: 100%;
+  /* Anchor to real top edge including browser UI safe area */
+  padding-top: env(safe-area-inset-top, 0px);
 }
 
 .navbar-inner {
