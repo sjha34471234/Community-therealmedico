@@ -1,21 +1,24 @@
 // ============================================================
 // FILE: app/layout.js
 // PURPOSE: Root layout — wraps every page with Navbar, Footer,
-//          toast notifications, and site-level metadata
-// LAST CHANGED: May 15, 2026
+//          BottomNav, toast notifications, and site-level metadata
+// LAST CHANGED: May 18, 2026
 // WHY IT EXISTS: Next.js App Router requires a root layout.js
 //               Everything inside here appears on every page
 // DEPENDENCIES: app/globals.css, components/Navbar.jsx,
-//               components/Footer.jsx, react-hot-toast,
-//               components/AuthProvider.jsx
+//               components/Footer.jsx, components/BottomNav.jsx,
+//               react-hot-toast, components/AuthProvider.jsx
 // ⚠️ DO NOT CHANGE: metadataBase must stay as the full community
 //                   domain — OG images won't resolve without it
 //                   Toaster must stay outside Suspense boundary
+//                   BottomNav must be inside AuthProvider —
+//                   it reads auth state via useAuthStore
 // ============================================================
 import './globals.css';
 import { Toaster } from 'react-hot-toast';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
+import BottomNav from '@/components/BottomNav';
 import AuthProvider from '@/components/AuthProvider';
 
 export const metadata = {
@@ -77,6 +80,8 @@ export default function RootLayout({ children }) {
           </main>
           {/* Footer — appears on every page */}
           <Footer />
+          {/* Bottom navigation — appears on every page, above footer */}
+          <BottomNav />
         </AuthProvider>
       </body>
     </html>
@@ -88,4 +93,6 @@ export default function RootLayout({ children }) {
 // REASON: Root layout required for Next.js 14 App Router
 // [May 15, 2026] UPDATED: Wrapped body in AuthProvider
 // REASON: Phase 4 — starts global auth listener once at app level
+// [May 18, 2026] UPDATED: Added BottomNav
+// REASON: Phase 10 — Instagram-style bottom navigation on all pages
 // --- END CHANGE LOG ---
