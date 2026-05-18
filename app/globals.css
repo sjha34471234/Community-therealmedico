@@ -13,6 +13,7 @@
                      Never remove bottom-nav CSS block — causes layout break
                      Every className in Navbar.jsx must have a rule here
                      Every className in BottomNav.jsx must have a rule here
+                     navbar is position:fixed — never change to sticky
    ============================================================ */
 
 /* ─── FONTS ─────────────────────────────────────────────────── */
@@ -114,8 +115,10 @@ body {
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  /* Space for bottom nav on all screen sizes */
-  padding-bottom: 72px;
+  /* Push content below fixed top navbar */
+  padding-top: 56px;
+  /* Push content above fixed bottom nav */
+  padding-bottom: 80px;
 }
 
 /* ─── TYPOGRAPHY HELPERS ────────────────────────────────────── */
@@ -161,8 +164,10 @@ a:hover {
 /* ─── NAVBAR ────────────────────────────────────────────────── */
 
 .navbar {
-  position: sticky;
+  position: fixed;
   top: 0;
+  left: 0;
+  right: 0;
   z-index: 100;
   background: var(--bg-primary);
   border-bottom: 1px solid var(--bg-tertiary);
@@ -386,14 +391,12 @@ a:hover {
    [May 14, 2026] CREATED: Initial build
    [May 14, 2026] FIXED: Missing body brace, duplicate box-sizing, mobile overflow
    [May 17, 2026] REFACTORED: Page-specific styles moved to separate CSS files
-   REASON: File was growing too large — split for maintainability
    [May 17, 2026] ADDED: .navbar-gear styles for Phase 8 gear icon
    [May 17, 2026] FIXED: Full navbar CSS restored — lost during refactor
-   REASON: .navbar, .navbar-inner, .navbar-logo etc were missing
    [May 17, 2026] ADDED: .navbar-username — username link next to gear icon
-   REASON: Username was missing from navbar after Phase 8 rewrite
    [May 18, 2026] ADDED: .bottom-nav block — Phase 10 bottom navigation
-   REASON: Instagram-style bottom nav on all screen sizes
-   [May 18, 2026] ADDED: padding-bottom: 72px on body
-   REASON: Prevents page content hiding behind fixed bottom nav
+   [May 18, 2026] FIXED: navbar changed from sticky to position:fixed
+   REASON: Navbar was scrolling away — must stay fixed at top always
+   [May 18, 2026] ADDED: padding-top:56px on body
+   REASON: Fixed navbar covers content without this offset
    --- END CHANGE LOG --- */
