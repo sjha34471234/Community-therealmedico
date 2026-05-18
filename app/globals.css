@@ -199,31 +199,49 @@ a:hover {
   margin: 0 auto;
   padding: 0 16px;
   height: 56px;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+}
+
+.navbar-left {
   display: flex;
   align-items: center;
-  gap: 16px;
+}
+
+.navbar-centre {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.navbar-right {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
 }
 
 .navbar-logo {
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.navbar-logo:hover {
+  text-decoration: none;
+}
+
+.navbar-logo-bold {
   font-family: 'Merriweather', Georgia, serif;
   font-weight: 700;
   font-size: 1rem;
   color: var(--text-primary);
-  text-decoration: none;
-  white-space: nowrap;
-  flex-shrink: 0;
 }
 
-.navbar-logo:hover {
-  color: var(--accent-primary);
-  text-decoration: none;
-}
-
-.navbar-links {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-shrink: 0;
+.navbar-logo-light {
+  font-family: 'Inter', sans-serif;
+  font-weight: 400;
+  font-size: 1rem;
+  color: var(--text-secondary);
 }
 
 .navbar-link {
@@ -241,32 +259,6 @@ a:hover {
 .navbar-link:hover {
   color: var(--text-primary);
   background: var(--bg-secondary);
-  text-decoration: none;
-}
-
-.navbar-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-  margin-left: auto;
-}
-
-.navbar-username {
-  font-family: 'Inter', sans-serif;
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--accent-primary);
-  text-decoration: none;
-  white-space: nowrap;
-  padding: 4px 6px;
-  border-radius: 6px;
-  transition: color 0.15s ease, background 0.15s ease;
-}
-
-.navbar-username:hover {
-  color: var(--accent-hover);
-  background: var(--accent-light);
   text-decoration: none;
 }
 
@@ -288,38 +280,6 @@ a:hover {
   color: #ffffff;
   text-decoration: none;
 }
-
-.navbar-gear {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-secondary);
-  padding: 6px;
-  border-radius: 6px;
-  transition: color 0.15s ease, background 0.15s ease;
-  text-decoration: none;
-}
-
-.navbar-gear:hover {
-  color: var(--accent-primary);
-  background: var(--accent-light);
-}
-
-/* ─── NAVBAR SEARCH (responsive) ────────────────────────────── */
-
-.navbar-search {
-  display: none;
-}
-
-@media (min-width: 640px) {
-  .navbar-search {
-    display: block;
-    flex: 1;
-    max-width: 480px;
-    position: relative;
-  }
-}
-
 /* ─── BOTTOM NAV ────────────────────────────────────────────── */
 
 .bottom-nav {
