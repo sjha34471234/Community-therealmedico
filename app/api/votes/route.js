@@ -1,52 +1,62 @@
 // ============================================================
 // FILE: app/api/votes/route.js
 // PURPOSE: Handle upvote/downvote on questions and answers
-// LAST CHANGED: May 15, 2026
+// LAST CHANGED: May 18, 2026
 // WHY IT EXISTS: VoteButton.jsx has been wired to this endpoint
 //   since Phase 3. Handles insert, update, and removal of votes,
 //   and updates the vote count on the parent question or answer.
+//   Phase 10: inserts upvote_question / upvote_answer notifications.
 // DEPENDENCIES: lib/supabaseServer.js
 // ⚠️ DO NOT CHANGE: Vote count is always recalculated from the
 //   votes table — never manually incremented. Auth is always
 //   verified server-side. Never trust user_id from request body.
+//   Never notify yourself — skip if actor_id === user_id.
 // ============================================================
 
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { supabaseServer } from '@/lib/supabaseServer'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
 
-// Helper — create anon client with request cookies for auth check
-function anonClientWithCookies(request) {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    {
-      global: {
-        headers: { Cookie: request.headers.get('cookie') ?? '' },
-      },
-      auth: { persistSession: false, autoRefreshToken: false },
-    }
-  )
+// ── helpers ───────────────────────────────────────────────────
+
+function extractToken(request) {
+  const auth = request.headers.get('authorization') || '';
+  return auth.startsWith('Bearer ') ? auth.slice(7) : null;
 }
 
-// Service role client — bypasses RLS for vote writes
-function adminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY,
-    { auth: { persistSession: false, autoRefreshToken: false } }
-  )
+async function getUserFromToken(token) {
+  if (!token) return null;
+  const db = supabaseServer();
+  const { data, error } = await db.auth.getUser(token);
+  if (error || !data?.user) return null;
+  return data.user;
 }
 
+// ── Insert notification (safe — never throws) ─────────────────
+async function insertNotification(db, { userId, type, actorId, questionId, answerId }) {
+  if (!userId || userId === actorId) return;
+  try {
+    await db.from('community_notifications').insert({
+      user_id: userId,
+      type,
+      actor_id: actorId,
+      question_id: questionId || null,
+      answer_id: answerId || null,
+    });
+  } catch (err) {
+    console.error('insertNotification error:', err);
+  }
+}
+
+// ── POST ──────────────────────────────────────────────────────
 export async function POST(request) {
   try {
-    // --- 1. Verify auth ---
-    const anonClient = anonClientWithCookies(request)
-    const { data: { user }, error: authError } = await anonClient.auth.getUser()
-
-    if (authError || !user) {
+    // --- 1. Verify auth via Bearer token ---
+    const token = extractToken(request);
+    const user = await getUserFromToken(token);
+    if (!user) {
       return NextResponse.json({ error: 'Sign in to vote' }, { status: 401 })
     }
 
@@ -54,40 +64,41 @@ export async function POST(request) {
     const body = await request.json()
     const { question_id, answer_id, vote_type } = body
 
-    // vote_type must be 1 (up), -1 (down), or 0 (remove)
     if (![1, -1, 0].includes(vote_type)) {
       return NextResponse.json({ error: 'Invalid vote_type' }, { status: 400 })
     }
 
-    // Must target either a question or an answer — not both, not neither
     if ((!question_id && !answer_id) || (question_id && answer_id)) {
       return NextResponse.json({ error: 'Provide either question_id or answer_id' }, { status: 400 })
     }
 
-    const supabase = adminClient()
+    const db = supabaseServer()
     const targetField = question_id ? 'question_id' : 'answer_id'
     const targetId = question_id ?? answer_id
 
     // --- 3. Check for existing vote ---
-    const { data: existing } = await supabase
+    const { data: existing } = await db
       .from('community_votes')
       .select('id, vote_type')
       .eq('user_id', user.id)
       .eq(targetField, targetId)
       .maybeSingle()
 
+    // Was this a brand new upvote (not a change or removal)?
+    const isNewUpvote = vote_type === 1 && !existing;
+
     // --- 4. Apply vote logic ---
     if (vote_type === 0 || (existing && existing.vote_type === vote_type)) {
-      // Remove vote — either explicit 0 or clicking same vote again
+      // Remove vote
       if (existing) {
-        await supabase
+        await db
           .from('community_votes')
           .delete()
           .eq('id', existing.id)
       }
     } else if (existing) {
-      // Change vote direction (up→down or down→up)
-      await supabase
+      // Change vote direction
+      await db
         .from('community_votes')
         .update({ vote_type })
         .eq('id', existing.id)
@@ -98,31 +109,66 @@ export async function POST(request) {
         vote_type,
         [targetField]: targetId,
       }
-      await supabase
+      await db
         .from('community_votes')
         .insert(insertRow)
     }
 
-    // --- 5. Recalculate vote totals from votes table ---
-    const { data: voteTotals } = await supabase
+    // --- 5. Recalculate vote totals ---
+    const { data: voteTotals } = await db
       .from('community_votes')
       .select('vote_type')
       .eq(targetField, targetId)
 
-    const upvotes = (voteTotals ?? []).filter(v => v.vote_type === 1).length
-    const downvotes = (voteTotals ?? []).filter(v => v.vote_type === -1).length
+    const upvotes = (voteTotals ?? []).filter(function isUp(v) { return v.vote_type === 1 }).length
+    const downvotes = (voteTotals ?? []).filter(function isDown(v) { return v.vote_type === -1 }).length
 
     // --- 6. Write totals back to parent row ---
     const table = question_id ? 'community_questions' : 'community_answers'
-    const idField = question_id ? 'id' : 'id'
-
-    await supabase
+    await db
       .from(table)
       .update({ upvotes, downvotes })
-      .eq(idField, targetId)
+      .eq('id', targetId)
 
-    // --- 7. Return new totals + user's current vote state ---
-    const { data: currentVote } = await supabase
+    // --- 7. Notify on new upvote only ---
+    if (isNewUpvote) {
+      if (question_id) {
+        // Find question owner
+        const { data: q } = await db
+          .from('community_questions')
+          .select('user_id')
+          .eq('id', question_id)
+          .single();
+        if (q?.user_id) {
+          await insertNotification(db, {
+            userId: q.user_id,
+            type: 'upvote_question',
+            actorId: user.id,
+            questionId: question_id,
+            answerId: null,
+          });
+        }
+      } else {
+        // Find answer owner + its question_id for the link
+        const { data: a } = await db
+          .from('community_answers')
+          .select('user_id, question_id')
+          .eq('id', answer_id)
+          .single();
+        if (a?.user_id) {
+          await insertNotification(db, {
+            userId: a.user_id,
+            type: 'upvote_answer',
+            actorId: user.id,
+            questionId: a.question_id,
+            answerId: answer_id,
+          });
+        }
+      }
+    }
+
+    // --- 8. Return new totals + user's current vote state ---
+    const { data: currentVote } = await db
       .from('community_votes')
       .select('vote_type')
       .eq('user_id', user.id)
@@ -143,6 +189,9 @@ export async function POST(request) {
 
 // --- CHANGE LOG ---
 // [May 15, 2026] CREATED: Phase 4 — votes API
-// REASON: VoteButton.jsx wired to this endpoint since Phase 3,
-//   needed the actual route to go live
+// REASON: VoteButton.jsx wired to this endpoint since Phase 3.
+// [May 18, 2026] UPDATED: Phase 10
+// REASON: Added upvote_question + upvote_answer notification inserts.
+//         Switched to Bearer token auth + named supabaseServer import.
+//         Only notifies on brand new upvotes — not on vote changes or removals.
 // --- END CHANGE LOG ---
