@@ -1,17 +1,17 @@
 // ============================================================
 // FILE: app/api/answers/route.js
-// PURPOSE: API route for community answers — GET answers + POST new answer
-// LAST CHANGED: May 14, 2026
-// WHY IT EXISTS: Handles answer submission with auth verification, rate limiting,
-//   and critically — updates last_activity_at on the parent question after every
-//   new answer. This update is what powers the feed resurfacing "new reply" logic.
+// PURPOSE: GET answers + POST new answer + accept answer
+// LAST CHANGED: May 18, 2026
+// WHY IT EXISTS: Handles answer submission with auth, rate limiting,
+//   last_activity_at update, answer_count increment, and Phase 10
+//   notification inserts (new_answer + answer_accepted).
 // DEPENDENCIES: lib/supabaseServer.js
 // ⚠️ DO NOT CHANGE:
 //   - After inserting an answer, ALWAYS update last_activity_at on the question.
-//     Skipping this breaks the entire viewed-post / new reply feed system.
 //   - After inserting an answer, ALWAYS increment answer_count on the question.
 //   - Auth must be verified server-side — never trust client-sent user_id.
 //   - Rate limit: max 10 answers per user per hour.
+//   - Never notify yourself — skip if actor_id === user_id.
 //   - force-dynamic + cache: 'no-store' — live data, never cached.
 // ============================================================
 
@@ -19,22 +19,52 @@ export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
 
 import { NextResponse } from 'next/server'
-import { createServerClient } from '@/lib/supabaseServer'
-import { createClient } from '@supabase/supabase-js'
+import { supabaseServer } from '@/lib/supabaseServer'
 
-// ── Rate limit check ──────────────────────────────────────────────────────────
-async function checkAnswerRateLimit(supabase, userId) {
+// ── helpers ───────────────────────────────────────────────────
+
+function extractToken(request) {
+  const auth = request.headers.get('authorization') || '';
+  return auth.startsWith('Bearer ') ? auth.slice(7) : null;
+}
+
+async function getUserFromToken(token) {
+  if (!token) return null;
+  const db = supabaseServer();
+  const { data, error } = await db.auth.getUser(token);
+  if (error || !data?.user) return null;
+  return data.user;
+}
+
+// ── Rate limit check ──────────────────────────────────────────
+async function checkAnswerRateLimit(db, userId) {
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString()
-  const { count } = await supabase
+  const { count } = await db
     .from('community_answers')
     .select('id', { count: 'exact', head: true })
     .eq('user_id', userId)
     .gte('created_at', oneHourAgo)
-
   return (count || 0) >= 10
 }
 
-// ── GET — fetch answers for a question ───────────────────────────────────────
+// ── Insert notification (safe — never throws) ─────────────────
+async function insertNotification(db, { userId, type, actorId, questionId, answerId }) {
+  // Never notify yourself
+  if (userId === actorId) return;
+  try {
+    await db.from('community_notifications').insert({
+      user_id: userId,
+      type,
+      actor_id: actorId,
+      question_id: questionId || null,
+      answer_id: answerId || null,
+    });
+  } catch (err) {
+    console.error('insertNotification error:', err);
+  }
+}
+
+// ── GET — fetch answers for a question ────────────────────────
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url)
@@ -44,9 +74,9 @@ export async function GET(request) {
       return NextResponse.json({ error: 'question_id is required' }, { status: 400 })
     }
 
-    const supabase = createServerClient()
+    const db = supabaseServer()
 
-    const { data: answers, error } = await supabase
+    const { data: answers, error } = await db
       .from('community_answers')
       .select('id, body, upvotes, downvotes, is_accepted, created_at, user_id')
       .eq('question_id', questionId)
@@ -59,16 +89,15 @@ export async function GET(request) {
       return NextResponse.json({ error: 'Failed to load answers' }, { status: 500 })
     }
 
-    // Fetch author usernames
     const userIds = Array.from(new Set(
       (answers || []).map(function getId(a) { return a.user_id }).filter(Boolean)
     ))
 
     let profileMap = {}
     if (userIds.length > 0) {
-      const { data: profiles } = await supabase
+      const { data: profiles } = await db
         .from('profiles')
-        .select('id, community_username')
+        .select('id, community_username, is_member')
         .in('id', userIds)
       if (profiles) {
         profiles.forEach(function mapP(p) { profileMap[p.id] = p })
@@ -80,6 +109,7 @@ export async function GET(request) {
       return {
         ...a,
         author_username: profile ? (profile.community_username || 'Anonymous User') : 'Anonymous User',
+        author_is_member: profile ? (profile.is_member || false) : false,
       }
     })
 
@@ -93,10 +123,9 @@ export async function GET(request) {
   }
 }
 
-// ── POST — submit a new answer ────────────────────────────────────────────────
+// ── POST — submit a new answer or accept an answer ────────────
 export async function POST(request) {
   try {
-    // Parse body
     let body
     try {
       body = await request.json()
@@ -104,9 +133,74 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
     }
 
+    // ── Accept answer action ──────────────────────────────────
+    // Body: { action: 'accept', answer_id, question_id }
+    if (body.action === 'accept') {
+      const token = extractToken(request);
+      const user = await getUserFromToken(token);
+      if (!user) {
+        return NextResponse.json({ error: 'Unauthorised' }, { status: 401 });
+      }
+
+      const { answer_id, question_id } = body;
+      if (!answer_id || !question_id) {
+        return NextResponse.json({ error: 'answer_id and question_id required' }, { status: 400 });
+      }
+
+      const db = supabaseServer();
+
+      // Verify the question belongs to this user
+      const { data: question, error: qErr } = await db
+        .from('community_questions')
+        .select('id, user_id')
+        .eq('id', question_id)
+        .single();
+
+      if (qErr || !question) {
+        return NextResponse.json({ error: 'Question not found' }, { status: 404 });
+      }
+      if (question.user_id !== user.id) {
+        return NextResponse.json({ error: 'Only the question author can accept answers' }, { status: 403 });
+      }
+
+      // Mark accepted — unmark all others first
+      await db
+        .from('community_answers')
+        .update({ is_accepted: false })
+        .eq('question_id', question_id);
+
+      const { data: accepted, error: acceptErr } = await db
+        .from('community_answers')
+        .update({ is_accepted: true })
+        .eq('id', answer_id)
+        .select('id, user_id')
+        .single();
+
+      if (acceptErr) {
+        return NextResponse.json({ error: 'Failed to accept answer' }, { status: 500 });
+      }
+
+      // Mark question as answered
+      await db
+        .from('community_questions')
+        .update({ is_answered: true })
+        .eq('id', question_id);
+
+      // Notify the answer author their answer was accepted
+      await insertNotification(db, {
+        userId: accepted.user_id,
+        type: 'answer_accepted',
+        actorId: user.id,
+        questionId: question_id,
+        answerId: answer_id,
+      });
+
+      return NextResponse.json({ success: true }, { status: 200 });
+    }
+
+    // ── New answer ────────────────────────────────────────────
     const { question_id, body: answerBody } = body
 
-    // Validation
     if (!question_id || typeof question_id !== 'string') {
       return NextResponse.json({ error: 'question_id is required' }, { status: 400 })
     }
@@ -117,32 +211,19 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Answer must be under 5000 characters' }, { status: 400 })
     }
 
-    // Verify auth server-side
-    const anonClient = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-      {
-        auth: { persistSession: false, autoRefreshToken: false },
-        global: {
-          headers: {
-            cookie: request.headers.get('cookie') || '',
-          },
-        },
-      }
-    )
-
-    const { data: { user }, error: authError } = await anonClient.auth.getUser()
-
-    if (authError || !user) {
+    // Auth via Bearer token
+    const token = extractToken(request);
+    const user = await getUserFromToken(token);
+    if (!user) {
       return NextResponse.json({ error: 'You must be signed in to post an answer' }, { status: 401 })
     }
 
-    const supabase = createServerClient()
+    const db = supabaseServer()
 
     // Verify question exists
-    const { data: question, error: qError } = await supabase
+    const { data: question, error: qError } = await db
       .from('community_questions')
-      .select('id, answer_count')
+      .select('id, user_id, answer_count')
       .eq('id', question_id)
       .single()
 
@@ -150,8 +231,8 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Question not found' }, { status: 404 })
     }
 
-    // Rate limit check
-    const rateLimited = await checkAnswerRateLimit(supabase, user.id)
+    // Rate limit
+    const rateLimited = await checkAnswerRateLimit(db, user.id)
     if (rateLimited) {
       return NextResponse.json(
         { error: 'You have posted too many answers in the last hour. Please wait before posting again.' },
@@ -161,7 +242,7 @@ export async function POST(request) {
 
     // Insert answer
     const now = new Date().toISOString()
-    const { data: inserted, error: insertError } = await supabase
+    const { data: inserted, error: insertError } = await db
       .from('community_answers')
       .insert({
         question_id,
@@ -181,10 +262,8 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Failed to post answer. Please try again.' }, { status: 500 })
     }
 
-    // ⚠️ CRITICAL — update last_activity_at on the question.
-    // This is what powers the feed resurfacing "new reply" logic.
-    // Also increment answer_count.
-    const { error: updateError } = await supabase
+    // ⚠️ CRITICAL — update last_activity_at + answer_count
+    const { error: updateError } = await db
       .from('community_questions')
       .update({
         last_activity_at: now,
@@ -194,9 +273,17 @@ export async function POST(request) {
       .eq('id', question_id)
 
     if (updateError) {
-      // Answer was posted but the feed signal failed — log but don't fail the request
       console.error('POST /api/answers — failed to update last_activity_at:', updateError)
     }
+
+    // Notify question owner that their question received a new answer
+    await insertNotification(db, {
+      userId: question.user_id,
+      type: 'new_answer',
+      actorId: user.id,
+      questionId: question_id,
+      answerId: inserted.id,
+    });
 
     return NextResponse.json({ id: inserted.id }, { status: 201 })
 
@@ -208,7 +295,10 @@ export async function POST(request) {
 
 // --- CHANGE LOG ---
 // [May 14, 2026] CREATED: Phase 3
-// REASON: Answer submission + retrieval. Auth verified server-side. Rate limit 10/hour.
-//   Critical: updates last_activity_at + answer_count on parent question after insert.
-//   This update powers the feed "new reply" resurfacing logic — never skip it.
+// REASON: Answer submission + retrieval.
+// [May 18, 2026] UPDATED: Phase 10
+// REASON: Added notification inserts — new_answer + answer_accepted.
+//         Fixed import to use named { supabaseServer } export.
+//         Added accept answer action to POST handler.
+//         Switched auth to Bearer token pattern (iPad rule).
 // --- END CHANGE LOG ---
