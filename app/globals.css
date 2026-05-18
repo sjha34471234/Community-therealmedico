@@ -1,7 +1,8 @@
 /* ============================================================
    FILE: app/globals.css
-   PURPOSE: Base styles only — fonts, variables, resets, navbar
-   LAST CHANGED: May 17, 2026
+   PURPOSE: Base styles only — fonts, variables, resets, navbar,
+            notification bell, bottom nav
+   LAST CHANGED: May 18, 2026
    WHY IT EXISTS: Every page inherits these via app/layout.js
    DEPENDENCIES: Font WOFF2 files in /public/fonts/
    ⚠️ DO NOT CHANGE: @font-face must stay ABOVE @tailwind
@@ -9,7 +10,9 @@
                      Never add @import for fonts — use @font-face only
                      Never add page-specific styles here — use per-page CSS files
                      Never remove navbar CSS block — causes vertical stacking
+                     Never remove bottom-nav CSS block — causes layout break
                      Every className in Navbar.jsx must have a rule here
+                     Every className in BottomNav.jsx must have a rule here
    ============================================================ */
 
 /* ─── FONTS ─────────────────────────────────────────────────── */
@@ -111,6 +114,8 @@ body {
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Space for bottom nav on all screen sizes */
+  padding-bottom: 72px;
 }
 
 /* ─── TYPOGRAPHY HELPERS ────────────────────────────────────── */
@@ -290,6 +295,93 @@ a:hover {
   }
 }
 
+/* ─── BOTTOM NAV ────────────────────────────────────────────── */
+
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  background: var(--bg-primary);
+  border-top: 1px solid var(--bg-tertiary);
+  width: 100%;
+}
+
+.bottom-nav-inner {
+  max-width: 600px;
+  margin: 0 auto;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 0 8px;
+}
+
+.bottom-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  flex: 1;
+  height: 100%;
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: color 0.15s ease;
+  border-radius: 8px;
+  padding: 6px 4px;
+}
+
+.bottom-nav-item:hover {
+  color: var(--accent-primary);
+  text-decoration: none;
+  background: var(--accent-light);
+}
+
+.bottom-nav-item--active {
+  color: var(--accent-primary);
+}
+
+.bottom-nav-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.625rem;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0.01em;
+}
+
+/* ─── ASK BUTTON (centred raised pill) ──────────────────────── */
+
+.bottom-nav-ask {
+  flex: 0 0 56px;
+  width: 56px;
+  height: 56px;
+  background: var(--accent-primary);
+  color: #ffffff;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8px;
+  box-shadow: 0 4px 12px rgba(29, 111, 164, 0.35);
+  transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+  padding: 0;
+}
+
+.bottom-nav-ask:hover {
+  background: var(--accent-hover);
+  color: #ffffff;
+  text-decoration: none;
+  box-shadow: 0 6px 16px rgba(29, 111, 164, 0.45);
+  transform: translateY(-1px);
+}
+
+.bottom-nav-ask.bottom-nav-item--active {
+  background: var(--accent-hover);
+  color: #ffffff;
+}
+
 /* --- CHANGE LOG ---
    [May 14, 2026] CREATED: Initial build
    [May 14, 2026] FIXED: Missing body brace, duplicate box-sizing, mobile overflow
@@ -300,4 +392,8 @@ a:hover {
    REASON: .navbar, .navbar-inner, .navbar-logo etc were missing
    [May 17, 2026] ADDED: .navbar-username — username link next to gear icon
    REASON: Username was missing from navbar after Phase 8 rewrite
+   [May 18, 2026] ADDED: .bottom-nav block — Phase 10 bottom navigation
+   REASON: Instagram-style bottom nav on all screen sizes
+   [May 18, 2026] ADDED: padding-bottom: 72px on body
+   REASON: Prevents page content hiding behind fixed bottom nav
    --- END CHANGE LOG --- */
