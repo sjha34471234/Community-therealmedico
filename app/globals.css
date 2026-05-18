@@ -1,17 +1,10 @@
 /* ============================================================
    FILE: app/globals.css
-   PURPOSE: Base styles only — fonts, variables, resets, navbar, bottom nav
+   PURPOSE: Base styles — fonts, variables, resets, navbar, bottom nav
    LAST CHANGED: May 18, 2026
-   WHY IT EXISTS: Every page inherits these via app/layout.js
-   DEPENDENCIES: Font WOFF2 files in /public/fonts/
-   ⚠️ DO NOT CHANGE: @font-face must stay ABOVE @tailwind
-                     Never add overflow:hidden — breaks all pages
-                     Never add @import for fonts — use @font-face only
-                     Never add page-specific styles here — use per-page CSS files
-                     Never remove navbar CSS block — causes vertical stacking
-                     Never remove bottom-nav CSS block — causes layout break
-                     navbar is position:fixed with top:0 — never change
-                     bottom-nav is position:fixed with bottom:0 — never change
+   ⚠️ DO NOT CHANGE: html+body overflow setup — prevents browser chrome slide
+                     navbar/bottom-nav transform:translateZ(0) — GPU layer
+                     Never add overflow:hidden to html — breaks everything
    ============================================================ */
 
 /* ─── FONTS ─────────────────────────────────────────────────── */
@@ -90,6 +83,8 @@
   --member-gold:   #B8860B;
   --member-border: #D4AF37;
   --member-bg:     #FFFBEB;
+  --navbar-h:      56px;
+  --bottomnav-h:   64px;
 }
 
 /* ─── BASE RESETS ───────────────────────────────────────────── */
@@ -102,17 +97,22 @@ html {
   margin: 0;
   padding: 0;
   width: 100%;
-  overflow-x: hidden;
-  /* Lock html to the screen — this is what makes fixed elements
-     stay fixed even when browser chrome slides */
   height: 100%;
+  /* overflow-x hidden only — never overflow-y hidden */
+  overflow-x: hidden;
 }
 
 body {
   margin: 0;
   padding: 0;
   width: 100%;
-  overflow-x: hidden;
+  /* This is the key — body fills exactly the visible viewport height.
+     The browser measures this ONCE on load and never changes it.
+     Result: the browser never gets a "page is taller than viewport"
+     signal, so it never hides its chrome on scroll.
+     Scrolling happens inside #page-scroll-container below. */
+  height: 100dvh;
+  overflow: hidden;
   background-color: var(--bg-primary);
   color: var(--text-primary);
   font-family: 'Inter', system-ui, sans-serif;
@@ -120,12 +120,22 @@ body {
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  /* Space for fixed top navbar */
-  padding-top: 56px;
-  /* Space for fixed bottom nav */
-  padding-bottom: 80px;
-  /* Use full initial viewport height — does not shrink when browser chrome hides */
-  min-height: 100vh;
+}
+
+/* ─── PAGE SCROLL CONTAINER ─────────────────────────────────── */
+/* This div wraps all page content in layout.js.
+   It is the ONLY thing that scrolls — not the body.
+   Browser never sees body scroll → never hides its chrome. */
+
+#page-scroll-container {
+  position: fixed;
+  top: var(--navbar-h);
+  left: 0;
+  right: 0;
+  bottom: var(--bottomnav-h);
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* ─── TYPOGRAPHY HELPERS ────────────────────────────────────── */
@@ -176,13 +186,12 @@ a:hover {
   left: 0;
   right: 0;
   z-index: 1000;
+  height: var(--navbar-h);
   background: var(--bg-primary);
   border-bottom: 1px solid var(--bg-tertiary);
   width: 100%;
-  /* Force GPU layer — keeps it painted above browser chrome transitions */
   transform: translateZ(0);
   -webkit-transform: translateZ(0);
-  will-change: transform;
 }
 
 .navbar-inner {
@@ -319,13 +328,12 @@ a:hover {
   left: 0;
   right: 0;
   z-index: 1000;
+  height: var(--bottomnav-h);
   background: var(--bg-primary);
   border-top: 1px solid var(--bg-tertiary);
   width: 100%;
-  /* Force GPU layer — keeps it painted above browser chrome transitions */
   transform: translateZ(0);
   -webkit-transform: translateZ(0);
-  will-change: transform;
 }
 
 .bottom-nav-inner {
@@ -371,7 +379,7 @@ a:hover {
   letter-spacing: 0.01em;
 }
 
-/* ─── ASK BUTTON (centred raised pill) ──────────────────────── */
+/* ─── ASK BUTTON ────────────────────────────────────────────── */
 
 .bottom-nav-ask {
   flex: 0 0 56px;
@@ -403,15 +411,8 @@ a:hover {
 }
 
 /* --- CHANGE LOG ---
-   [May 14, 2026] CREATED: Initial build
-   [May 14, 2026] FIXED: Missing body brace, duplicate box-sizing, mobile overflow
-   [May 17, 2026] REFACTORED: Page-specific styles moved to separate CSS files
-   [May 17, 2026] ADDED: .navbar-gear styles for Phase 8 gear icon
-   [May 17, 2026] FIXED: Full navbar CSS restored — lost during refactor
-   [May 17, 2026] ADDED: .navbar-username — username link next to gear icon
-   [May 18, 2026] ADDED: .bottom-nav block — Phase 10 bottom navigation
-   [May 18, 2026] FIXED: navbar + bottom-nav changed to position:fixed
-   [May 18, 2026] FIXED: Added transform:translateZ(0) + will-change:transform
-   REASON: Forces GPU compositing layer — prevents browser chrome slide
-           from pulling fixed navbars with it on iPad Chrome/Safari
+   [May 18, 2026] FIXED: body height:100dvh + overflow:hidden + #page-scroll-container
+   REASON: Prevents browser chrome (address bar) from sliding on scroll.
+           Body never scrolls — only #page-scroll-container scrolls internally.
+           Browser never hides its chrome because body scroll never fires.
    --- END CHANGE LOG --- */
