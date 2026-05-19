@@ -1,107 +1,72 @@
 // ============================================================
-// FILE: components/FollowButton.jsx
-// PURPOSE: Follow/unfollow toggle button for profile pages
+// FILE: components/ProfileFollowBlock.jsx
+// PURPOSE: Live follower/following counts + follow button on profile page.
 // LAST CHANGED: May 19, 2026
-// WHY IT EXISTS: Phase 9 — users can follow each other.
-// DEPENDENCIES: store/authStore.js, app/api/follows/route.js
-// ⚠️ DO NOT CHANGE: Button hidden on own profile — never show to self.
-//                   Optimistic UI updates instantly, reverts on error.
-//                   Auth-gated — shows sign in prompt if not logged in.
-//                   Always uses window.location.origin in fetch (rule #22).
-//                   credentials: 'include' required on all fetches (rule #22).
-//                   onCountChange callback — called with server-confirmed count.
+// WHY IT EXISTS: Profile page is ISR — counts are stale after toggle.
+//                On own profile: fetches live following count from API on mount.
+//                On other profiles: only followerCount updates on toggle.
+// DEPENDENCIES: components/FollowButton.jsx, store/authStore.js,
+//               app/profile/profile.css
+// ⚠️ DO NOT CHANGE: followingCount on other profiles is never updated here —
+//                   it belongs to the profile being viewed, not the logged-in user.
+//                   On own profile, following count is fetched live from API.
 // ============================================================
 'use client';
 import { useState, useEffect } from 'react';
 import useAuthStore from '@/store/authStore';
-export default function FollowButton({ targetUserId, initialFollowerCount = 0, onCountChange }) {
-  const { user, accessToken } = useAuthStore();
-  const [following, setFollowing] = useState(false);
-  const [followerCount, setFollowerCount] = useState(initialFollowerCount);
-  const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
+import FollowButton from '@/components/FollowButton';
+export default function ProfileFollowBlock({ targetUserId, initialFollowerCount, followingCount: initialFollowingCount }) {
+  const { user } = useAuthStore();
   const isOwnProfile = user?.id === targetUserId;
+  const [followerCount, setFollowerCount] = useState(initialFollowerCount);
+  const [followingCount, setFollowingCount] = useState(initialFollowingCount);
+  // On own profile, fetch live following count on mount
+  // because ISR cache is stale after following someone elsewhere
   useEffect(() => {
-    if (!user || isOwnProfile || !targetUserId) {
-      setLoading(false);
-      return;
-    }
-    async function checkFollowStatus() {
+    if (!isOwnProfile || !targetUserId) return;
+    async function fetchLiveFollowing() {
       try {
         const res = await fetch(
-          `${window.location.origin}/api/follows?follower_id=${user.id}&following_id=${targetUserId}`,
+          `${window.location.origin}/api/follows?user_id=${targetUserId}&type=following`,
           { credentials: 'include' }
         );
         const data = await res.json();
-        setFollowing(data.following ?? false);
+        if (Array.isArray(data.following)) {
+          setFollowingCount(data.following.length);
+        }
       } catch (err) {
-        console.error('FollowButton status check error:', err);
-      } finally {
-        setLoading(false);
+        console.error('ProfileFollowBlock following fetch error:', err);
       }
     }
-    checkFollowStatus();
-  }, [user, targetUserId, isOwnProfile]);
-  if (isOwnProfile) return null;
-  if (!user) {
-    return (
-      <a href="/auth" className="follow-btn follow-btn--guest">Sign in to follow</a>
-    );
-  }
-  async function handleToggle() {
-    if (busy) return;
-    setBusy(true);
-    const wasFollowing = following;
-    const prevCount = followerCount;
-    setFollowing(!wasFollowing);
-    setFollowerCount(wasFollowing ? prevCount - 1 : prevCount + 1);
-    if (onCountChange) onCountChange(wasFollowing ? prevCount - 1 : prevCount + 1, wasFollowing ? -1 : 1);
-    try {
-      const res = await fetch(`${window.location.origin}/api/follows`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({ following_id: targetUserId }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setFollowing(wasFollowing);
-        setFollowerCount(prevCount);
-        if (onCountChange) onCountChange(prevCount);
-        console.error('Follow toggle error:', data.error);
-        return;
-      }
-      setFollowing(data.following);
-      setFollowerCount(data.follower_count);
-      if (onCountChange) onCountChange(data.follower_count, data.following ? 1 : -1);
-    } catch (err) {
-      setFollowing(wasFollowing);
-      setFollowerCount(prevCount);
-      if (onCountChange) onCountChange(prevCount, 0);
-      console.error('FollowButton toggle error:', err);
-    } finally {
-      setBusy(false);
-    }
-  }
-  if (loading) {
-    return <button className="follow-btn follow-btn--loading" disabled>…</button>;
-  }
+    fetchLiveFollowing();
+  }, [isOwnProfile, targetUserId]);
   return (
-    <button
-      className={`follow-btn ${following ? 'follow-btn--following' : 'follow-btn--follow'}`}
-      onClick={handleToggle}
-      disabled={busy}
-    >
-      {following ? 'Following' : 'Follow'}
-    </button>
+    <>
+      <div className="profile-stats">
+        <div className="profile-stat">
+          <span className="profile-stat-value">{followerCount}</span>
+          <span className="profile-stat-label">followers</span>
+        </div>
+        <div className="profile-stat-divider" />
+        <div className="profile-stat">
+          <span className="profile-stat-value">{followingCount}</span>
+          <span className="profile-stat-label">following</span>
+        </div>
+      </div>
+      <div className="profile-follow-action">
+        <FollowButton
+          targetUserId={targetUserId}
+          initialFollowerCount={initialFollowerCount}
+          onCountChange={setFollowerCount}
+        />
+      </div>
+    </>
   );
 }
 // --- CHANGE LOG ---
-// [May 17, 2026] CREATED: Phase 9 — follow/unfollow button
-// [May 19, 2026] UPDATED: Added onCountChange callback prop.
-// REASON: ProfileFollowBlock needs to receive the server-confirmed
-//         follower count after each toggle to update the stats row live.
+// [May 19, 2026] CREATED: Extracted from profile page — live follower count.
+// [May 19, 2026] FIXED: followingCount removed from state on other profiles —
+//               was incorrectly incrementing their following count on toggle.
+// [May 19, 2026] FIXED: Own profile fetches live following count from API on mount —
+//               ISR cache meant your following count was stale after following someone.
 // --- END CHANGE LOG ---
