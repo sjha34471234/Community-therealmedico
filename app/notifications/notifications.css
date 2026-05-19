@@ -76,9 +76,7 @@
 
 .notif-dropdown {
   position: fixed;
-  top: 60px;
-  right: 12px;
-  width: 320px;
+  width: 300px;
   max-width: calc(100vw - 24px);
   background: var(--bg-primary);
   border: 1px solid var(--bg-tertiary);
@@ -88,6 +86,7 @@
   overflow: hidden;
   animation: notif-drop-in 0.18s ease;
 }
+
 
 @keyframes notif-drop-in {
   from { opacity: 0; transform: translateY(-8px) scale(0.98); }
