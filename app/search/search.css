@@ -414,7 +414,44 @@
   text-align: center;
   margin: 0;
 }
+/* ─── SEARCH PAGE INPUT ─────────────────────────────────────── */
 
+.search-page__input-wrap {
+  position: relative;
+  margin-bottom: 1.25rem;
+}
+
+.search-page__input-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.search-page__input {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: 'Inter', sans-serif;
+  font-size: 1rem;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border: 1.5px solid var(--bg-tertiary);
+  border-radius: 10px;
+  padding: 13px 16px 13px 46px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.search-page__input:focus {
+  border-color: var(--accent-primary);
+  background: var(--bg-primary);
+}
+
+.search-page__input::placeholder {
+  color: var(--text-muted);
+}
 /* --- CHANGE LOG ---
    [May 17, 2026] CREATED: Split from globals.css
    [May 17, 2026] FIXED: Class names now match actual JSX — searchbar-wrap, search-filter-tab,
