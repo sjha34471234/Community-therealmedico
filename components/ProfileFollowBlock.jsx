@@ -2,20 +2,18 @@
 // FILE: components/ProfileFollowBlock.jsx
 // PURPOSE: Live follower/following counts + follow button on profile page.
 // LAST CHANGED: May 19, 2026
-// WHY IT EXISTS: Profile page is ISR — counts are stale after toggle.
-//                This client component owns both counts live.
+// WHY IT EXISTS: Profile page is ISR — follower count is stale after toggle.
+//                This client component owns the live follower count.
 // DEPENDENCIES: components/FollowButton.jsx, app/profile/profile.css
+// ⚠️ DO NOT CHANGE: followingCount is NEVER updated here — it belongs to
+//                   the profile being viewed, not the logged-in user.
+//                   Only followerCount updates when someone follows/unfollows.
 // ============================================================
 'use client';
 import { useState } from 'react';
 import FollowButton from '@/components/FollowButton';
-export default function ProfileFollowBlock({ targetUserId, initialFollowerCount, followingCount: initialFollowingCount }) {
+export default function ProfileFollowBlock({ targetUserId, initialFollowerCount, followingCount }) {
   const [followerCount, setFollowerCount] = useState(initialFollowerCount);
-  const [followingCount, setFollowingCount] = useState(initialFollowingCount);
-  function handleCountChange(newFollowerCount, delta) {
-    setFollowerCount(newFollowerCount);
-    setFollowingCount((prev) => prev + delta);
-  }
   return (
     <>
       <div className="profile-stats">
@@ -33,7 +31,7 @@ export default function ProfileFollowBlock({ targetUserId, initialFollowerCount,
         <FollowButton
           targetUserId={targetUserId}
           initialFollowerCount={initialFollowerCount}
-          onCountChange={handleCountChange}
+          onCountChange={setFollowerCount}
         />
       </div>
     </>
@@ -41,5 +39,8 @@ export default function ProfileFollowBlock({ targetUserId, initialFollowerCount,
 }
 // --- CHANGE LOG ---
 // [May 19, 2026] CREATED: Extracted from profile page — live follower count.
-// [May 19, 2026] UPDATED: followingCount also put in state — was stale after toggle.
+// [May 19, 2026] FIXED: Removed followingCount from state entirely.
+//               followingCount shown here belongs to the profile being viewed —
+//               it never changes when the logged-in user clicks Follow.
+//               Only followerCount updates on toggle.
 // --- END CHANGE LOG ---
