@@ -11,6 +11,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { Bell, MessageCircle, ThumbsUp, UserPlus, CheckCircle } from 'lucide-react';
 import Link from 'next/link';
 import useAuthStore from '@/store/authStore';
@@ -55,8 +56,12 @@ export default function NotificationBell() {
   const [notifications, setNotifications] = useState([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const dropdownRef = useRef(null);
+  const bellRef = useRef(null);
   const pollRef = useRef(null);
+
+  useEffect(() => { setMounted(true); }, []);
 
   const fetchUnreadCount = useCallback(async () => {
     if (!accessToken) return;
@@ -80,7 +85,10 @@ export default function NotificationBell() {
 
   useEffect(() => {
     function handleClick(e) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+      if (
+        dropdownRef.current && !dropdownRef.current.contains(e.target) &&
+        bellRef.current && !bellRef.current.contains(e.target)
+      ) {
         setOpen(false);
       }
     }
@@ -117,22 +125,24 @@ export default function NotificationBell() {
   if (!user) return null;
 
   return (
-    <>
-      {/* Backdrop */}
-      {open && <div className="notif-backdrop" onClick={() => setOpen(false)} />}
+    <div ref={bellRef}>
+      {/* Bell button — stays inside navbar, never affects layout */}
+      <button
+        className={`notif-bell-btn${open ? ' notif-bell-btn--active' : ''}`}
+        onClick={handleOpen}
+        aria-label="Notifications"
+      >
+        <Bell size={20} />
+        {unreadCount > 0 && (
+          <span className="notif-bell-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
+        )}
+      </button>
 
-      <div className="notif-bell-wrap" ref={dropdownRef}>
-        {/* Bell button */}
-        <button className={`notif-bell-btn${open ? ' notif-bell-btn--active' : ''}`} onClick={handleOpen} aria-label="Notifications">
-          <Bell size={20} />
-          {unreadCount > 0 && (
-            <span className="notif-bell-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
-          )}
-        </button>
-
-        {/* Dropdown */}
-        {open && (
-          <div className="notif-dropdown">
+      {/* Backdrop + Dropdown — portalled to document.body, zero navbar impact */}
+      {mounted && open && createPortal(
+        <>
+          <div className="notif-backdrop" onClick={() => setOpen(false)} />
+          <div className="notif-dropdown" ref={dropdownRef}>
             {/* Header */}
             <div className="notif-dropdown-header">
               <div className="notif-dropdown-header-left">
@@ -199,14 +209,16 @@ export default function NotificationBell() {
               </div>
             )}
           </div>
-        )}
-      </div>
-    </>
+        </>,
+        document.body
+      )}
+    </div>
   );
 }
 
 // --- CHANGE LOG ---
 // [May 18, 2026] CREATED: Phase 10 — notification bell
-// [May 19, 2026] REDESIGNED: New dropdown layout — icon per type, backdrop,
-//               max-height scroll, loading dots, empty state, footer link.
+// [May 19, 2026] REDESIGNED: backdrop + dropdown via createPortal to document.body
+//               Fixes navbar layout disruption. Bell stays in navbar DOM.
+//               Backdrop and dropdown render outside all parent containers.
 // --- END CHANGE LOG ---
