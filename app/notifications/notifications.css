@@ -1,12 +1,12 @@
 /* ============================================================
    FILE: app/notifications/notifications.css
    PURPOSE: Styles for notifications page + bell dropdown
-   LAST CHANGED: May 18, 2026
+   LAST CHANGED: May 19, 2026
    WHY IT EXISTS: Phase 10 — Notification Centre
    DEPENDENCIES: app/globals.css (variables)
    ⚠️ DO NOT CHANGE: notif-bell-* classes — used by NotificationBell.jsx
                      notif-page-* classes — used by notifications/page.js
-                     notif-dropdown z-index must stay above navbar (z:100)
+                     notif-dropdown z-index must stay above navbar (z:999)
    ============================================================ */
 
 /* ─── BELL WRAP ─────────────────────────────────────────────── */
@@ -29,11 +29,12 @@
   cursor: pointer;
   color: var(--text-secondary);
   padding: 6px;
-  border-radius: 6px;
+  border-radius: 8px;
   transition: color 0.15s ease, background 0.15s ease;
 }
 
-.notif-bell-btn:hover {
+.notif-bell-btn:hover,
+.notif-bell-btn--active {
   color: var(--accent-primary);
   background: var(--accent-light);
 }
@@ -42,83 +43,162 @@
 
 .notif-bell-badge {
   position: absolute;
-  top: 0px;
-  right: 0px;
+  top: 1px;
+  right: 1px;
   background: var(--danger);
   color: #ffffff;
   font-family: 'Inter', sans-serif;
-  font-size: 0.625rem;
+  font-size: 0.6rem;
   font-weight: 700;
   line-height: 1;
-  min-width: 16px;
-  height: 16px;
+  min-width: 15px;
+  height: 15px;
   padding: 0 3px;
   border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
+  border: 2px solid #ffffff;
+}
+
+/* ─── BACKDROP ──────────────────────────────────────────────── */
+
+.notif-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 998;
+  background: rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(1px);
+  -webkit-backdrop-filter: blur(1px);
 }
 
 /* ─── DROPDOWN ──────────────────────────────────────────────── */
 
 .notif-dropdown {
   position: fixed;
-  top: 56px;
+  top: 60px;
   right: 12px;
-  width: 300px;
+  width: 320px;
   max-width: calc(100vw - 24px);
-  max-height: 420px;
-  overflow-y: auto;
   background: var(--bg-primary);
   border: 1px solid var(--bg-tertiary);
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  border-radius: 16px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.14), 0 2px 8px rgba(0, 0, 0, 0.06);
   z-index: 999;
+  overflow: hidden;
+  animation: notif-drop-in 0.18s ease;
 }
+
+@keyframes notif-drop-in {
+  from { opacity: 0; transform: translateY(-8px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ─── DROPDOWN HEADER ───────────────────────────────────────── */
 
 .notif-dropdown-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 16px 10px;
+  padding: 14px 16px 12px;
   border-bottom: 1px solid var(--bg-tertiary);
+}
+
+.notif-dropdown-header-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-family: 'Inter', sans-serif;
   font-size: 0.875rem;
   font-weight: 600;
   color: var(--text-primary);
 }
 
+.notif-all-read-pill {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--success);
+  background: #e8f5e9;
+  padding: 2px 7px;
+  border-radius: 20px;
+}
+
 .notif-see-all {
+  font-family: 'Inter', sans-serif;
   font-size: 0.8125rem;
   font-weight: 500;
   color: var(--accent-primary);
   text-decoration: none;
+  transition: color 0.12s ease;
 }
 
 .notif-see-all:hover {
   color: var(--accent-hover);
-  text-decoration: underline;
 }
 
-/* ─── DROPDOWN EMPTY STATE ──────────────────────────────────── */
+/* ─── DROPDOWN BODY ─────────────────────────────────────────── */
+
+.notif-dropdown-body {
+  max-height: 360px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* ─── LOADING DOTS ──────────────────────────────────────────── */
+
+.notif-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 32px 16px;
+}
+
+.notif-loading-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent-primary);
+  animation: notif-dot-pulse 1.2s ease-in-out infinite;
+}
+
+.notif-loading-dot:nth-child(2) { animation-delay: 0.2s; }
+.notif-loading-dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes notif-dot-pulse {
+  0%, 80%, 100% { opacity: 0.25; transform: scale(0.85); }
+  40%            { opacity: 1;    transform: scale(1); }
+}
+
+/* ─── EMPTY STATE ───────────────────────────────────────────── */
 
 .notif-empty {
-  padding: 24px 16px;
-  text-align: center;
-  font-family: 'Inter', sans-serif;
-  font-size: 0.875rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 36px 16px;
   color: var(--text-muted);
 }
 
-/* ─── DROPDOWN ITEM ─────────────────────────────────────────── */
+.notif-empty p {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+/* ─── NOTIFICATION ITEM ─────────────────────────────────────── */
 
 .notif-item {
-  display: block;
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
   padding: 12px 16px;
   border-bottom: 1px solid var(--bg-secondary);
   text-decoration: none;
-  transition: background 0.12s ease;
   background: var(--bg-primary);
+  transition: background 0.12s ease;
+  position: relative;
 }
 
 .notif-item:last-child {
@@ -127,7 +207,6 @@
 
 .notif-item:hover {
   background: var(--bg-secondary);
-  text-decoration: none;
 }
 
 .notif-item--unread {
@@ -138,17 +217,28 @@
   background: #dbeef8;
 }
 
+.notif-item-icon {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+}
+
+.notif-item-body {
+  flex: 1;
+  min-width: 0;
+}
+
 .notif-item-text {
   font-family: 'Inter', sans-serif;
   font-size: 0.8125rem;
   color: var(--text-primary);
   margin: 0 0 2px;
   line-height: 1.4;
-}
-
-.notif-item-text strong {
-  font-weight: 600;
-  color: var(--text-primary);
 }
 
 .notif-item-sub {
@@ -166,6 +256,36 @@
   font-size: 0.6875rem;
   color: var(--text-muted);
   margin: 0;
+}
+
+.notif-item-dot {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent-primary);
+  margin-top: 5px;
+}
+
+/* ─── DROPDOWN FOOTER ───────────────────────────────────────── */
+
+.notif-dropdown-footer {
+  border-top: 1px solid var(--bg-tertiary);
+  padding: 10px 16px;
+  text-align: center;
+}
+
+.notif-footer-link {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--accent-primary);
+  text-decoration: none;
+  transition: color 0.12s ease;
+}
+
+.notif-footer-link:hover {
+  color: var(--accent-hover);
 }
 
 /* ─── FULL NOTIFICATIONS PAGE ───────────────────────────────── */
@@ -272,7 +392,6 @@
 }
 
 /* ─── BOTTOM NAV SPACING ────────────────────────────────────── */
-/* Prevents last notification from hiding behind bottom nav */
 
 .notif-page {
   padding-bottom: 100px;
@@ -280,5 +399,7 @@
 
 /* --- CHANGE LOG ---
    [May 18, 2026] CREATED: Phase 10 — notifications styles
-   REASON: Notification Centre feature
+   [May 19, 2026] REDESIGNED: Bell dropdown — backdrop, drop-in animation,
+                 type icons, loading dots, empty state, footer link,
+                 max-height scroll, unread dot. Page styles unchanged.
    --- END CHANGE LOG --- */
