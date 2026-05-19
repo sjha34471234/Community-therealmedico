@@ -62,16 +62,18 @@
 /* ─── DROPDOWN ──────────────────────────────────────────────── */
 
 .notif-dropdown {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  width: 320px;
+  position: fixed;
+  top: 56px;
+  right: 12px;
+  width: 300px;
+  max-width: calc(100vw - 24px);
+  max-height: 420px;
+  overflow-y: auto;
   background: var(--bg-primary);
   border: 1px solid var(--bg-tertiary);
   border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.10);
-  z-index: 200;
-  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  z-index: 999;
 }
 
 .notif-dropdown-header {
