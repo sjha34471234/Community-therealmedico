@@ -1,14 +1,14 @@
 // ============================================================
 // FILE: app/api/questions/route.js
 // PURPOSE: API route for community questions — GET feed + POST new question
-// LAST CHANGED: May 17, 2026
+// LAST CHANGED: May 19, 2026
 // WHY IT EXISTS: GET powers the live question feed (Phase 2).
 //   POST added in Phase 3 — handles new question submission with auth,
 //   rate limiting, slug generation, and Supabase insert.
 // DEPENDENCIES: lib/supabaseServer.js
 // ⚠️ DO NOT CHANGE:
 //   - force-dynamic + cache: 'no-store' — this is live data, never cache it.
-//   - Auth must be verified server-side via getUser() — never trust client-sent user_id.
+//   - Auth must use Bearer token — never cookies (rule #36).
 //   - Rate limit: max 5 questions per user per hour.
 //   - Slug must be keyword-rich — never use UUID as slug.
 //   - Array.from(new Set(...)) — never [...new Set(...)].
@@ -20,8 +20,7 @@ export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
 
 import { NextResponse } from 'next/server'
-import { createServerClient } from '@/lib/supabaseServer'
-import { createClient } from '@supabase/supabase-js'
+import { supabaseServer } from '@/lib/supabaseServer'
 
 // ── Slug generator ────────────────────────────────────────────────────────────
 function generateSlug(title) {
@@ -60,7 +59,7 @@ export async function GET(request) {
     const offset = (page - 1) * limit
     const userId = searchParams.get('userId') || null
 
-    const supabase = createServerClient()
+    const supabase = supabaseServer()
 
     let query = supabase
       .from('community_questions')
@@ -72,7 +71,6 @@ export async function GET(request) {
     } else if (sort === 'top') {
       query = query.order('upvotes', { ascending: false }).order('created_at', { ascending: false })
     } else {
-      // hot — most recently active
       query = query.order('is_pinned', { ascending: false }).order('last_activity_at', { ascending: false })
     }
 
@@ -119,11 +117,10 @@ export async function GET(request) {
         return { ...q, hasNewActivity: hasNew }
       })
 
-      // Exclude posts the user has viewed with no new activity (keep unviewed + new activity)
       processed = processed.filter(function filterViewed(q) {
         const snapshot = viewMap[q.id]
-        if (!snapshot) return true       // never viewed — always show
-        return q.hasNewActivity          // viewed — only show if new reply
+        if (!snapshot) return true
+        return q.hasNewActivity
       })
     }
 
@@ -162,7 +159,6 @@ export async function GET(request) {
 // ── POST — create new question ────────────────────────────────────────────────
 export async function POST(request) {
   try {
-    // Parse body
     let body
     try {
       body = await request.json()
@@ -172,7 +168,6 @@ export async function POST(request) {
 
     const { title, body: questionBody, tags } = body
 
-    // Basic validation
     if (!title || typeof title !== 'string' || title.trim().length < 15) {
       return NextResponse.json({ error: 'Title must be at least 15 characters' }, { status: 400 })
     }
@@ -194,27 +189,18 @@ export async function POST(request) {
         )).slice(0, 5)
       : []
 
-    // Verify auth server-side using anon key + cookie session
-    const anonClient = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-      {
-        auth: { persistSession: false, autoRefreshToken: false },
-        global: {
-          headers: {
-            cookie: request.headers.get('cookie') || '',
-          },
-        },
-      }
-    )
-
-    const { data: { user }, error: authError } = await anonClient.auth.getUser()
-
-    if (authError || !user) {
+    // Verify auth via Bearer token — never cookies (rule #36)
+    const authHeader = request.headers.get('Authorization') || ''
+    const token = authHeader.replace('Bearer ', '').trim()
+    if (!token) {
       return NextResponse.json({ error: 'You must be signed in to ask a question' }, { status: 401 })
     }
 
-    const supabase = createServerClient()
+    const supabase = supabaseServer()
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
+    if (authError || !user) {
+      return NextResponse.json({ error: 'You must be signed in to ask a question' }, { status: 401 })
+    }
 
     // Rate limit check
     const rateLimited = await checkQuestionRateLimit(supabase, user.id)
@@ -267,5 +253,7 @@ export async function POST(request) {
 // [May 14, 2026] CREATED: GET handler — Phase 2 feed
 // [May 14, 2026] UPDATED: POST handler added — Phase 3
 // [May 17, 2026] UPDATED: profiles SELECT now includes is_member — Phase 7
-// REASON: is_member_post flag needed by QuestionCard for gold border cosmetic
+// [May 19, 2026] FIXED: Auth switched from cookie-based to Bearer token (rule #36).
+//               Removed createClient cookie approach — iPad drops cookies on API calls.
+//               Now uses supabaseServer().auth.getUser(token) consistently.
 // --- END CHANGE LOG ---
