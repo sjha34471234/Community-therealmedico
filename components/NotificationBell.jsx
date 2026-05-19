@@ -57,11 +57,22 @@ export default function NotificationBell() {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const dropdownRef = useRef(null);
+  const [dropdownPos, setDropdownPos] = useState({ top: 60, right: 12 });
   const bellRef = useRef(null);
+  const dropdownRef = useRef(null);
   const pollRef = useRef(null);
 
   useEffect(() => { setMounted(true); }, []);
+
+  // Calculate position from bell button's actual location on screen
+  function calcPosition() {
+    if (!bellRef.current) return;
+    const rect = bellRef.current.getBoundingClientRect();
+    setDropdownPos({
+      top: rect.bottom + 8,
+      right: window.innerWidth - rect.right,
+    });
+  }
 
   const fetchUnreadCount = useCallback(async () => {
     if (!accessToken) return;
@@ -98,6 +109,7 @@ export default function NotificationBell() {
 
   async function handleOpen() {
     if (open) { setOpen(false); return; }
+    calcPosition();
     setOpen(true);
     setLoading(true);
     try {
@@ -126,7 +138,6 @@ export default function NotificationBell() {
 
   return (
     <div ref={bellRef}>
-      {/* Bell button — stays inside navbar, never affects layout */}
       <button
         className={`notif-bell-btn${open ? ' notif-bell-btn--active' : ''}`}
         onClick={handleOpen}
@@ -138,11 +149,17 @@ export default function NotificationBell() {
         )}
       </button>
 
-      {/* Backdrop + Dropdown — portalled to document.body, zero navbar impact */}
       {mounted && open && createPortal(
         <>
+          {/* Backdrop */}
           <div className="notif-backdrop" onClick={() => setOpen(false)} />
-          <div className="notif-dropdown" ref={dropdownRef}>
+
+          {/* Dropdown — positioned directly below bell button */}
+          <div
+            className="notif-dropdown"
+            ref={dropdownRef}
+            style={{ top: dropdownPos.top, right: dropdownPos.right }}
+          >
             {/* Header */}
             <div className="notif-dropdown-header">
               <div className="notif-dropdown-header-left">
@@ -218,7 +235,7 @@ export default function NotificationBell() {
 
 // --- CHANGE LOG ---
 // [May 18, 2026] CREATED: Phase 10 — notification bell
-// [May 19, 2026] REDESIGNED: backdrop + dropdown via createPortal to document.body
-//               Fixes navbar layout disruption. Bell stays in navbar DOM.
-//               Backdrop and dropdown render outside all parent containers.
+// [May 19, 2026] REDESIGNED: Portal-based dropdown, backdrop, type icons
+// [May 19, 2026] FIXED: Dynamic positioning via getBoundingClientRect()
+//               Dropdown now anchors precisely below the bell button.
 // --- END CHANGE LOG ---
