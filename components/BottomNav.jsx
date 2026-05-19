@@ -67,7 +67,10 @@ export default function BottomNav() {
     if (item.key === 'search') return pathname.startsWith('/search');
     if (item.key === 'ask') return pathname === '/ask';
     if (item.key === 'chat') return pathname.startsWith('/chat');
-    if (item.key === 'profile') return pathname.startsWith('/profile');
+    if (item.key === 'profile') {
+      if (!user || !profile?.community_username) return false;
+      return pathname === `/profile/${profile.community_username}`;
+    }
     return false;
   }
 
