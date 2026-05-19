@@ -66,16 +66,15 @@ export default function NotificationBell() {
 
   // Calculate position from bell button's actual location on screen
   function calcPosition() {
-  if (!bellRef.current) return;
-  const rect = bellRef.current.getBoundingClientRect();
-  const dropdownWidth = 300;
-  const rightEdge = rect.right;
-  const left = Math.max(8, rightEdge - dropdownWidth);
-  setDropdownPos({
-    top: rect.bottom + 8,
-    left: left,
-  });
-}
+    if (!bellRef.current) return;
+    const rect = bellRef.current.getBoundingClientRect();
+    const dropdownWidth = 300;
+    const left = Math.max(8, rect.right - dropdownWidth);
+    setDropdownPos({
+      top: rect.bottom + 8,
+      left: left,
+    });
+  }
 
 
   const fetchUnreadCount = useCallback(async () => {
