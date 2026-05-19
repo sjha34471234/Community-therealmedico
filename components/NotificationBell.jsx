@@ -1,20 +1,19 @@
 // ============================================================
 // FILE: components/NotificationBell.jsx
 // PURPOSE: Bell icon with unread badge, dropdown preview, polls every 60s
-// LAST CHANGED: May 18, 2026
+// LAST CHANGED: May 19, 2026
 // WHY IT EXISTS: Phase 10 — Notification Centre
 // DEPENDENCIES: store/authStore.js, app/api/notifications/route.js
+//               app/notifications/notifications.css
 // ⚠️ DO NOT CHANGE: polling interval, mark-read on open pattern
 // ============================================================
 
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Bell } from 'lucide-react';
+import { Bell, MessageCircle, ThumbsUp, UserPlus, CheckCircle } from 'lucide-react';
 import Link from 'next/link';
 import useAuthStore from '@/store/authStore';
-
-// ── helpers ──────────────────────────────────────────────────
 
 function timeAgo(dateStr) {
   const diff = Math.floor((Date.now() - new Date(dateStr)) / 1000);
@@ -24,15 +23,21 @@ function timeAgo(dateStr) {
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
-function notificationText(n) {
+function notificationMeta(n) {
   const actor = n.actor?.community_username || 'Someone';
   switch (n.type) {
-    case 'new_answer':       return { bold: actor, rest: ' answered your question' };
-    case 'answer_accepted':  return { bold: null,  rest: 'Your answer was accepted' };
-    case 'upvote_question':  return { bold: actor, rest: ' upvoted your question' };
-    case 'upvote_answer':    return { bold: actor, rest: ' upvoted your answer' };
-    case 'new_follower':     return { bold: actor, rest: ' started following you' };
-    default:                 return { bold: null,  rest: 'New notification' };
+    case 'new_answer':
+      return { icon: MessageCircle, color: '#1D6FA4', text: `${actor} answered your question` };
+    case 'answer_accepted':
+      return { icon: CheckCircle, color: '#2E7D32', text: 'Your answer was accepted' };
+    case 'upvote_question':
+      return { icon: ThumbsUp, color: '#B45309', text: `${actor} upvoted your question` };
+    case 'upvote_answer':
+      return { icon: ThumbsUp, color: '#B45309', text: `${actor} upvoted your answer` };
+    case 'new_follower':
+      return { icon: UserPlus, color: '#6B21A8', text: `${actor} started following you` };
+    default:
+      return { icon: Bell, color: '#9AA0AE', text: 'New notification' };
   }
 }
 
@@ -44,8 +49,6 @@ function notificationLink(n) {
   return '/notifications';
 }
 
-// ── component ─────────────────────────────────────────────────
-
 export default function NotificationBell() {
   const { user, accessToken } = useAuthStore();
   const [unreadCount, setUnreadCount] = useState(0);
@@ -55,17 +58,12 @@ export default function NotificationBell() {
   const dropdownRef = useRef(null);
   const pollRef = useRef(null);
 
-  // ── fetch unread count ──────────────────────────────────────
   const fetchUnreadCount = useCallback(async () => {
     if (!accessToken) return;
     try {
       const res = await fetch(
         `${window.location.origin}/api/notifications?unread=true`,
-        {
-          headers: { Authorization: `Bearer ${accessToken}` },
-          credentials: 'include',
-          cache: 'no-store',
-        }
+        { headers: { Authorization: `Bearer ${accessToken}` }, credentials: 'include', cache: 'no-store' }
       );
       if (!res.ok) return;
       const data = await res.json();
@@ -73,7 +71,6 @@ export default function NotificationBell() {
     } catch (_) {}
   }, [accessToken]);
 
-  // ── poll every 60 seconds ───────────────────────────────────
   useEffect(() => {
     if (!user || !accessToken) return;
     fetchUnreadCount();
@@ -81,7 +78,6 @@ export default function NotificationBell() {
     return () => clearInterval(pollRef.current);
   }, [user, accessToken, fetchUnreadCount]);
 
-  // ── close on outside click ──────────────────────────────────
   useEffect(() => {
     function handleClick(e) {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
@@ -92,7 +88,6 @@ export default function NotificationBell() {
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
-  // ── open dropdown — fetch full list + mark read ─────────────
   async function handleOpen() {
     if (open) { setOpen(false); return; }
     setOpen(true);
@@ -100,17 +95,11 @@ export default function NotificationBell() {
     try {
       const res = await fetch(
         `${window.location.origin}/api/notifications`,
-        {
-          headers: { Authorization: `Bearer ${accessToken}` },
-          credentials: 'include',
-          cache: 'no-store',
-        }
+        { headers: { Authorization: `Bearer ${accessToken}` }, credentials: 'include', cache: 'no-store' }
       );
       if (!res.ok) throw new Error();
       const data = await res.json();
       setNotifications(data.notifications || []);
-
-      // mark all read
       if (unreadCount > 0) {
         await fetch(`${window.location.origin}/api/notifications`, {
           method: 'PATCH',
@@ -128,63 +117,96 @@ export default function NotificationBell() {
   if (!user) return null;
 
   return (
-    <div className="notif-bell-wrap" ref={dropdownRef}>
-      {/* Bell button */}
-      <button className="notif-bell-btn" onClick={handleOpen} aria-label="Notifications">
-        <Bell size={20} />
-        {unreadCount > 0 && (
-          <span className="notif-bell-badge">
-            {unreadCount > 99 ? '99+' : unreadCount}
-          </span>
-        )}
-      </button>
+    <>
+      {/* Backdrop */}
+      {open && <div className="notif-backdrop" onClick={() => setOpen(false)} />}
 
-      {/* Dropdown */}
-      {open && (
-        <div className="notif-dropdown">
-          <div className="notif-dropdown-header">
-            <span>Notifications</span>
-            <Link href="/notifications" className="notif-see-all" onClick={() => setOpen(false)}>
-              See all
-            </Link>
-          </div>
-
-          {loading && (
-            <div className="notif-empty">Loading...</div>
+      <div className="notif-bell-wrap" ref={dropdownRef}>
+        {/* Bell button */}
+        <button className={`notif-bell-btn${open ? ' notif-bell-btn--active' : ''}`} onClick={handleOpen} aria-label="Notifications">
+          <Bell size={20} />
+          {unreadCount > 0 && (
+            <span className="notif-bell-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
           )}
+        </button>
 
-          {!loading && notifications.length === 0 && (
-            <div className="notif-empty">No notifications yet</div>
-          )}
-
-          {!loading && notifications.slice(0, 10).map((n) => {
-            const { bold, rest } = notificationText(n);
-            const href = notificationLink(n);
-            return (
-              <Link
-                key={n.id}
-                href={href}
-                className={`notif-item${n.read ? '' : ' notif-item--unread'}`}
-                onClick={() => setOpen(false)}
-              >
-                <p className="notif-item-text">
-                  {bold && <strong>{bold}</strong>}
-                  {rest}
-                </p>
-                {n.question?.title && (
-                  <p className="notif-item-sub">{n.question.title}</p>
+        {/* Dropdown */}
+        {open && (
+          <div className="notif-dropdown">
+            {/* Header */}
+            <div className="notif-dropdown-header">
+              <div className="notif-dropdown-header-left">
+                <Bell size={15} />
+                <span>Notifications</span>
+                {unreadCount === 0 && notifications.length > 0 && (
+                  <span className="notif-all-read-pill">All read</span>
                 )}
-                <p className="notif-item-time">{timeAgo(n.created_at)}</p>
+              </div>
+              <Link href="/notifications" className="notif-see-all" onClick={() => setOpen(false)}>
+                See all
               </Link>
-            );
-          })}
-        </div>
-      )}
-    </div>
+            </div>
+
+            {/* Body */}
+            <div className="notif-dropdown-body">
+              {loading && (
+                <div className="notif-loading">
+                  <span className="notif-loading-dot" />
+                  <span className="notif-loading-dot" />
+                  <span className="notif-loading-dot" />
+                </div>
+              )}
+
+              {!loading && notifications.length === 0 && (
+                <div className="notif-empty">
+                  <Bell size={28} strokeWidth={1.5} />
+                  <p>You're all caught up</p>
+                </div>
+              )}
+
+              {!loading && notifications.slice(0, 8).map((n) => {
+                const { icon: Icon, color, text } = notificationMeta(n);
+                const href = notificationLink(n);
+                return (
+                  <Link
+                    key={n.id}
+                    href={href}
+                    className={`notif-item${n.read ? '' : ' notif-item--unread'}`}
+                    onClick={() => setOpen(false)}
+                  >
+                    <span className="notif-item-icon" style={{ background: `${color}18`, color }}>
+                      <Icon size={14} />
+                    </span>
+                    <div className="notif-item-body">
+                      <p className="notif-item-text">{text}</p>
+                      {n.question?.title && (
+                        <p className="notif-item-sub">{n.question.title}</p>
+                      )}
+                      <p className="notif-item-time">{timeAgo(n.created_at)}</p>
+                    </div>
+                    {!n.read && <span className="notif-item-dot" />}
+                  </Link>
+                );
+              })}
+            </div>
+
+            {/* Footer */}
+            {!loading && notifications.length > 0 && (
+              <div className="notif-dropdown-footer">
+                <Link href="/notifications" className="notif-footer-link" onClick={() => setOpen(false)}>
+                  View all notifications
+                </Link>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 
 // --- CHANGE LOG ---
 // [May 18, 2026] CREATED: Phase 10 — notification bell
-// REASON: Notification Centre feature
+// [May 19, 2026] REDESIGNED: New dropdown layout — icon per type, backdrop,
+//               max-height scroll, loading dots, empty state, footer link.
 // --- END CHANGE LOG ---
