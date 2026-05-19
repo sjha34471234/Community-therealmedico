@@ -1,13 +1,13 @@
 // ============================================================
 // FILE: components/settings/ProfileSettings.jsx
-// PURPOSE: Profile tab — edit community_username and community_bio
-// LAST CHANGED: May 17, 2026
-// WHY IT EXISTS: Users need to edit their profile details.
-//                Posts to existing /api/profile endpoint.
-// DEPENDENCIES: store/authStore.js, lib/supabase.js, react-hot-toast
-// ⚠️ DO NOT CHANGE: Must use Bearer token in Authorization header —
-//                   never cookies in API routes (rule #35).
+// PURPOSE: Profile tab — view username (locked) + edit community_bio
+// LAST CHANGED: May 19, 2026
+// WHY IT EXISTS: Users need to edit their profile bio.
+//                Username is locked after creation — cannot be changed.
+// DEPENDENCIES: store/authStore.js, react-hot-toast
+// ⚠️ DO NOT CHANGE: Must use Bearer token in Authorization header.
 //                   Must call fetchProfile after save to refresh store.
+//                   Username field is intentionally disabled — never re-enable.
 // ============================================================
 
 'use client';
@@ -21,14 +21,12 @@ const MAX_BIO = 160;
 export default function ProfileSettings() {
   const { profile, accessToken, fetchProfile, user } = useAuthStore();
 
-  const [username, setUsername] = useState('');
   const [bio, setBio] = useState('');
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState({ type: '', message: '' });
 
   useEffect(() => {
     if (profile) {
-      setUsername(profile.community_username || '');
       setBio(profile.community_bio || '');
     }
   }, [profile]);
@@ -39,23 +37,7 @@ export default function ProfileSettings() {
   }
 
   async function handleSave() {
-    const trimmedUsername = username.trim();
     const trimmedBio = bio.trim();
-
-    if (!trimmedUsername) {
-      showFeedback('error', 'Username cannot be empty.');
-      return;
-    }
-
-    if (trimmedUsername.length < 3) {
-      showFeedback('error', 'Username must be at least 3 characters.');
-      return;
-    }
-
-    if (!/^[a-zA-Z0-9_]+$/.test(trimmedUsername)) {
-      showFeedback('error', 'Username can only contain letters, numbers, and underscores.');
-      return;
-    }
 
     if (trimmedBio.length > MAX_BIO) {
       showFeedback('error', `Bio must be ${MAX_BIO} characters or fewer.`);
@@ -74,7 +56,7 @@ export default function ProfileSettings() {
           'Authorization': `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
-          community_username: trimmedUsername,
+          community_username: profile.community_username,
           community_bio: trimmedBio,
         }),
       });
@@ -109,13 +91,11 @@ export default function ProfileSettings() {
           id="settings-username"
           type="text"
           className="settings-input"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          maxLength={30}
-          autoComplete="off"
-          spellCheck={false}
+          value={profile?.community_username || ''}
+          disabled
+          style={{ opacity: 0.6, cursor: 'not-allowed', background: 'var(--bg-secondary)' }}
         />
-        <p className="settings-char-count">{username.length} / 30</p>
+        <p className="settings-char-count">Username cannot be changed.</p>
       </div>
 
       <div className="settings-field">
@@ -150,7 +130,6 @@ export default function ProfileSettings() {
 
 // --- CHANGE LOG ---
 // [May 17, 2026] CREATED: Phase 8 — profile editing tab
-// REASON: Users need to edit username and bio from settings.
-//         POSTs to /api/profile with Bearer token.
-//         Calls fetchProfile after save to keep authStore in sync.
+// [May 19, 2026] UPDATED: Username field locked — disabled + not-allowed cursor.
+// REASON: Username should be permanent after creation. Only bio is editable.
 // --- END CHANGE LOG ---
