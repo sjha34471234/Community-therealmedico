@@ -15,9 +15,7 @@
 }
 
 .search-page__header {
-  margin-bottom: 1.5rem;
-  padding-bottom: 1.25rem;
-  border-bottom: 1px solid var(--bg-tertiary);
+  margin-bottom: 1rem;
 }
 
 .search-page__title {
