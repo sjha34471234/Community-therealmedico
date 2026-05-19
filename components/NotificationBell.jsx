@@ -15,7 +15,7 @@ import { createPortal } from 'react-dom';
 import { Bell, MessageCircle, ThumbsUp, UserPlus, CheckCircle } from 'lucide-react';
 import Link from 'next/link';
 import useAuthStore from '@/store/authStore';
-
+import '@/app/notifications/notifications.css';
 function timeAgo(dateStr) {
   const diff = Math.floor((Date.now() - new Date(dateStr)) / 1000);
   if (diff < 60) return 'just now';
