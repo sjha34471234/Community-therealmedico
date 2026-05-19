@@ -8,6 +8,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import useAuthStore from '@/store/authStore';
 import FollowButton from '@/components/FollowButton';
+import '@/app/profile/profile.css';
 
 const BATCH_SIZE = 10;
 
