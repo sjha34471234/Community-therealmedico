@@ -66,13 +66,17 @@ export default function NotificationBell() {
 
   // Calculate position from bell button's actual location on screen
   function calcPosition() {
-    if (!bellRef.current) return;
-    const rect = bellRef.current.getBoundingClientRect();
-    setDropdownPos({
-      top: rect.bottom + 8,
-      right: window.innerWidth - rect.right,
-    });
-  }
+  if (!bellRef.current) return;
+  const rect = bellRef.current.getBoundingClientRect();
+  const dropdownWidth = 300;
+  const rightEdge = rect.right;
+  const left = Math.max(8, rightEdge - dropdownWidth);
+  setDropdownPos({
+    top: rect.bottom + 8,
+    left: left,
+  });
+}
+
 
   const fetchUnreadCount = useCallback(async () => {
     if (!accessToken) return;
@@ -158,7 +162,8 @@ export default function NotificationBell() {
           <div
             className="notif-dropdown"
             ref={dropdownRef}
-            style={{ top: dropdownPos.top, right: dropdownPos.right }}
+            style={{ top: dropdownPos.top, left: dropdownPos.left }}
+
           >
             {/* Header */}
             <div className="notif-dropdown-header">
