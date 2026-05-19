@@ -66,7 +66,7 @@
 .notif-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 998;
+  z-index: 9999;
   background: rgba(0, 0, 0, 0.18);
   backdrop-filter: blur(1px);
   -webkit-backdrop-filter: blur(1px);
@@ -82,7 +82,7 @@
   border: 1px solid var(--bg-tertiary);
   border-radius: 16px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.14), 0 2px 8px rgba(0, 0, 0, 0.06);
-  z-index: 999;
+  z-index: 10000;
   overflow: hidden;
   animation: notif-drop-in 0.18s ease;
 }
