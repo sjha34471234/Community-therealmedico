@@ -181,7 +181,7 @@ export default function QuestionDetail({ question, answers, authorProfile, answe
         .qd-question-card{background:var(--bg-primary);border:1px solid var(--bg-tertiary);border-radius:12px;padding:28px;margin-bottom:32px;}
         @media(max-width:600px){.qd-question-card{padding:18px 16px;}}
         .qd-pinned-badge{display:inline-block;font-family:'Inter',system-ui,sans-serif;font-size:0.75rem;font-weight:600;color:var(--warning);background:#FEF3C7;border-radius:20px;padding:3px 10px;margin-bottom:12px;}
-        .qd-title{font-family:'Merriweather',Georgia,serif;font-size:1.5rem;font-weight:700;color:var(--text-primary);line-height:1.4;margin:0 0 16px;}
+        .qd-title{font-family:'Merriweather',Georgia,serif;font-size:1.5rem;font-weight:700;color:var(--text-primary);line-height:1.4;margin:0 0 16px;text-transform:uppercase;}
         @media(max-width:600px){.qd-title{font-size:1.2rem;}}
         .qd-meta-row{display:flex;flex-wrap:wrap;gap:14px;margin-bottom:14px;}
         .qd-meta-item{display:inline-flex;align-items:center;gap:4px;font-family:'Inter',system-ui,sans-serif;font-size:0.78rem;color:var(--text-muted);}
