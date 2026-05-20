@@ -160,8 +160,8 @@ export default function VoteButton({
 
 // --- CHANGE LOG ---
 // [May 14, 2026] CREATED: Phase 3
-// [May 20, 2026] FIXED: Three bugs:
-//   1. Now sends question_id/answer_id instead of target_id/target_type
-//   2. Now reads data.upvotes instead of data.new_count
-//   3. Now sends Bearer token via useAuthStore — was sending no auth header
+// [May 20, 2026] FIXED: Three bugs —
+//   1. Was sending target_id/target_type — API expects question_id or answer_id
+//   2. Was reading data.new_count — API returns data.upvotes
+//   3. Was sending no Bearer token — added Authorization header via useAuthStore
 // --- END CHANGE LOG ---
