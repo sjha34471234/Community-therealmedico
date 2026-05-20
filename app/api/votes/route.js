@@ -12,7 +12,7 @@
 //   verified server-side. Never trust user_id from request body.
 //   Never notify yourself — skip if actor_id === user_id.
 // ============================================================
-
+import { revalidatePath } from 'next/cache'
 import { NextResponse } from 'next/server'
 import { supabaseServer } from '@/lib/supabaseServer'
 
@@ -165,6 +165,16 @@ export async function POST(request) {
           });
         }
       }
+    }
+
+    // Bust ISR cache for the question page so refresh shows correct count
+    if (question_id) {
+      const { data: q } = await db
+        .from('community_questions')
+        .select('slug')
+        .eq('id', question_id)
+        .single()
+      if (q?.slug) revalidatePath('/q/' + q.slug)
     }
 
     // --- 8. Return new totals + user's current vote state ---
