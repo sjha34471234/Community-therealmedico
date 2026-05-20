@@ -76,7 +76,7 @@ export default function QuestionCard({ question }) {
       )}
 
       {/* Question title */}
-      <a href={'/q/' + question.slug} style={{ fontFamily: 'Merriweather, Georgia, serif', fontWeight: 700, fontSize: '1rem', color: 'var(--text-primary)', textDecoration: 'none', lineHeight: 1.4, display: 'block', marginBottom: '0.4rem' }}>
+      <a href={'/q/' + question.slug} style={{ fontFamily: 'Merriweather, Georgia, serif', fontWeight: 700, fontSize: '1rem', color: 'var(--text-primary)', textDecoration: 'none', lineHeight: 1.4, display: 'block', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
         {question.is_answered && (
           <span style={{ color: 'var(--success)', fontSize: '0.75rem', fontFamily: 'Inter, system-ui, sans-serif', fontWeight: 600, marginRight: '6px' }}>✓ Answered</span>
         )}
