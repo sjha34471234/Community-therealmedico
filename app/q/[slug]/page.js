@@ -8,7 +8,7 @@ import { notFound } from 'next/navigation'
 import { supabaseServer } from '@/lib/supabaseServer'
 import QuestionDetail from '@/components/QuestionDetail'
 
-export const revalidate = 0
+export const dynamic = 'force-dynamic'
 
 export async function generateMetadata({ params }) {
   const { slug } = params
