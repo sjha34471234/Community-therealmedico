@@ -25,6 +25,7 @@ import { createClient } from '@/lib/supabase'
 import useAuthStore from '@/store/authStore'
 import TagPill from '@/components/TagPill'
 import toast from 'react-hot-toast'
+import VoteButton from '@/components/VoteButton'
 import {
   ChevronUp,
   ChevronDown,
@@ -184,13 +185,12 @@ export default function QuestionDetail({ question, answers, authorProfile, answe
         <div className="qd-body">{question.body}</div>
 
         <div className="qd-vote-row">
-          <button className="qd-vote-btn qd-vote-up" type="button" aria-label="Upvote question">
-            <ChevronUp size={18} />
-          </button>
-          <span className="qd-vote-count">{question.upvotes || 0}</span>
-          <button className="qd-vote-btn qd-vote-down" type="button" aria-label="Downvote question">
-            <ChevronDown size={18} />
-          </button>
+          <VoteButton
+            targetId={question.id}
+            targetType="question"
+            initialCount={question.upvotes || 0}
+            userVote={null}
+          />
           {question.is_answered && (
             <span className="qd-answered-badge">
               <CheckCircle size={14} /> Answered
@@ -230,13 +230,12 @@ export default function QuestionDetail({ question, answers, authorProfile, answe
 
               <div className="qd-answer-footer">
                 <div className="qd-answer-vote-row">
-                  <button className="qd-vote-btn qd-vote-up" type="button" aria-label="Upvote answer">
-                    <ChevronUp size={16} />
-                  </button>
-                  <span className="qd-vote-count">{answer.upvotes || 0}</span>
-                  <button className="qd-vote-btn qd-vote-down" type="button" aria-label="Downvote answer">
-                    <ChevronDown size={16} />
-                  </button>
+                  <VoteButton
+                    targetId={answer.id}
+                    targetType="answer"
+                    initialCount={answer.upvotes || 0}
+                    userVote={null}
+                  />
                 </div>
                 <div className="qd-answer-meta">
                   <span className="qd-meta-item">
