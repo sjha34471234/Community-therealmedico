@@ -22,7 +22,7 @@ import KarmaTag from '@/components/KarmaTag';
 import ProfileFollowBlock from '@/components/ProfileFollowBlock';
 import '@/app/profile/profile.css';
 
-export const revalidate = 3600;
+export const revalidate = 60;
 
 export async function generateMetadata({ params }) {
   const { username } = params;
