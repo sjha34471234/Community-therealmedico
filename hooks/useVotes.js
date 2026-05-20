@@ -29,13 +29,13 @@ export function useVotes(question, answers) {
   const [votes, setVotes] = useState({})
 
   // Fetch live state for all targets on mount
-  useEffect(function loadVotes() {
-    if (!user || !accessToken) return
+    useEffect(function loadVotes() {
+    if (!user || !accessToken || !question?.id) return
 
     async function run() {
       const targets = [
         { targetType: 'question', targetId: question.id },
-        ...(answers || []).map(function makeTarget(a) {
+        ...(answers || []).filter(function hasId(a) { return !!a.id }).map(function makeTarget(a) {
           return { targetType: 'answer', targetId: a.id }
         }),
       ]
