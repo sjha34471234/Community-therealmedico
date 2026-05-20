@@ -65,6 +65,14 @@ export default function QuestionDetail({ question, answers, authorProfile, answe
   const [submitting, setSubmitting] = useState(false)
   const [answerError, setAnswerError] = useState('')
 
+  // Live vote state — keyed by id so updates are isolated
+  const [questionVote, setQuestionVote] = useState(null)
+  const [questionCount, setQuestionCount] = useState(question.upvotes || 0)
+  const [answerVotes, setAnswerVotes] = useState({})
+  const [answerCounts, setAnswerCounts] = useState(
+    Object.fromEntries((answers || []).map(function makeEntry(a) { return [a.id, a.upvotes || 0] }))
+  )
+
   const profileMap = {}
   answerProfiles.forEach(function mapProfile(p) {
     profileMap[p.id] = p
@@ -89,6 +97,43 @@ export default function QuestionDetail({ question, answers, authorProfile, answe
       })
   }, [user, question?.id, question?.last_activity_at])
 
+  // Fetch user's current votes on mount
+  useEffect(function fetchUserVotes() {
+    if (!user || !accessToken) return
+
+    async function loadVotes() {
+      try {
+        const ids = [question.id, ...(answers || []).map(function getId(a) { return a.id })]
+        // Fetch question vote
+        const qRes = await fetch(
+          window.location.origin + '/api/votes?question_id=' + question.id,
+          { headers: { Authorization: 'Bearer ' + accessToken }, credentials: 'include' }
+        )
+        if (qRes.ok) {
+          const qData = await qRes.json()
+          setQuestionVote(qData.userVote || null)
+          setQuestionCount(qData.upvotes ?? question.upvotes ?? 0)
+        }
+
+        // Fetch answer votes
+        for (const answer of (answers || [])) {
+          const aRes = await fetch(
+            window.location.origin + '/api/votes?answer_id=' + answer.id,
+            { headers: { Authorization: 'Bearer ' + accessToken }, credentials: 'include' }
+          )
+          if (aRes.ok) {
+            const aData = await aRes.json()
+            setAnswerVotes(function prev(v) { return Object.assign({}, v, { [answer.id]: aData.userVote || null }) })
+            setAnswerCounts(function prev(c) { return Object.assign({}, c, { [answer.id]: aData.upvotes ?? answer.upvotes ?? 0 }) })
+          }
+        }
+      } catch (err) {
+        console.error('fetchUserVotes error:', err)
+      }
+    }
+    loadVotes()
+  }, [user, accessToken, question.id])
+  
   // ── Answer submit ────────────────────────────────────────
   async function handleAnswerSubmit() {
     if (!answerBody.trim()) {
@@ -188,8 +233,12 @@ export default function QuestionDetail({ question, answers, authorProfile, answe
           <VoteButton
             targetId={question.id}
             targetType="question"
-            initialCount={question.upvotes || 0}
-            userVote={null}
+            initialCount={questionCount}
+            userVote={questionVote}
+            onVoteChange={function handleQVote(newCount, newVote) {
+              setQuestionCount(newCount)
+              setQuestionVote(newVote)
+            }}
           />
           {question.is_answered && (
             <span className="qd-answered-badge">
@@ -233,8 +282,12 @@ export default function QuestionDetail({ question, answers, authorProfile, answe
                   <VoteButton
                     targetId={answer.id}
                     targetType="answer"
-                    initialCount={answer.upvotes || 0}
-                    userVote={null}
+                    initialCount={answerCounts[answer.id] ?? answer.upvotes ?? 0}
+                    userVote={answerVotes[answer.id] ?? null}
+                    onVoteChange={function handleAVote(newCount, newVote) {
+                      setAnswerCounts(function prev(c) { return Object.assign({}, c, { [answer.id]: newCount }) })
+                      setAnswerVotes(function prev(v) { return Object.assign({}, v, { [answer.id]: newVote }) })
+                    }}
                   />
                 </div>
                 <div className="qd-answer-meta">
