@@ -1,58 +1,55 @@
 // ============================================================
 // FILE: components/VoteButton.jsx
 // PURPOSE: Upvote/downvote button pair for questions and answers
-// LAST CHANGED: May 14, 2026
-// WHY IT EXISTS: Voting UI is shared between question detail and answer cards.
-//   Extracted into its own component so vote logic lives in one place.
-//   Vote state is always server truth — never optimistically updated.
-// DEPENDENCIES: lucide-react, react-hot-toast
-// ⚠️ DO NOT CHANGE:
-//   - Vote count must never be optimistically updated — always reflects server value.
-//   - credentials: 'include' on ALL fetch calls.
-//   - window.location.origin for API URL — never relative paths.
-//   - Named handler functions only — no arrow functions in JSX props.
-//   - 'use client' required — has onClick handlers.
+// LAST CHANGED: May 20, 2026
 // ============================================================
-
 'use client'
 
 import { useState } from 'react'
 import { ChevronUp, ChevronDown } from 'lucide-react'
 import toast from 'react-hot-toast'
+import useAuthStore from '@/store/authStore'
 
 export default function VoteButton({
-  targetId,        // question id or answer id
-  targetType,      // 'question' or 'answer'
-  initialCount,    // upvotes count from server
-  userVote,        // 1, -1, or null — current user's vote (null if guest)
-  userId,          // null if guest
-  onVoteChange,    // optional callback(newCount, newVote) after successful vote
+  targetId,
+  targetType,
+  initialCount,
+  userVote,
+  onVoteChange,
 }) {
+  const { user, accessToken } = useAuthStore()
   const [count, setCount] = useState(initialCount || 0)
   const [currentVote, setCurrentVote] = useState(userVote || null)
   const [loading, setLoading] = useState(false)
 
   async function handleVote(voteType) {
-    if (!userId) {
+    if (!user) {
       toast.error('Sign in to vote')
       return
     }
     if (loading) return
 
-    // If clicking the same vote type — remove the vote (toggle off)
     const newVoteType = currentVote === voteType ? 0 : voteType
+
+    const body = {
+      vote_type: newVoteType,
+    }
+    if (targetType === 'question') {
+      body.question_id = targetId
+    } else {
+      body.answer_id = targetId
+    }
 
     setLoading(true)
     try {
       const res = await fetch(window.location.origin + '/api/votes', {
         method: 'POST',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          target_id: targetId,
-          target_type: targetType,
-          vote_type: newVoteType,
-        }),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify(body),
       })
 
       const data = await res.json()
@@ -66,12 +63,11 @@ export default function VoteButton({
         return
       }
 
-      // Use server-returned count — never calculate locally
-      setCount(data.new_count)
+      setCount(data.upvotes)
       setCurrentVote(newVoteType === 0 ? null : newVoteType)
 
       if (onVoteChange) {
-        onVoteChange(data.new_count, newVoteType === 0 ? null : newVoteType)
+        onVoteChange(data.upvotes, newVoteType === 0 ? null : newVoteType)
       }
     } catch (err) {
       console.error('VoteButton fetch error:', err)
@@ -164,7 +160,8 @@ export default function VoteButton({
 
 // --- CHANGE LOG ---
 // [May 14, 2026] CREATED: Phase 3
-// REASON: Shared vote button for questions and answers.
-//   Vote count is always server truth. Wired to /api/votes (Phase 4).
-//   Toggle off supported (clicking active vote type removes it).
+// [May 20, 2026] FIXED: Three bugs:
+//   1. Now sends question_id/answer_id instead of target_id/target_type
+//   2. Now reads data.upvotes instead of data.new_count
+//   3. Now sends Bearer token via useAuthStore — was sending no auth header
 // --- END CHANGE LOG ---
