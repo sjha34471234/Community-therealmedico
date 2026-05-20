@@ -196,7 +196,57 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }
 }
+// ── GET /api/votes ────────────────────────────────────────────
+// ?question_id=... or ?answer_id=...
+// Returns current upvotes count + user's vote if authenticated
+export async function GET(request) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const question_id = searchParams.get('question_id')
+    const answer_id = searchParams.get('answer_id')
 
+    if (!question_id && !answer_id) {
+      return NextResponse.json({ error: 'Provide question_id or answer_id' }, { status: 400 })
+    }
+
+    const db = supabaseServer()
+    const targetField = question_id ? 'question_id' : 'answer_id'
+    const targetId = question_id ?? answer_id
+    const table = question_id ? 'community_questions' : 'community_answers'
+
+    // Get current upvote count from parent row
+    const { data: row } = await db
+      .from(table)
+      .select('upvotes')
+      .eq('id', targetId)
+      .single()
+
+    // Get user's vote if authenticated
+    let userVote = null
+    const token = extractToken(request)
+    if (token) {
+      const user = await getUserFromToken(token)
+      if (user) {
+        const { data: vote } = await db
+          .from('community_votes')
+          .select('vote_type')
+          .eq('user_id', user.id)
+          .eq(targetField, targetId)
+          .maybeSingle()
+        userVote = vote?.vote_type ?? null
+      }
+    }
+
+    return NextResponse.json({
+      upvotes: row?.upvotes ?? 0,
+      userVote,
+    }, { headers: { 'Cache-Control': 'no-store' } })
+
+  } catch (err) {
+    console.error('[votes/route.js] GET error:', err)
+    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+  }
+}
 // --- CHANGE LOG ---
 // [May 15, 2026] CREATED: Phase 4 — votes API
 // REASON: VoteButton.jsx wired to this endpoint since Phase 3.
