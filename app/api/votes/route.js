@@ -7,6 +7,7 @@
 import { NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { supabaseServer } from '@/lib/supabaseServer'
+import { awardKarma } from '@/lib/karma'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -40,8 +41,6 @@ async function insertNotification(db, { userId, type, actorId, questionId, answe
 }
 
 // ── GET /api/votes ────────────────────────────────────────────
-// ?question_id=... or ?answer_id=...
-// Returns upvotes, downvotes, and userVote for the target
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url)
@@ -57,14 +56,12 @@ export async function GET(request) {
     const targetId = question_id ?? answer_id
     const table = question_id ? 'community_questions' : 'community_answers'
 
-    // Get current upvotes + downvotes from parent row
     const { data: row } = await db
       .from(table)
       .select('upvotes, downvotes')
       .eq('id', targetId)
       .single()
 
-    // Get user's vote if authenticated
     let userVote = null
     const token = extractToken(request)
     if (token) {
@@ -124,7 +121,13 @@ export async function POST(request) {
       .eq(targetField, targetId)
       .maybeSingle()
 
-    const isNewUpvote = vote_type === 1 && !existing;
+    const prevVoteType = existing?.vote_type ?? null
+    const isNewUpvote = vote_type === 1 && !existing
+    const isNewDownvote = vote_type === -1 && !existing
+    const isRemovingUpvote = vote_type === 0 && prevVoteType === 1
+    const isRemovingDownvote = vote_type === 0 && prevVoteType === -1
+    const isChangingToUpvote = vote_type === 1 && prevVoteType === -1
+    const isChangingToDownvote = vote_type === -1 && prevVoteType === 1
 
     // Apply vote logic
     if (vote_type === 0 || (existing && existing.vote_type === vote_type)) {
@@ -147,56 +150,65 @@ export async function POST(request) {
     const upvotes = (voteTotals ?? []).filter(function isUp(v) { return v.vote_type === 1 }).length
     const downvotes = (voteTotals ?? []).filter(function isDown(v) { return v.vote_type === -1 }).length
 
-    // Write totals back to parent row
     const table = question_id ? 'community_questions' : 'community_answers'
     await db.from(table).update({ upvotes, downvotes }).eq('id', targetId)
 
-    // Notify on new upvote only
+    // ── Get content owner for karma ───────────────────────────
+    let ownerId = null
+    if (question_id) {
+      const { data: q } = await db.from('community_questions').select('user_id').eq('id', question_id).single()
+      ownerId = q?.user_id || null
+    } else {
+      const { data: a } = await db.from('community_answers').select('user_id').eq('id', answer_id).single()
+      ownerId = a?.user_id || null
+    }
+
+    // ── Award karma based on vote change ─────────────────────
+    if (ownerId && ownerId !== user.id) {
+      if (isNewUpvote) {
+        await awardKarma({ userId: ownerId, eventType: question_id ? 'question_upvoted' : 'answer_upvoted', sourceId: targetId })
+      }
+      if (isNewDownvote) {
+        await awardKarma({ userId: ownerId, eventType: question_id ? 'question_downvoted' : 'answer_downvoted', sourceId: targetId })
+        await awardKarma({ userId: user.id, eventType: 'downvote_cast', sourceId: targetId })
+      }
+      if (isRemovingUpvote) {
+        await awardKarma({ userId: ownerId, eventType: question_id ? 'question_downvoted' : 'answer_downvoted', sourceId: targetId })
+      }
+      if (isRemovingDownvote) {
+        await awardKarma({ userId: ownerId, eventType: question_id ? 'question_upvoted' : 'answer_upvoted', sourceId: targetId })
+      }
+      if (isChangingToUpvote) {
+        await awardKarma({ userId: ownerId, eventType: question_id ? 'question_upvoted' : 'answer_upvoted', sourceId: targetId })
+        await awardKarma({ userId: ownerId, eventType: question_id ? 'question_upvoted' : 'answer_upvoted', sourceId: targetId })
+      }
+      if (isChangingToDownvote) {
+        await awardKarma({ userId: ownerId, eventType: question_id ? 'question_downvoted' : 'answer_downvoted', sourceId: targetId })
+        await awardKarma({ userId: ownerId, eventType: question_id ? 'question_downvoted' : 'answer_downvoted', sourceId: targetId })
+      }
+    }
+
+    // ── Notify on new upvote only ─────────────────────────────
     if (isNewUpvote) {
       if (question_id) {
-        const { data: q } = await db
-          .from('community_questions')
-          .select('user_id')
-          .eq('id', question_id)
-          .single();
+        const { data: q } = await db.from('community_questions').select('user_id').eq('id', question_id).single()
         if (q?.user_id) {
-          await insertNotification(db, {
-            userId: q.user_id,
-            type: 'upvote_question',
-            actorId: user.id,
-            questionId: question_id,
-            answerId: null,
-          });
+          await insertNotification(db, { userId: q.user_id, type: 'upvote_question', actorId: user.id, questionId: question_id, answerId: null })
         }
       } else {
-        const { data: a } = await db
-          .from('community_answers')
-          .select('user_id, question_id')
-          .eq('id', answer_id)
-          .single();
+        const { data: a } = await db.from('community_answers').select('user_id, question_id').eq('id', answer_id).single()
         if (a?.user_id) {
-          await insertNotification(db, {
-            userId: a.user_id,
-            type: 'upvote_answer',
-            actorId: user.id,
-            questionId: a.question_id,
-            answerId: answer_id,
-          });
+          await insertNotification(db, { userId: a.user_id, type: 'upvote_answer', actorId: user.id, questionId: a.question_id, answerId: answer_id })
         }
       }
     }
 
-    // Bust ISR cache for question page
+    // Bust ISR cache
     if (question_id) {
-      const { data: q } = await db
-        .from('community_questions')
-        .select('slug')
-        .eq('id', question_id)
-        .single()
+      const { data: q } = await db.from('community_questions').select('slug').eq('id', question_id).single()
       if (q?.slug) revalidatePath('/q/' + q.slug)
     }
 
-    // Get user's current vote state
     const { data: currentVote } = await db
       .from('community_votes')
       .select('vote_type')
@@ -204,11 +216,7 @@ export async function POST(request) {
       .eq(targetField, targetId)
       .maybeSingle()
 
-    return NextResponse.json({
-      upvotes,
-      downvotes,
-      userVote: currentVote?.vote_type ?? 0,
-    })
+    return NextResponse.json({ upvotes, downvotes, userVote: currentVote?.vote_type ?? 0 })
 
   } catch (err) {
     console.error('[votes/route.js] Unexpected error:', err)
@@ -219,7 +227,6 @@ export async function POST(request) {
 // --- CHANGE LOG ---
 // [May 15, 2026] CREATED: Phase 4
 // [May 18, 2026] UPDATED: Phase 10 — notifications + Bearer token auth
-// [May 20, 2026] FIXED: GET now returns downvotes too
-//               POST now returns downvotes too
-//               revalidatePath busts ISR cache after vote
+// [May 20, 2026] FIXED: GET + POST return downvotes. revalidatePath added.
+// [May 20, 2026] FIXED: awardKarma calls added for all vote change scenarios
 // --- END CHANGE LOG ---
