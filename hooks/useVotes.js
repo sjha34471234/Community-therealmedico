@@ -37,6 +37,7 @@ export function useVotes(question, answers) {
     const delta = newVote - (prevVote || 0)
     setScores(function s(p) { return Object.assign({}, p, { [targetId]: prevScore + delta }) })
     setUserVotes(function v(p) { return Object.assign({}, p, { [targetId]: newVote === 0 ? null : newVote }) })
+    console.log('postVote called:', { questionId, answerId, newVote })
     const result = await postVote(questionId, answerId, newVote, accessToken)
     if (result.error) {
       setScores(function s(p) { return Object.assign({}, p, { [targetId]: prevScore }) })
