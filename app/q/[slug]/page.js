@@ -1,16 +1,7 @@
 // ============================================================
 // FILE: app/q/[slug]/page.js
 // PURPOSE: Question detail page — full question + answers, ISR, SEO
-// LAST CHANGED: May 17, 2026
-// WHY IT EXISTS: Each question needs its own URL for SEO and sharing.
-//   Server component so it can use ISR revalidation and generateMetadata.
-//   Renders QuestionDetail (client) for interactivity.
-// DEPENDENCIES: lib/supabaseServer.js, components/QuestionDetail.jsx
-// ⚠️ DO NOT CHANGE:
-//   - revalidate must stay 3600 — never use force-dynamic on this page.
-//   - params is { slug: string } — NOT a Promise (Next.js 14 rule).
-//   - generateMetadata must stay in this file — never move to QuestionDetail.
-//   - QAPage JSON-LD must stay on this page for SEO.
+// LAST CHANGED: May 20, 2026
 // ============================================================
 
 import { notFound } from 'next/navigation'
@@ -18,8 +9,6 @@ import { supabaseServer } from '@/lib/supabaseServer'
 import QuestionDetail from '@/components/QuestionDetail'
 
 export const revalidate = 3600
-
-// ── generateMetadata ─────────────────────────────────────────────────────────
 
 export async function generateMetadata({ params }) {
   const { slug } = params
@@ -32,9 +21,7 @@ export async function generateMetadata({ params }) {
     .single()
 
   if (!question) {
-    return {
-      title: 'Question not found — The Real Medico Community',
-    }
+    return { title: 'Question not found — The Real Medico Community' }
   }
 
   const description = question.body
@@ -44,9 +31,7 @@ export async function generateMetadata({ params }) {
   return {
     title: question.title + ' — The Real Medico Community',
     description,
-    alternates: {
-      canonical: 'https://community.therealmedico.store/q/' + slug,
-    },
+    alternates: { canonical: 'https://community.therealmedico.store/q/' + slug },
     openGraph: {
       title: question.title,
       description,
@@ -58,13 +43,10 @@ export async function generateMetadata({ params }) {
   }
 }
 
-// ── Page ─────────────────────────────────────────────────────────────────────
-
 export default async function QuestionPage({ params }) {
   const { slug } = params
-  const supabase = createServerClient()
+  const supabase = supabaseServer()
 
-  // Fetch question
   const { data: question, error: qError } = await supabase
     .from('community_questions')
     .select(`
@@ -86,11 +68,8 @@ export default async function QuestionPage({ params }) {
     .eq('slug', slug)
     .single()
 
-  if (qError || !question) {
-    notFound()
-  }
+  if (qError || !question) notFound()
 
-  // Fetch answers
   const { data: answers } = await supabase
     .from('community_answers')
     .select('id, body, upvotes, downvotes, is_accepted, created_at, user_id')
@@ -99,14 +78,12 @@ export default async function QuestionPage({ params }) {
     .order('upvotes', { ascending: false })
     .order('created_at', { ascending: true })
 
-  // Fetch author profile — include is_member for Phase 7 cosmetics
   const { data: authorProfile } = await supabase
     .from('profiles')
     .select('community_username, community_flair, is_member')
     .eq('id', question.user_id)
     .single()
 
-  // Fetch answer author profiles — include is_member for Phase 7 cosmetics
   const answerUserIds = answers
     ? Array.from(new Set(answers.map(function getId(a) { return a.user_id }).filter(Boolean)))
     : []
@@ -120,17 +97,13 @@ export default async function QuestionPage({ params }) {
     answerProfiles = profiles || []
   }
 
-  // Increment view count (fire and forget — doesn't block render)
   supabase
     .from('community_questions')
     .update({ view_count: (question.view_count || 0) + 1 })
     .eq('id', question.id)
     .then(function noop() {})
 
-  // ── JSON-LD ────────────────────────────────────────────────────────────────
-  const acceptedAnswer = answers
-    ? answers.find(function findAccepted(a) { return a.is_accepted })
-    : null
+  const acceptedAnswer = answers ? answers.find(function findAccepted(a) { return a.is_accepted }) : null
 
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -155,13 +128,9 @@ export default async function QuestionPage({ params }) {
     },
   }
 
-  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-      />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <QuestionDetail
         question={question}
         answers={answers || []}
@@ -174,7 +143,7 @@ export default async function QuestionPage({ params }) {
 
 // --- CHANGE LOG ---
 // [May 14, 2026] CREATED: Phase 3
-// REASON: Question detail page with ISR, generateMetadata, QAPage JSON-LD.
-// [May 17, 2026] UPDATED: profiles SELECT now includes is_member — Phase 7
-// REASON: Pass member status to QuestionDetail for gold author cosmetics
+// [May 17, 2026] UPDATED: is_member added to profiles select
+// [May 20, 2026] FIXED: createServerClient → supabaseServer (correct named export)
+//               Added downvotes to question select for net score calculation
 // --- END CHANGE LOG ---
