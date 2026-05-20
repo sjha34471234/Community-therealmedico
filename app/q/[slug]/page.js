@@ -14,7 +14,7 @@
 // ============================================================
 
 import { notFound } from 'next/navigation'
-import { createServerClient } from '@/lib/supabaseServer'
+import { supabaseServer } from '@/lib/supabaseServer'
 import QuestionDetail from '@/components/QuestionDetail'
 
 export const revalidate = 3600
