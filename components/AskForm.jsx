@@ -262,7 +262,7 @@ export default function AskForm() {
         .ask-required { color:var(--danger); margin-left:2px; }
         .ask-optional { font-weight:400; color:var(--text-muted); font-size:0.8rem; }
         .ask-hint { font-family:'Inter',system-ui,sans-serif; font-size:0.8rem; color:var(--text-muted); margin:0; line-height:1.5; }
-        .ask-input,.ask-textarea { font-family:'Inter',system-ui,sans-serif; font-size:0.9rem; color:var(--text-primary); background:var(--bg-secondary); border:1.5px solid var(--bg-tertiary); border-radius:8px; padding:10px 14px; width:100%; box-sizing:border-box; transition:border-color 0.15s; outline:none; }
+        .ask-input,.ask-textarea { font-family:'Inter',system-ui,sans-serif; font-size:0.9rem; color:var(--text-primary); background:var(--bg-secondary); border:1.5px solid var(--bg-tertiary); border-radius:8px; padding:10px 14px; width:100%; box-sizing:border-box; transition:border-color 0.15s; outline:none; text-transform:uppercase; }
         .ask-input:focus,.ask-textarea:focus { border-color:var(--accent-primary); background:var(--bg-primary); }
         .ask-input-error { border-color:var(--danger)!important; }
         .ask-textarea { resize:vertical; min-height:200px; line-height:1.6; white-space:pre-wrap; }
