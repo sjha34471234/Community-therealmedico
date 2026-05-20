@@ -233,14 +233,14 @@ a:hover {
 .navbar-logo-bold {
   font-family: 'Merriweather', Georgia, serif;
   font-weight: 700;
-  font-size: 1rem;
-  color: var(--text-primary);
+  font-size: 1.0625rem;
+  color: var(--accent-primary);
 }
 
 .navbar-logo-light {
   font-family: 'Inter', sans-serif;
   font-weight: 400;
-  font-size: 1rem;
+  font-size: 0.875rem;
   color: var(--text-secondary);
 }
 
