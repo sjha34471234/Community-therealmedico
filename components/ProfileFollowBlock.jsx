@@ -152,9 +152,9 @@ export default function ProfileFollowBlock({ targetUserId, initialFollowerCount,
             )}
 
             {dataLoaded && visibleList.map((person) => {
-              const profile = openPanel === 'followers' ? person.follower : person.following;
-              if (!profile) return null;
-              const initial = (profile.community_username || '?')[0].toUpperCase();
+  const profile = person;
+  if (!profile?.community_username) return null;
+  const initial = (profile.community_username || '?')[0].toUpperCase();
               return (
                 <Link
                   key={person.id}
