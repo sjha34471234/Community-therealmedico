@@ -30,7 +30,7 @@ export default function QuestionDetail({ question, answers, authorProfile, answe
   const router = useRouter()
   const { user, accessToken } = useAuthStore()
   const { getScore, getVote, vote } = useVotes(question, answers)
-
+  console.log('question.id:', question?.id, 'question:', question)
   const [answerBody, setAnswerBody] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [answerError, setAnswerError] = useState('')
