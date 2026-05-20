@@ -29,7 +29,7 @@ function isMember(p) { return p?.is_member === true }
 export default function QuestionDetail({ question, answers, authorProfile, answerProfiles }) {
   const router = useRouter()
   const { user, accessToken } = useAuthStore()
-  const { getCount, getVote, handleVote } = useVotes(question, answers)
+  const { getScore, getVote, vote } = useVotes(question, answers)
 
   const [answerBody, setAnswerBody] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -38,7 +38,6 @@ export default function QuestionDetail({ question, answers, authorProfile, answe
   const profileMap = {}
   answerProfiles.forEach(function map(p) { profileMap[p.id] = p })
 
-  // View upsert
   useEffect(function upsertView() {
     if (!user || !question?.id || !question?.last_activity_at) return
     supabase.from('community_post_views').upsert(
@@ -102,9 +101,10 @@ export default function QuestionDetail({ question, answers, authorProfile, answe
 
         <div className="qd-vote-row">
           <VoteButton
-            count={getCount(question.id)}
+            score={getScore(question.id)}
             userVote={getVote(question.id)}
-            onVote={function onQVote(v) { handleVote('question', question.id, v) }}
+            onUpvote={function up() { vote(question.id, null, 1) }}
+            onDownvote={function down() { vote(question.id, null, -1) }}
           />
           {question.is_answered && <span className="qd-answered-badge"><CheckCircle size={14} /> Answered</span>}
         </div>
@@ -127,9 +127,10 @@ export default function QuestionDetail({ question, answers, authorProfile, answe
               <div className="qd-answer-body">{answer.body}</div>
               <div className="qd-answer-footer">
                 <VoteButton
-                  count={getCount(answer.id)}
+                  score={getScore(answer.id)}
                   userVote={getVote(answer.id)}
-                  onVote={function onAVote(v) { handleVote('answer', answer.id, v) }}
+                  onUpvote={function up() { vote(null, answer.id, 1) }}
+                  onDownvote={function down() { vote(null, answer.id, -1) }}
                 />
                 <div className="qd-answer-meta">
                   <span className="qd-meta-item"><User size={12} />
@@ -218,6 +219,6 @@ export default function QuestionDetail({ question, answers, authorProfile, answe
 
 // --- CHANGE LOG ---
 // [May 14, 2026] CREATED: Phase 3
-// [May 20, 2026] REFACTORED: Vote logic moved to hooks/useVotes.js + lib/votes.js
-//               VoteButton is now pure UI — no logic inside
+// [May 20, 2026] FIXED: Updated to use getScore/getVote/vote from useVotes hook
+//               VoteButton now uses score/onUpvote/onDownvote props
 // --- END CHANGE LOG ---
