@@ -1,25 +1,12 @@
 // ============================================================
 // FILE: components/QuestionDetail.jsx
 // PURPOSE: Client component — renders full question + answers, upserts view record
-// LAST CHANGED: May 19, 2026
-// WHY IT EXISTS: The question detail page needs client-side auth to:
-//   1. Upsert community_post_views when a logged-in user opens the page
-//   2. Show the answer form for logged-in users
-//   3. Show vote buttons
-// DEPENDENCIES: store/authStore.js, components/TagPill.jsx, lucide-react
-// ⚠️ DO NOT CHANGE:
-//   - useAuthStore for auth — never separate onAuthStateChange here
-//   - The view upsert MUST use activity_snapshot = question.last_activity_at
-//   - credentials: 'include' on ALL fetch calls.
-//   - Authorization: Bearer token on POST — never cookies only (rule #36)
-//   - window.location.origin for API URLs — never relative paths.
-//   - white-space: pre-wrap on question body and answer bodies — no markdown yet.
-//   - All <a> tags must be single line — iPad clipboard rule.
+// LAST CHANGED: May 20, 2026
 // ============================================================
 
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import useAuthStore from '@/store/authStore'
@@ -27,8 +14,6 @@ import TagPill from '@/components/TagPill'
 import toast from 'react-hot-toast'
 import VoteButton from '@/components/VoteButton'
 import {
-  ChevronUp,
-  ChevronDown,
   CheckCircle,
   MessageSquare,
   Eye,
@@ -65,20 +50,20 @@ export default function QuestionDetail({ question, answers, authorProfile, answe
   const [submitting, setSubmitting] = useState(false)
   const [answerError, setAnswerError] = useState('')
 
-  // Live vote state — keyed by id so updates are isolated
+  // Net score = upvotes - downvotes
   const [questionVote, setQuestionVote] = useState(null)
-  const [questionCount, setQuestionCount] = useState(question.upvotes || 0)
+  const [questionCount, setQuestionCount] = useState((question.upvotes || 0) - (question.downvotes || 0))
   const [answerVotes, setAnswerVotes] = useState({})
   const [answerCounts, setAnswerCounts] = useState(
-    Object.fromEntries((answers || []).map(function makeEntry(a) { return [a.id, a.upvotes || 0] }))
+    Object.fromEntries((answers || []).map(function makeEntry(a) {
+      return [a.id, (a.upvotes || 0) - (a.downvotes || 0)]
+    }))
   )
 
   const profileMap = {}
-  answerProfiles.forEach(function mapProfile(p) {
-    profileMap[p.id] = p
-  })
+  answerProfiles.forEach(function mapProfile(p) { profileMap[p.id] = p })
 
-  // ── View upsert — runs when user auth is known ───────────
+  // View upsert
   useEffect(function upsertView() {
     if (!user || !question?.id || !question?.last_activity_at) return
     supabase
@@ -97,25 +82,24 @@ export default function QuestionDetail({ question, answers, authorProfile, answe
       })
   }, [user, question?.id, question?.last_activity_at])
 
-  // Fetch user's current votes on mount
+  // Fetch user's current votes + live counts on mount
   useEffect(function fetchUserVotes() {
     if (!user || !accessToken) return
 
     async function loadVotes() {
       try {
-        const ids = [question.id, ...(answers || []).map(function getId(a) { return a.id })]
-        // Fetch question vote
+        // Question vote
         const qRes = await fetch(
           window.location.origin + '/api/votes?question_id=' + question.id,
           { headers: { Authorization: 'Bearer ' + accessToken }, credentials: 'include' }
         )
         if (qRes.ok) {
           const qData = await qRes.json()
-          setQuestionVote(qData.userVote || null)
-          setQuestionCount(qData.upvotes ?? question.upvotes ?? 0)
+          setQuestionVote(qData.userVote ?? null)
+          setQuestionCount((qData.upvotes ?? 0) - (qData.downvotes ?? 0))
         }
 
-        // Fetch answer votes
+        // Answer votes
         for (const answer of (answers || [])) {
           const aRes = await fetch(
             window.location.origin + '/api/votes?answer_id=' + answer.id,
@@ -123,8 +107,8 @@ export default function QuestionDetail({ question, answers, authorProfile, answe
           )
           if (aRes.ok) {
             const aData = await aRes.json()
-            setAnswerVotes(function prev(v) { return Object.assign({}, v, { [answer.id]: aData.userVote || null }) })
-            setAnswerCounts(function prev(c) { return Object.assign({}, c, { [answer.id]: aData.upvotes ?? answer.upvotes ?? 0 }) })
+            setAnswerVotes(function prev(v) { return Object.assign({}, v, { [answer.id]: aData.userVote ?? null }) })
+            setAnswerCounts(function prev(c) { return Object.assign({}, c, { [answer.id]: (aData.upvotes ?? 0) - (aData.downvotes ?? 0) }) })
           }
         }
       } catch (err) {
@@ -133,8 +117,8 @@ export default function QuestionDetail({ question, answers, authorProfile, answe
     }
     loadVotes()
   }, [user, accessToken, question.id])
-  
-  // ── Answer submit ────────────────────────────────────────
+
+  // Answer submit
   async function handleAnswerSubmit() {
     if (!answerBody.trim()) {
       setAnswerError('Please write your answer before posting.')
@@ -185,11 +169,10 @@ export default function QuestionDetail({ question, answers, authorProfile, answe
     if (answerError) setAnswerError('')
   }
 
-  // ── Render ───────────────────────────────────────────────
   return (
     <main style={{ maxWidth: '768px', margin: '0 auto', padding: '32px 16px 64px' }}>
 
-      {/* ── Question ── */}
+      {/* Question */}
       <article className="qd-question-card">
 
         {question.is_pinned && (
@@ -249,7 +232,7 @@ export default function QuestionDetail({ question, answers, authorProfile, answe
 
       </article>
 
-      {/* ── Answers ── */}
+      {/* Answers */}
       <section className="qd-answers-section">
         <h2 className="qd-answers-heading">
           {answers.length === 0
@@ -282,7 +265,7 @@ export default function QuestionDetail({ question, answers, authorProfile, answe
                   <VoteButton
                     targetId={answer.id}
                     targetType="answer"
-                    initialCount={answerCounts[answer.id] ?? answer.upvotes ?? 0}
+                    initialCount={answerCounts[answer.id] ?? 0}
                     userVote={answerVotes[answer.id] ?? null}
                     onVoteChange={function handleAVote(newCount, newVote) {
                       setAnswerCounts(function prev(c) { return Object.assign({}, c, { [answer.id]: newCount }) })
@@ -308,7 +291,7 @@ export default function QuestionDetail({ question, answers, authorProfile, answe
         })}
       </section>
 
-      {/* ── Answer form ── */}
+      {/* Answer form */}
       <section className="qd-answer-form-section">
         <h2 className="qd-answers-heading">Your Answer</h2>
 
@@ -395,8 +378,8 @@ export default function QuestionDetail({ question, answers, authorProfile, answe
 
 // --- CHANGE LOG ---
 // [May 14, 2026] CREATED: Phase 3
-// [May 17, 2026] UPDATED: Real Medico+ gold username + crown on authors. Phase 7.
-// [May 19, 2026] FIXED: Replaced separate onAuthStateChange with useAuthStore.
-//               Added Authorization: Bearer token to answer POST request.
-//               REASON: API route requires Bearer token — cookies alone rejected on iPad.
+// [May 17, 2026] UPDATED: Real Medico+ gold cosmetics
+// [May 19, 2026] FIXED: Bearer token on answer POST
+// [May 20, 2026] FIXED: Net score (upvotes - downvotes) for all vote displays
+//               Live vote fetch on mount — highlight + count always correct
 // --- END CHANGE LOG ---
