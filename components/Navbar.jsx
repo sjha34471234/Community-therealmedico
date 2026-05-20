@@ -1,7 +1,7 @@
 // ============================================================
 // FILE: components/Navbar.jsx
-// PURPOSE: Top navigation — Tags (left), logo (centre), bell/gear/sign-in (right)
-// LAST CHANGED: May 19, 2026
+// PURPOSE: Top navigation — logo (left), bell/gear/sign-in (right)
+// LAST CHANGED: May 20, 2026
 // WHY IT EXISTS: App-wide navigation.
 // DEPENDENCIES: components/NotificationBell.jsx,
 //               store/authStore.js, app/globals.css (navbar styles)
@@ -25,9 +25,6 @@ export default function Navbar() {
     <nav className="navbar">
       <div className="navbar-inner">
         <div className="navbar-left">
-          <Link href="/tags" className="navbar-link">Tags</Link>
-        </div>
-        <div className="navbar-centre">
           <Link href="/" className="navbar-logo">
             <span className="navbar-logo-bold">The Real Medico</span><span className="navbar-logo-light"> Community</span>
           </Link>
@@ -52,5 +49,5 @@ export default function Navbar() {
 // --- CHANGE LOG ---
 // [May 19, 2026] REDESIGNED: Tags left, logo centre, bell/sign-in right.
 //               Removed: SearchBar (bottom nav), username (bottom nav Profile tab).
-// [May 19, 2026] UPDATED: On own profile page, bell swaps to gear icon → /settings.
+// [May 20, 2026] UPDATED: Removed Tags link. Logo moved to left. Less cramped on mobile.
 // --- END CHANGE LOG ---
