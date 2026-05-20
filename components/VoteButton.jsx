@@ -40,6 +40,11 @@ export default function VoteButton({
       body.answer_id = targetId
     }
 
+    // Optimistic update — feels instant
+    const optimisticCount = count + (currentVote === voteType ? -voteType : newVoteType - (currentVote || 0))
+    setCount(optimisticCount)
+    setCurrentVote(newVoteType === 0 ? null : newVoteType)
+
     setLoading(true)
     try {
       const res = await fetch(window.location.origin + '/api/votes', {
