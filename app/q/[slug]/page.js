@@ -74,6 +74,7 @@ export default async function QuestionPage({ params }) {
       body,
       tags,
       upvotes,
+      downvotes,
       view_count,
       answer_count,
       is_answered,
