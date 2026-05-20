@@ -5,7 +5,7 @@
 // ============================================================
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { ChevronUp, ChevronDown } from 'lucide-react'
 import toast from 'react-hot-toast'
 import useAuthStore from '@/store/authStore'
@@ -23,7 +23,7 @@ export default function VoteButton({
   const [loading, setLoading] = useState(false)
 
   // Sync when parent fetches live vote state after mount
-  useEffect(function syncProps() {
+  useEffect(function syncCount() {
     setCount(initialCount || 0)
   }, [initialCount])
 
@@ -47,12 +47,13 @@ export default function VoteButton({
       body.answer_id = targetId
     }
 
-    // Snapshot current state for revert
+    // Snapshot for revert
     const prevCount = count
     const prevVote = currentVote
 
-    // Optimistic update
-    const delta = newVoteType - (currentVote || 0)
+    // Optimistic update — net score delta
+    const prevVoteVal = currentVote || 0
+    const delta = newVoteType - prevVoteVal
     setCount(function c(prev) { return prev + delta })
     setCurrentVote(newVoteType === 0 ? null : newVoteType)
 
@@ -83,12 +84,13 @@ export default function VoteButton({
         return
       }
 
-      // Confirm with server truth
-      setCount(data.upvotes)
+      // Confirm with server truth — net score
+      const netScore = (data.upvotes ?? 0) - (data.downvotes ?? 0)
+      setCount(netScore)
       setCurrentVote(newVoteType === 0 ? null : newVoteType)
 
       if (onVoteChange) {
-        onVoteChange(data.upvotes, newVoteType === 0 ? null : newVoteType)
+        onVoteChange(netScore, newVoteType === 0 ? null : newVoteType)
       }
 
     } catch (err) {
@@ -150,7 +152,8 @@ export default function VoteButton({
 
 // --- CHANGE LOG ---
 // [May 14, 2026] CREATED: Phase 3
-// [May 20, 2026] FIXED: useEffect syncs initialCount + userVote from parent
-//               after live fetch. useState ignores prop changes — this fixes it.
-//               Removed router.refresh() — ISR not reliable. Live fetch handles refresh.
+// [May 20, 2026] FIXED: useEffect syncs props after parent live fetch
+//               Net score = upvotes - downvotes (not upvotes alone)
+//               Optimistic delta correct for downvotes
+//               Revert on error
 // --- END CHANGE LOG ---
