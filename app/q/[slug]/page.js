@@ -68,7 +68,10 @@ export default async function QuestionPage({ params }) {
     .eq('slug', slug)
     .single()
 
-  if (qError || !question) notFound()
+  if (qError || !question) {
+    console.error('Question not found:', { slug, qError: qError?.message, question })
+    notFound()
+  }
 
   const { data: answers } = await supabase
     .from('community_answers')
