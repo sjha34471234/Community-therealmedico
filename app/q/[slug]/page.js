@@ -23,7 +23,7 @@ export const revalidate = 3600
 
 export async function generateMetadata({ params }) {
   const { slug } = params
-  const supabase = createServerClient()
+  const supabase = supabaseServer()
 
   const { data: question } = await supabase
     .from('community_questions')
