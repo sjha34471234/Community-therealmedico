@@ -157,7 +157,7 @@ export default function ProfileFollowBlock({ targetUserId, initialFollowerCount,
   const initial = (profile.community_username || '?')[0].toUpperCase();
               return (
                 <Link
-                  key={person.id}
+                  key={profile.id}
                   href={`/profile/${profile.community_username}`}
                   className="follow-dropdown-item"
                   onClick={() => setOpenPanel(null)}
