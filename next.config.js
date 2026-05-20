@@ -11,6 +11,7 @@
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  generateBuildId: async function() { return 'build-' + Date.now() },
 
   // Allows next/image to load images from Supabase storage
   images: {
