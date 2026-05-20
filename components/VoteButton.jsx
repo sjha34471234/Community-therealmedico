@@ -5,8 +5,7 @@
 // ============================================================
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, useRef } from 'react'
 import { ChevronUp, ChevronDown } from 'lucide-react'
 import toast from 'react-hot-toast'
 import useAuthStore from '@/store/authStore'
@@ -19,10 +18,18 @@ export default function VoteButton({
   onVoteChange,
 }) {
   const { user, accessToken } = useAuthStore()
-  const router = useRouter()
   const [count, setCount] = useState(initialCount || 0)
-  const [currentVote, setCurrentVote] = useState(userVote || null)
+  const [currentVote, setCurrentVote] = useState(userVote ?? null)
   const [loading, setLoading] = useState(false)
+
+  // Sync when parent fetches live vote state after mount
+  useEffect(function syncProps() {
+    setCount(initialCount || 0)
+  }, [initialCount])
+
+  useEffect(function syncVote() {
+    setCurrentVote(userVote ?? null)
+  }, [userVote])
 
   async function handleVote(voteType) {
     if (!user) {
@@ -33,18 +40,20 @@ export default function VoteButton({
 
     const newVoteType = currentVote === voteType ? 0 : voteType
 
-    const body = {
-      vote_type: newVoteType,
-    }
+    const body = { vote_type: newVoteType }
     if (targetType === 'question') {
       body.question_id = targetId
     } else {
       body.answer_id = targetId
     }
 
-    // Optimistic update — feels instant
-    const optimisticCount = count + (currentVote === voteType ? -voteType : newVoteType - (currentVote || 0))
-    setCount(optimisticCount)
+    // Snapshot current state for revert
+    const prevCount = count
+    const prevVote = currentVote
+
+    // Optimistic update
+    const delta = newVoteType - (currentVote || 0)
+    setCount(function c(prev) { return prev + delta })
     setCurrentVote(newVoteType === 0 ? null : newVoteType)
 
     setLoading(true)
@@ -54,7 +63,7 @@ export default function VoteButton({
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
+          'Authorization': 'Bearer ' + accessToken,
         },
         body: JSON.stringify(body),
       })
@@ -62,10 +71,14 @@ export default function VoteButton({
       const data = await res.json()
 
       if (res.status === 429) {
+        setCount(prevCount)
+        setCurrentVote(prevVote)
         toast.error('You are voting too quickly. Please slow down.')
         return
       }
       if (!res.ok) {
+        setCount(prevCount)
+        setCurrentVote(prevVote)
         toast.error(data.error || 'Vote failed. Please try again.')
         return
       }
@@ -78,12 +91,9 @@ export default function VoteButton({
         onVoteChange(data.upvotes, newVoteType === 0 ? null : newVoteType)
       }
 
-      // Revalidate ISR cache so refresh shows correct count
-      router.refresh()
     } catch (err) {
-      // Revert optimistic update on error
-      setCount(count)
-      setCurrentVote(currentVote)
+      setCount(prevCount)
+      setCurrentVote(prevVote)
       console.error('VoteButton fetch error:', err)
       toast.error('Network error. Please try again.')
     } finally {
@@ -126,47 +136,13 @@ export default function VoteButton({
       </button>
 
       <style>{`
-        .vb-wrap {
-          display: inline-flex;
-          align-items: center;
-          gap: 4px;
-        }
-        .vb-btn {
-          background: var(--bg-secondary);
-          border: 1px solid var(--bg-tertiary);
-          border-radius: 6px;
-          padding: 4px 6px;
-          cursor: pointer;
-          display: inline-flex;
-          align-items: center;
-          color: var(--text-muted);
-          transition: background 0.15s, color 0.15s, border-color 0.15s;
-          line-height: 1;
-        }
-        .vb-btn:hover:not(:disabled) {
-          background: var(--accent-light);
-          color: var(--accent-primary);
-          border-color: var(--accent-primary);
-        }
-        .vb-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .vb-btn-active-up {
-          background: var(--accent-light);
-          color: var(--accent-primary);
-          border-color: var(--accent-primary);
-        }
-        .vb-btn-active-down {
-          background: #FEF2F2;
-          color: var(--danger);
-          border-color: var(--danger);
-        }
-        .vb-count {
-          font-family: 'Inter', system-ui, sans-serif;
-          font-size: 0.9rem;
-          font-weight: 700;
-          color: var(--text-primary);
-          min-width: 24px;
-          text-align: center;
-        }
+        .vb-wrap { display:inline-flex; align-items:center; gap:4px; }
+        .vb-btn { background:var(--bg-secondary); border:1px solid var(--bg-tertiary); border-radius:6px; padding:4px 6px; cursor:pointer; display:inline-flex; align-items:center; color:var(--text-muted); transition:background 0.15s,color 0.15s,border-color 0.15s; line-height:1; }
+        .vb-btn:hover:not(:disabled) { background:var(--accent-light); color:var(--accent-primary); border-color:var(--accent-primary); }
+        .vb-btn:disabled { opacity:0.5; cursor:not-allowed; }
+        .vb-btn-active-up { background:var(--accent-light); color:var(--accent-primary); border-color:var(--accent-primary); }
+        .vb-btn-active-down { background:#FEF2F2; color:var(--danger); border-color:var(--danger); }
+        .vb-count { font-family:'Inter',system-ui,sans-serif; font-size:0.9rem; font-weight:700; color:var(--text-primary); min-width:24px; text-align:center; }
       `}</style>
     </div>
   )
@@ -174,8 +150,7 @@ export default function VoteButton({
 
 // --- CHANGE LOG ---
 // [May 14, 2026] CREATED: Phase 3
-// [May 20, 2026] FIXED: Three bugs —
-//   1. Was sending target_id/target_type — API expects question_id or answer_id
-//   2. Was reading data.new_count — API returns data.upvotes
-//   3. Was sending no Bearer token — added Authorization header via useAuthStore
+// [May 20, 2026] FIXED: useEffect syncs initialCount + userVote from parent
+//               after live fetch. useState ignores prop changes — this fixes it.
+//               Removed router.refresh() — ISR not reliable. Live fetch handles refresh.
 // --- END CHANGE LOG ---
