@@ -2,20 +2,13 @@
 // FILE: app/page.js
 // PURPOSE: Homepage — live question feed with sort tabs
 //          Two-column layout: feed left, recently visited right
+//          Infinite scroll — loads more as user scrolls down
 // LAST CHANGED: May 21, 2026
-// WHY IT EXISTS: Main entry point for the community
-// DEPENDENCIES: components/QuestionCard.jsx, components/SortBar.jsx,
-//               components/RecentlyVisited.jsx,
-//               app/api/questions/route.js, lib/supabase.js
-// ⚠️ DO NOT CHANGE: revalidate stays at 300 — do not force-dynamic
-//                   userId is read client-side via onAuthStateChange
-//                   Never call getUser() or getSession() on mount
-//                   All <a> tags must stay on single lines — iPad rule
 // ============================================================
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import SortBar from '@/components/SortBar';
 import QuestionCard from '@/components/QuestionCard';
 import RecentlyVisited from '@/components/RecentlyVisited';
@@ -30,17 +23,28 @@ export default function HomePage() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const sentinelRef = useRef(null);
+  const loadingMoreRef = useRef(false);
+  const hasMoreRef = useRef(false);
+  const pageRef = useRef(1);
+  const sortRef = useRef('hot');
+  const userIdRef = useRef(null);
 
   useEffect(function() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(function(event, session) {
       setUserId(session ? session.user.id : null);
+      userIdRef.current = session ? session.user.id : null;
     });
     return function() { subscription.unsubscribe(); };
   }, []);
 
   useEffect(function() {
+    sortRef.current = sort;
+    pageRef.current = 1;
     setPage(1);
     setQuestions([]);
+    setHasMore(false);
+    hasMoreRef.current = false;
     fetchQuestions(sort, 1, userId, false);
   }, [sort, userId]);
 
@@ -57,6 +61,7 @@ export default function HomePage() {
     try {
       if (append) {
         setLoadingMore(true);
+        loadingMoreRef.current = true;
       } else {
         setLoading(true);
         setError(null);
@@ -72,23 +77,37 @@ export default function HomePage() {
       } else {
         setQuestions(data.questions || []);
       }
-      setHasMore(data.hasMore === true);
+      const more = data.hasMore === true;
+      setHasMore(more);
+      hasMoreRef.current = more;
     } catch (err) {
       console.error('Feed fetch error:', err);
       setError('Could not load questions. Please try again.');
     } finally {
       setLoading(false);
       setLoadingMore(false);
+      loadingMoreRef.current = false;
     }
   }
 
-  function handleSortChange(newSort) { setSort(newSort); }
+  const handleIntersect = useCallback(function(entries) {
+    const entry = entries[0];
+    if (entry.isIntersecting && hasMoreRef.current && !loadingMoreRef.current) {
+      const nextPage = pageRef.current + 1;
+      pageRef.current = nextPage;
+      setPage(nextPage);
+      fetchQuestions(sortRef.current, nextPage, userIdRef.current, true);
+    }
+  }, []);
 
-  function handleLoadMore() {
-    const nextPage = page + 1;
-    setPage(nextPage);
-    fetchQuestions(sort, nextPage, userId, true);
-  }
+  useEffect(function() {
+    const observer = new IntersectionObserver(handleIntersect, { rootMargin: '200px' });
+    const sentinel = sentinelRef.current;
+    if (sentinel) observer.observe(sentinel);
+    return function() { if (sentinel) observer.unobserve(sentinel); };
+  }, [handleIntersect]);
+
+  function handleSortChange(newSort) { setSort(newSort); }
 
   return (
     <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '1.5rem 1rem' }}>
@@ -140,17 +159,22 @@ export default function HomePage() {
           {!loading && !error && questions.length > 0 && (
             <div>
               {questions.map(function(q) { return <QuestionCard key={q.id} question={q} />; })}
-              {hasMore && (
-                <div style={{ textAlign: 'center', marginTop: '1.5rem' }}>
-                  <button onClick={handleLoadMore} disabled={loadingMore} style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--accent-primary)', fontFamily: 'Inter, system-ui, sans-serif', fontWeight: 500, fontSize: '0.875rem', padding: '9px 28px', borderRadius: '7px', border: '1px solid var(--accent-primary)', cursor: loadingMore ? 'not-allowed' : 'pointer', opacity: loadingMore ? 0.6 : 1 }}>
-                    {loadingMore ? 'Loading…' : 'Load more'}
-                  </button>
-                </div>
-              )}
-              {!hasMore && (
-                <p style={{ textAlign: 'center', fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '1.5rem' }}>You have reached the end</p>
-              )}
             </div>
+          )}
+
+          {/* Invisible sentinel — triggers infinite scroll */}
+          <div ref={sentinelRef} style={{ height: '1px' }} />
+
+          {/* Loading more spinner */}
+          {loadingMore && (
+            <div style={{ textAlign: 'center', padding: '1.5rem 0' }}>
+              <span style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.85rem', color: 'var(--text-muted)' }}>Loading more…</span>
+            </div>
+          )}
+
+          {/* End of feed */}
+          {!hasMore && !loading && questions.length > 0 && (
+            <p style={{ textAlign: 'center', fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '1.5rem' }}>You have reached the end</p>
           )}
 
           {!userId && !loading && (
@@ -163,7 +187,7 @@ export default function HomePage() {
 
         </div>
 
-        {/* ── Right column — recently visited (hidden on mobile) ── */}
+        {/* ── Right column — recently visited ── */}
         <div style={{ width: '260px', flexShrink: 0, position: 'sticky', top: '16px' }} className="home-sidebar">
           <RecentlyVisited />
         </div>
@@ -183,5 +207,7 @@ export default function HomePage() {
 // --- CHANGE LOG ---
 // [May 14, 2026] CREATED: Initial build — Phase 2 live feed
 // [May 21, 2026] UPDATED: Two-column layout — feed left, RecentlyVisited sidebar right
-//               Sidebar hidden on mobile (max-width 720px)
+// [May 21, 2026] UPDATED: Infinite scroll — replaced Load more button with
+//               IntersectionObserver sentinel. Loads next page automatically
+//               when user scrolls within 200px of the bottom.
 // --- END CHANGE LOG ---
