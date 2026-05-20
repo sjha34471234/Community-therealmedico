@@ -6,6 +6,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { ChevronUp, ChevronDown } from 'lucide-react'
 import toast from 'react-hot-toast'
 import useAuthStore from '@/store/authStore'
@@ -18,6 +19,7 @@ export default function VoteButton({
   onVoteChange,
 }) {
   const { user, accessToken } = useAuthStore()
+  const router = useRouter()
   const [count, setCount] = useState(initialCount || 0)
   const [currentVote, setCurrentVote] = useState(userVote || null)
   const [loading, setLoading] = useState(false)
@@ -68,13 +70,20 @@ export default function VoteButton({
         return
       }
 
+      // Confirm with server truth
       setCount(data.upvotes)
       setCurrentVote(newVoteType === 0 ? null : newVoteType)
 
       if (onVoteChange) {
         onVoteChange(data.upvotes, newVoteType === 0 ? null : newVoteType)
       }
+
+      // Revalidate ISR cache so refresh shows correct count
+      router.refresh()
     } catch (err) {
+      // Revert optimistic update on error
+      setCount(count)
+      setCurrentVote(currentVote)
       console.error('VoteButton fetch error:', err)
       toast.error('Network error. Please try again.')
     } finally {
