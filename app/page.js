@@ -119,7 +119,7 @@ export default function HomePage() {
 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1rem' }}>
             <SortBar activeSort={sort} onSortChange={handleSortChange} />
-            <a href="/ask" style={{ backgroundColor: 'var(--accent-primary)', color: '#FFFFFF', fontFamily: 'Inter, system-ui, sans-serif', fontWeight: 500, fontSize: '0.875rem', padding: '7px 18px', borderRadius: '7px', textDecoration: 'none', whiteSpace: 'nowrap' }}>+ Ask a Question</a>
+            <a href="/ask" className="ask-btn-desktop" style={{ backgroundColor: 'var(--accent-primary)', color: '#FFFFFF', fontFamily: 'Inter, system-ui, sans-serif', fontWeight: 500, fontSize: '0.875rem', padding: '7px 18px', borderRadius: '7px', textDecoration: 'none', whiteSpace: 'nowrap' }}>+ Ask a Question</a>
           </div>
 
           {loading && (
@@ -189,6 +189,7 @@ export default function HomePage() {
       <style>{`
         @media (max-width: 720px) {
           .home-sidebar { display: none; }
+          .ask-btn-desktop { display: none; }
         }
       `}</style>
 
@@ -201,4 +202,5 @@ export default function HomePage() {
 // [May 21, 2026] UPDATED: Two-column layout — feed left, RecentlyVisited sidebar right
 // [May 21, 2026] UPDATED: Infinite scroll — IntersectionObserver sentinel
 // [May 21, 2026] REMOVED: "Questions / Browse questions from the healthcare community" header block
+// [May 21, 2026] UPDATED: Hide "+ Ask a Question" button on mobile (uses BottomNav + instead)
 // --- END CHANGE LOG ---
