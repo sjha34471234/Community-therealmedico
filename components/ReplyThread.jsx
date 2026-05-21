@@ -1,8 +1,6 @@
 // ============================================================
 // FILE: components/ReplyThread.jsx
 // PURPOSE: Lazy-loaded reply thread under an answer.
-//          Only renders when user taps "View X replies".
-//          Loads 5 replies at a time, infinite scroll within thread.
 // LAST CHANGED: May 21, 2026
 // ============================================================
 'use client'
@@ -23,26 +21,39 @@ function timeAgo(iso) {
   return Math.floor(d / 30) + 'mo ago'
 }
 
-export default function ReplyThread({ questionId, parentAnswerId, onReplyPosted }) {
+function renderBody(text) {
+  if (!text) return null
+  const parts = text.split(/(@\w+)/g)
+  return parts.map(function renderPart(part, i) {
+    if (part.startsWith('@')) {
+      const username = part.slice(1)
+      return <a key={i} href={'/profile/' + username} style={{ color: 'var(--accent-primary)', fontWeight: 600, textDecoration: 'none' }}>{part}</a>
+    }
+    return part
+  })
+}
+
+export default function ReplyThread({ questionId, parentAnswerId, parentAuthorUsername, onReplyPosted }) {
   const { user, accessToken } = useAuthStore()
   const [replies, setReplies] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(false)
-  const [page, setPage] = useState(1)
-  const [replyingTo, setReplyingTo] = useState(null)
+  const [replyOpen, setReplyOpen] = useState(false)
   const [replyBody, setReplyBody] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const sentinelRef = useRef(null)
   const hasMoreRef = useRef(false)
   const loadingMoreRef = useRef(false)
   const pageRef = useRef(1)
+  const textareaRef = useRef(null)
 
   useEffect(function loadFirst() {
     fetchReplies(1, false)
   }, [])
 
   useEffect(function setupObserver() {
+    if (loading) return
     const observer = new IntersectionObserver(function(entries) {
       if (entries[0].isIntersecting && hasMoreRef.current && !loadingMoreRef.current) {
         const next = pageRef.current + 1
@@ -80,9 +91,24 @@ export default function ReplyThread({ questionId, parentAnswerId, onReplyPosted 
     }
   }
 
-  function handleReplyClick(username) {
-    setReplyingTo(username)
-    setReplyBody('@' + username + ' ')
+  function openReplyTo(username) {
+    const mention = '@' + username + ' '
+    setReplyBody(mention)
+    setReplyOpen(true)
+    setTimeout(function() {
+      if (textareaRef.current) {
+        textareaRef.current.focus()
+        textareaRef.current.setSelectionRange(mention.length, mention.length)
+      }
+    }, 50)
+  }
+
+  function openBlankReply() {
+    setReplyBody('')
+    setReplyOpen(true)
+    setTimeout(function() {
+      if (textareaRef.current) textareaRef.current.focus()
+    }, 50)
   }
 
   async function handleReplySubmit() {
@@ -102,7 +128,7 @@ export default function ReplyThread({ questionId, parentAnswerId, onReplyPosted 
       if (!res.ok) { toast.error(data.error || 'Failed to post reply'); return }
       toast.success('Reply posted!')
       setReplyBody('')
-      setReplyingTo(null)
+      setReplyOpen(false)
       pageRef.current = 1
       fetchReplies(1, false)
       if (onReplyPosted) onReplyPosted()
@@ -111,11 +137,6 @@ export default function ReplyThread({ questionId, parentAnswerId, onReplyPosted 
     } finally {
       setSubmitting(false)
     }
-  }
-
-  function handleCancelReply() {
-    setReplyingTo(null)
-    setReplyBody('')
   }
 
   if (loading) {
@@ -139,9 +160,9 @@ export default function ReplyThread({ questionId, parentAnswerId, onReplyPosted 
               <a href={'/profile/' + reply.author_username} style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.78rem', fontWeight: 700, color: isMem ? 'var(--member-gold)' : 'var(--accent-primary)', textDecoration: 'none' }}>{isMem ? '👑 ' : ''}{reply.author_username}</a>
               <span style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.72rem', color: 'var(--text-muted)' }}>{timeAgo(reply.created_at)}</span>
             </div>
-            <p style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.85rem', color: 'var(--text-primary)', margin: '0 0 6px', lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{reply.body}</p>
+            <p style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.85rem', color: 'var(--text-primary)', margin: '0 0 6px', lineHeight: 1.6, wordBreak: 'break-word' }}>{renderBody(reply.body)}</p>
             {user && (
-              <button onClick={function() { handleReplyClick(reply.author_username) }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.72rem', color: 'var(--text-muted)', padding: '0' }}>↩ Reply</button>
+              <button onClick={function() { openReplyTo(reply.author_username) }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.72rem', color: 'var(--text-muted)', padding: 0 }}>↩ Reply</button>
             )}
           </div>
         )
@@ -152,19 +173,24 @@ export default function ReplyThread({ questionId, parentAnswerId, onReplyPosted 
 
       {user && (
         <div style={{ marginTop: '10px' }}>
-          {replyingTo && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-              <span style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.75rem', color: 'var(--text-muted)' }}>Replying to @{replyingTo}</span>
-              <button onClick={handleCancelReply} style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.72rem', color: 'var(--danger)', padding: 0 }}>Cancel</button>
-            </div>
+          {!replyOpen && (
+            <button onClick={function() { openReplyTo(parentAuthorUsername || '') }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.78rem', color: 'var(--accent-primary)', fontWeight: 600, padding: '4px 0' }}>+ Add a reply</button>
           )}
-          {!replyingTo && (
-            <button onClick={function() { handleReplyClick('') }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.78rem', color: 'var(--accent-primary)', fontWeight: 600, padding: '4px 0' }}>+ Add a reply</button>
-          )}
-          {replyingTo !== null && (
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
-              <textarea value={replyBody} onChange={function(e) { setReplyBody(e.target.value) }} rows={2} disabled={submitting} placeholder="Write your reply..." style={{ flex: 1, fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.85rem', color: 'var(--text-primary)', background: 'var(--bg-secondary)', border: '1.5px solid var(--bg-tertiary)', borderRadius: '8px', padding: '8px 12px', resize: 'vertical', outline: 'none', lineHeight: 1.5 }} />
-              <button onClick={handleReplySubmit} disabled={submitting} style={{ background: 'var(--accent-primary)', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px 14px', fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.8rem', fontWeight: 600, cursor: submitting ? 'not-allowed' : 'pointer', opacity: submitting ? 0.6 : 1, whiteSpace: 'nowrap' }}>{submitting ? '…' : 'Post'}</button>
+          {replyOpen && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <textarea
+                ref={textareaRef}
+                value={replyBody}
+                onChange={function(e) { setReplyBody(e.target.value) }}
+                rows={2}
+                disabled={submitting}
+                placeholder={'Reply to this answer...'}
+                style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.85rem', color: 'var(--text-primary)', background: 'var(--bg-secondary)', border: '1.5px solid var(--bg-tertiary)', borderRadius: '8px', padding: '8px 12px', resize: 'vertical', outline: 'none', lineHeight: 1.5, width: '100%', boxSizing: 'border-box' }}
+              />
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                <button onClick={function() { setReplyOpen(false); setReplyBody('') }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.78rem', color: 'var(--text-muted)', padding: '4px 8px' }}>Cancel</button>
+                <button onClick={handleReplySubmit} disabled={submitting} style={{ background: 'var(--accent-primary)', color: '#fff', border: 'none', borderRadius: '8px', padding: '6px 14px', fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.8rem', fontWeight: 600, cursor: submitting ? 'not-allowed' : 'pointer', opacity: submitting ? 0.6 : 1 }}>{submitting ? '…' : 'Post'}</button>
+              </div>
             </div>
           )}
         </div>
@@ -175,5 +201,6 @@ export default function ReplyThread({ questionId, parentAnswerId, onReplyPosted 
 
 // --- CHANGE LOG ---
 // [May 21, 2026] CREATED: Reply thread component
-// REASON: Thread system for answers — lazy loaded on demand
+// [May 21, 2026] FIXED: Auto-mention fills correctly, mention links clickable,
+//               reply box focuses on open, parentAuthorUsername prop added
 // --- END CHANGE LOG ---
