@@ -33,7 +33,7 @@ function renderBody(text) {
   })
 }
 
-export default function ReplyThread({ questionId, parentAnswerId, parentAuthorUsername, onReplyPosted }) {
+export default function ReplyThread({ questionId, parentAnswerId, parentAuthorUsername, autoMention, onReplyPosted }) {
   const { user, accessToken } = useAuthStore()
   const [replies, setReplies] = useState([])
   const [loading, setLoading] = useState(true)
