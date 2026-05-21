@@ -1,10 +1,11 @@
 // ============================================================
 // FILE: components/QuestionDetail.jsx
-// PURPOSE: Renders question + answers. Vote logic via useVotes hook.
-// LAST CHANGED: May 20, 2026
+// PURPOSE: Question detail page — two column layout.
+//          Left: question hero + answer feed.
+//          Right: sticky answer write box.
+// LAST CHANGED: May 21, 2026
 // ============================================================
 'use client'
-
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
@@ -12,8 +13,9 @@ import useAuthStore from '@/store/authStore'
 import { useVotes } from '@/hooks/useVotes'
 import TagPill from '@/components/TagPill'
 import VoteButton from '@/components/VoteButton'
+import AnswerFeed from '@/components/AnswerFeed'
 import toast from 'react-hot-toast'
-import { CheckCircle, MessageSquare, Eye, Clock, User, Send, AlertCircle, LogIn } from 'lucide-react'
+import { CheckCircle, Eye, Clock, User, Send, AlertCircle, LogIn, MessageSquare } from 'lucide-react'
 
 const supabase = createClient()
 const ANSWER_MAX = 5000
@@ -26,17 +28,15 @@ function formatDate(iso) {
 function getUsername(p) { return p?.community_username || 'Anonymous User' }
 function isMember(p) { return p?.is_member === true }
 
-export default function QuestionDetail({ question, answers, authorProfile, answerProfiles }) {
+export default function QuestionDetail({ question, answers: initialAnswers, authorProfile, answerProfiles }) {
   const router = useRouter()
   const { user, accessToken } = useAuthStore()
-  const { getScore, getVote, vote } = useVotes(question, answers)
-  console.log('question.id:', question?.id, 'question:', question)
+  const { getScore, getVote, vote } = useVotes(question, initialAnswers)
+
   const [answerBody, setAnswerBody] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [answerError, setAnswerError] = useState('')
-
-  const profileMap = {}
-  answerProfiles.forEach(function map(p) { profileMap[p.id] = p })
+  const [answered, setAnswered] = useState(question.is_answered)
 
   useEffect(function upsertView() {
     if (!user || !question?.id || !question?.last_activity_at) return
@@ -73,152 +73,116 @@ export default function QuestionDetail({ question, answers, authorProfile, answe
 
   function handleAnswerChange(e) { setAnswerBody(e.target.value); if (answerError) setAnswerError('') }
 
+  const mem = isMember(authorProfile)
+
   return (
-    <main style={{ maxWidth:'768px', margin:'0 auto', padding:'32px 16px 64px' }}>
+    <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '24px 16px 64px' }}>
+      <div style={{ display: 'flex', gap: '28px', alignItems: 'flex-start' }}>
 
-      <article className="qd-question-card">
-        {question.is_pinned && <div className="qd-pinned-badge">📌 Pinned</div>}
-        <h1 className="qd-title">{question.title}</h1>
+        {/* ── Left column ── */}
+        <div style={{ flex: '1 1 0', minWidth: 0 }}>
 
-        <div className="qd-meta-row">
-          <span className="qd-meta-item"><User size={13} />
-            <span style={{ color: isMember(authorProfile) ? 'var(--member-gold)' : 'inherit', fontWeight: isMember(authorProfile) ? 600 : 400 }}>
-              {isMember(authorProfile) ? '👑 ' : ''}{getUsername(authorProfile)}
-            </span>
-          </span>
-          <span className="qd-meta-item"><Clock size={13} />{formatDate(question.created_at)}</span>
-          <span className="qd-meta-item"><Eye size={13} />{question.view_count || 0} views</span>
-          <span className="qd-meta-item"><MessageSquare size={13} />{question.answer_count || 0} {question.answer_count === 1 ? 'answer' : 'answers'}</span>
-        </div>
+          {/* Question hero */}
+          <article style={{ background: 'var(--bg-primary)', border: '1px solid var(--bg-tertiary)', borderRadius: '14px', padding: '28px', marginBottom: '32px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
 
-        {question.tags && question.tags.length > 0 && (
-          <div className="qd-tags-row">
-            {question.tags.map(function renderTag(tag) { return <TagPill key={tag} tag={tag} /> })}
-          </div>
-        )}
+            {question.is_pinned && (
+              <div style={{ marginBottom: '10px' }}>
+                <span style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.72rem', fontWeight: 600, color: 'var(--warning)', background: '#FEF3C7', borderRadius: '20px', padding: '3px 10px' }}>📌 Pinned</span>
+              </div>
+            )}
 
-        <div className="qd-body">{question.body}</div>
+            <h1 style={{ fontFamily: 'Merriweather, Georgia, serif', fontWeight: 700, fontSize: '1.6rem', color: 'var(--text-primary)', lineHeight: 1.4, margin: '0 0 16px', textTransform: 'uppercase' }}>{question.title}</h1>
 
-        <div className="qd-vote-row">
-          <VoteButton
-            score={getScore(question.id)}
-            userVote={getVote(question.id)}
-            onUpvote={function up() { vote(question.id, null, 1) }}
-            onDownvote={function down() { vote(question.id, null, -1) }}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginBottom: '16px', alignItems: 'center' }}>
+              <a href={'/profile/' + getUsername(authorProfile)} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.8rem', fontWeight: 600, color: mem ? 'var(--member-gold)' : 'var(--accent-primary)', textDecoration: 'none' }}>
+                <User size={13} />{mem ? '👑 ' : ''}{getUsername(authorProfile)}
+              </a>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.78rem', color: 'var(--text-muted)' }}><Clock size={13} />{formatDate(question.created_at)}</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.78rem', color: 'var(--text-muted)' }}><Eye size={13} />{question.view_count || 0} views</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.78rem', color: 'var(--text-muted)' }}><MessageSquare size={13} />{question.answer_count || 0} {question.answer_count === 1 ? 'answer' : 'answers'}</span>
+              {answered && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.75rem', fontWeight: 600, color: 'var(--success)', background: '#E8F5E9', borderRadius: '20px', padding: '3px 10px' }}><CheckCircle size={13} /> Answered</span>
+              )}
+            </div>
+
+            {question.tags && question.tags.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '20px' }}>
+                {question.tags.map(function(tag) { return <TagPill key={tag} tag={tag} /> })}
+              </div>
+            )}
+
+            <div style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.95rem', color: 'var(--text-primary)', lineHeight: 1.8, whiteSpace: 'pre-wrap', wordBreak: 'break-word', marginBottom: '24px', paddingBottom: '20px', borderBottom: '1px solid var(--bg-tertiary)' }}>{question.body}</div>
+
+            <VoteButton
+              score={getScore(question.id)}
+              userVote={getVote(question.id)}
+              onUpvote={function() { vote(question.id, null, 1) }}
+              onDownvote={function() { vote(question.id, null, -1) }}
+            />
+          </article>
+
+          {/* Answer feed */}
+          <AnswerFeed
+            question={question}
+            questionAuthorId={question.user_id}
+            initialAnswers={initialAnswers}
+            initialHasMore={initialAnswers.length >= 10}
+            onAnswerAccepted={function() { setAnswered(true) }}
           />
-          {question.is_answered && <span className="qd-answered-badge"><CheckCircle size={14} /> Answered</span>}
+
         </div>
-      </article>
 
-      <section className="qd-answers-section">
-        <h2 className="qd-answers-heading">
-          {answers.length === 0 ? 'No answers yet' : answers.length === 1 ? '1 Answer' : answers.length + ' Answers'}
-        </h2>
+        {/* ── Right column — sticky answer box ── */}
+        <div style={{ width: '300px', flexShrink: 0, position: 'sticky', top: '16px' }} className="qd-sidebar">
+          <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--bg-tertiary)', borderRadius: '14px', padding: '20px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+            <h3 style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 14px' }}>Your Answer</h3>
 
-        {answers.map(function renderAnswer(answer) {
-          const aProfile = profileMap[answer.user_id] || null
-          const mem = isMember(aProfile)
-          return (
-            <div key={answer.id} id={'answer-' + answer.id}
-              className={answer.is_accepted ? 'qd-answer-card qd-answer-accepted' : 'qd-answer-card'}
-              style={{ borderLeft: mem && !answer.is_accepted ? '4px solid var(--member-border)' : undefined, backgroundColor: mem && !answer.is_accepted ? 'var(--member-bg)' : undefined }}
-            >
-              {answer.is_accepted && <div className="qd-accepted-banner"><CheckCircle size={14} /> Accepted Answer</div>}
-              <div className="qd-answer-body">{answer.body}</div>
-              <div className="qd-answer-footer">
-                <VoteButton
-                  score={getScore(answer.id)}
-                  userVote={getVote(answer.id)}
-                  onUpvote={function up() { vote(null, answer.id, 1) }}
-                  onDownvote={function down() { vote(null, answer.id, -1) }}
+            {!user ? (
+              <div style={{ textAlign: 'center', padding: '16px 0' }}>
+                <LogIn size={24} color="var(--accent-primary)" strokeWidth={1.5} />
+                <p style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.85rem', color: 'var(--text-secondary)', margin: '8px 0 12px', lineHeight: 1.5 }}>Sign in to post an answer and help the community.</p>
+                <a href="/auth" style={{ display: 'inline-block', background: 'var(--accent-primary)', color: '#fff', fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.85rem', fontWeight: 600, padding: '8px 20px', borderRadius: '8px', textDecoration: 'none' }}>Sign In</a>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <textarea
+                  style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.875rem', color: 'var(--text-primary)', background: 'var(--bg-secondary)', border: answerError ? '1.5px solid var(--danger)' : '1.5px solid var(--bg-tertiary)', borderRadius: '8px', padding: '10px 14px', width: '100%', boxSizing: 'border-box', resize: 'vertical', minHeight: '160px', outline: 'none', lineHeight: 1.6, whiteSpace: 'pre-wrap', transition: 'border-color 0.15s' }}
+                  placeholder="Write your answer here. Be clear, specific, and cite sources where relevant..."
+                  value={answerBody}
+                  onChange={handleAnswerChange}
+                  maxLength={ANSWER_MAX}
+                  disabled={submitting}
+                  rows={7}
                 />
-                <div className="qd-answer-meta">
-                  <span className="qd-meta-item"><User size={12} />
-                    <span style={{ color: mem ? 'var(--member-gold)' : 'inherit', fontWeight: mem ? 600 : 400 }}>
-                      {mem ? '👑 ' : ''}{getUsername(aProfile)}
-                    </span>
-                  </span>
-                  <span className="qd-meta-item"><Clock size={12} />{formatDate(answer.created_at)}</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  {answerError
+                    ? <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.75rem', color: 'var(--danger)' }}><AlertCircle size={13} />{answerError}</span>
+                    : <span style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.72rem', color: 'var(--text-muted)' }}>{answerBody.length}/{ANSWER_MAX}</span>
+                  }
+                  <button type="button" onClick={handleAnswerSubmit} disabled={submitting} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'var(--accent-primary)', color: '#fff', fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.875rem', fontWeight: 600, padding: '9px 20px', borderRadius: '8px', border: 'none', cursor: submitting ? 'not-allowed' : 'pointer', opacity: submitting ? 0.6 : 1, transition: 'background 0.15s', whiteSpace: 'nowrap' }}>
+                    {submitting ? 'Posting...' : <><Send size={14} /> Post Answer</>}
+                  </button>
                 </div>
               </div>
-            </div>
-          )
-        })}
-      </section>
+            )}
+          </div>
+        </div>
 
-      <section className="qd-answer-form-section">
-        <h2 className="qd-answers-heading">Your Answer</h2>
-        {!user ? (
-          <div className="qd-auth-gate">
-            <LogIn size={20} color="var(--accent-primary)" strokeWidth={1.5} />
-            <p className="qd-auth-gate-text"><a href="/auth" className="qd-auth-link">Sign in</a> to post an answer and help the community.</p>
-          </div>
-        ) : (
-          <div className="qd-answer-form-card">
-            <textarea
-              className={answerError ? 'qd-answer-textarea qd-textarea-error' : 'qd-answer-textarea'}
-              placeholder="Write your answer here. Be clear, specific, and cite sources where relevant..."
-              value={answerBody}
-              onChange={handleAnswerChange}
-              maxLength={ANSWER_MAX}
-              disabled={submitting}
-              rows={8}
-            />
-            <div className="qd-answer-form-footer">
-              {answerError
-                ? <span className="qd-form-error"><AlertCircle size={13} /> {answerError}</span>
-                : <span className="qd-char-count">{answerBody.length}/{ANSWER_MAX}</span>
-              }
-              <button type="button" className="qd-post-answer-btn" onClick={handleAnswerSubmit} disabled={submitting}>
-                {submitting ? 'Posting...' : <><Send size={14} /> Post Answer</>}
-              </button>
-            </div>
-          </div>
-        )}
-      </section>
+      </div>
 
       <style>{`
-        .qd-question-card{background:var(--bg-primary);border:1px solid var(--bg-tertiary);border-radius:12px;padding:28px;margin-bottom:32px;}
-        @media(max-width:600px){.qd-question-card{padding:18px 16px;}}
-        .qd-pinned-badge{display:inline-block;font-family:'Inter',system-ui,sans-serif;font-size:0.75rem;font-weight:600;color:var(--warning);background:#FEF3C7;border-radius:20px;padding:3px 10px;margin-bottom:12px;}
-        .qd-title{font-family:'Merriweather',Georgia,serif;font-size:1.5rem;font-weight:700;color:var(--text-primary);line-height:1.4;margin:0 0 16px;text-transform:uppercase;}
-        @media(max-width:600px){.qd-title{font-size:1.2rem;}}
-        .qd-meta-row{display:flex;flex-wrap:wrap;gap:14px;margin-bottom:14px;}
-        .qd-meta-item{display:inline-flex;align-items:center;gap:4px;font-family:'Inter',system-ui,sans-serif;font-size:0.78rem;color:var(--text-muted);}
-        .qd-tags-row{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:20px;}
-        .qd-body{font-family:'Inter',system-ui,sans-serif;font-size:0.95rem;color:var(--text-primary);line-height:1.75;white-space:pre-wrap;word-break:break-word;margin-bottom:24px;}
-        .qd-vote-row{display:flex;align-items:center;gap:6px;padding-top:16px;border-top:1px solid var(--bg-tertiary);}
-        .qd-answered-badge{display:inline-flex;align-items:center;gap:5px;margin-left:12px;font-family:'Inter',system-ui,sans-serif;font-size:0.78rem;font-weight:600;color:var(--success);background:#E8F5E9;border-radius:20px;padding:3px 10px;}
-        .qd-answers-section{margin-bottom:40px;}
-        .qd-answers-heading{font-family:'Inter',system-ui,sans-serif;font-size:1rem;font-weight:700;color:var(--text-primary);margin:0 0 16px;padding-bottom:10px;border-bottom:2px solid var(--bg-tertiary);}
-        .qd-answer-card{background:var(--bg-primary);border:1px solid var(--bg-tertiary);border-radius:10px;padding:22px;margin-bottom:16px;}
-        .qd-answer-accepted{border-color:var(--success)!important;background:#F9FFF9!important;}
-        .qd-accepted-banner{display:inline-flex;align-items:center;gap:5px;font-family:'Inter',system-ui,sans-serif;font-size:0.75rem;font-weight:700;color:var(--success);margin-bottom:12px;}
-        .qd-answer-body{font-family:'Inter',system-ui,sans-serif;font-size:0.9rem;color:var(--text-primary);line-height:1.75;white-space:pre-wrap;word-break:break-word;margin-bottom:16px;}
-        .qd-answer-footer{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;padding-top:12px;border-top:1px solid var(--bg-tertiary);}
-        .qd-answer-meta{display:flex;gap:12px;flex-wrap:wrap;}
-        .qd-auth-gate{display:flex;align-items:center;gap:10px;background:var(--bg-secondary);border:1px solid var(--bg-tertiary);border-radius:10px;padding:18px 20px;}
-        .qd-auth-gate-text{font-family:'Inter',system-ui,sans-serif;font-size:0.9rem;color:var(--text-secondary);margin:0;}
-        .qd-auth-link{color:var(--accent-primary);font-weight:600;text-decoration:none;}
-        .qd-auth-link:hover{text-decoration:underline;}
-        .qd-answer-form-card{background:var(--bg-primary);border:1px solid var(--bg-tertiary);border-radius:10px;padding:20px;display:flex;flex-direction:column;gap:10px;}
-        .qd-answer-textarea{font-family:'Inter',system-ui,sans-serif;font-size:0.9rem;color:var(--text-primary);background:var(--bg-secondary);border:1.5px solid var(--bg-tertiary);border-radius:8px;padding:10px 14px;width:100%;box-sizing:border-box;resize:vertical;min-height:160px;outline:none;line-height:1.6;white-space:pre-wrap;transition:border-color 0.15s;}
-        .qd-answer-textarea:focus{border-color:var(--accent-primary);background:var(--bg-primary);}
-        .qd-answer-textarea:disabled{opacity:0.6;cursor:not-allowed;}
-        .qd-textarea-error{border-color:var(--danger)!important;}
-        .qd-answer-form-footer{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;}
-        .qd-form-error{display:flex;align-items:center;gap:4px;font-family:'Inter',system-ui,sans-serif;font-size:0.78rem;color:var(--danger);}
-        .qd-char-count{font-family:'Inter',system-ui,sans-serif;font-size:0.75rem;color:var(--text-muted);}
-        .qd-post-answer-btn{display:inline-flex;align-items:center;gap:6px;background:var(--accent-primary);color:#fff;font-family:'Inter',system-ui,sans-serif;font-size:0.875rem;font-weight:600;padding:9px 20px;border-radius:8px;border:none;cursor:pointer;transition:background 0.15s;white-space:nowrap;}
-        .qd-post-answer-btn:hover:not(:disabled){background:var(--accent-hover);}
-        .qd-post-answer-btn:disabled{opacity:0.6;cursor:not-allowed;}
+        @media (max-width: 720px) {
+          .qd-sidebar { display: none; }
+        }
       `}</style>
-    </main>
+
+    </div>
   )
 }
 
 // --- CHANGE LOG ---
 // [May 14, 2026] CREATED: Phase 3
-// [May 20, 2026] FIXED: Updated to use getScore/getVote/vote from useVotes hook
-//               VoteButton now uses score/onUpvote/onDownvote props
+// [May 20, 2026] FIXED: useVotes hook integration
+// [May 21, 2026] REWRITTEN: Two column layout, AnswerFeed component,
+//               clickable usernames, bigger question hero
 // --- END CHANGE LOG ---
