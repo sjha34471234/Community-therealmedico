@@ -102,7 +102,7 @@ export default function AnswerItem({ answer, questionAuthorId, questionId, getSc
       </div>
 
       {showReplies && (
-        <ReplyThread questionId={questionId} parentAnswerId={answer.id} onReplyPosted={handleReplyPosted} />
+        <ReplyThread questionId={questionId} parentAnswerId={answer.id} parentAuthorUsername={answer.author_username} onReplyPosted={handleReplyPosted} />
       )}
     </div>
   )
