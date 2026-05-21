@@ -1,7 +1,7 @@
 // ============================================================
 // FILE: app/q/[slug]/page.js
 // PURPOSE: Question detail page — full question + answers, ISR, SEO
-// LAST CHANGED: May 20, 2026
+// LAST CHANGED: May 21, 2026
 // ============================================================
 
 import { notFound } from 'next/navigation'
@@ -75,8 +75,9 @@ export default async function QuestionPage({ params }) {
 
   const { data: answers } = await supabase
     .from('community_answers')
-    .select('id, body, upvotes, downvotes, is_accepted, created_at, user_id')
+    .select('id, body, upvotes, downvotes, is_accepted, created_at, user_id, parent_id')
     .eq('question_id', question.id)
+    .is('parent_id', null)
     .order('is_accepted', { ascending: false })
     .order('upvotes', { ascending: false })
     .order('created_at', { ascending: true })
@@ -149,4 +150,7 @@ export default async function QuestionPage({ params }) {
 // [May 17, 2026] UPDATED: is_member added to profiles select
 // [May 20, 2026] FIXED: createServerClient → supabaseServer (correct named export)
 //               Added downvotes to question select for net score calculation
+// [May 21, 2026] FIXED: Added .is('parent_id', null) to initial answers query
+//               Replies were appearing as top-level answers on first page load
+//               Also added parent_id to select so AnswerFeed has full data
 // --- END CHANGE LOG ---
