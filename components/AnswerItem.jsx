@@ -99,16 +99,34 @@ export default function AnswerItem({ answer, questionAuthorId, questionId, getSc
         </div>
       </div>
 
-      {/* Reply indicator — always visible when replies exist */}
-      <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-        {replyCount > 0 && (
-          <button onClick={function() { setShowReplies(function(v) { return !v }) }} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: showReplies ? 'var(--accent-light)' : 'var(--bg-secondary)', border: '1px solid ' + (showReplies ? 'var(--accent-primary)' : 'var(--bg-tertiary)'), borderRadius: '20px', padding: '3px 10px', cursor: 'pointer', fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.75rem', color: 'var(--accent-primary)', fontWeight: 600 }}>
-            <MessageCircle size={12} />
-            {showReplies ? 'Hide replies' : replyCount + ' ' + (replyCount === 1 ? 'reply' : 'replies')}
-            {showReplies ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+      {/* Instagram-style "View X more replies" row */}
+      {replyCount > 0 && (
+        <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {/* Short horizontal line */}
+          <div style={{ width: '24px', height: '2px', background: 'var(--text-muted)', borderRadius: '2px', flexShrink: 0 }} />
+          <button
+            onClick={function() { setShowReplies(function(v) { return !v }) }}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '5px',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: 0,
+              fontFamily: 'Inter, system-ui, sans-serif',
+              fontSize: '0.78rem',
+              fontWeight: 700,
+              color: 'var(--text-secondary)',
+            }}
+          >
+            {showReplies
+              ? <>Hide replies <ChevronUp size={13} /></>
+              : <>View {replyCount} {replyCount === 1 ? 'reply' : 'replies'} <ChevronDown size={13} /></>
+            }
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {showReplies && (
         <ReplyThread
@@ -129,4 +147,6 @@ export default function AnswerItem({ answer, questionAuthorId, questionId, getSc
 // [May 21, 2026] FIXED: Reply button auto-mentions answer author
 //               Reply indicator always visible as pill badge
 //               autoMention prop passed to ReplyThread
+// [May 21, 2026] UPDATED: Reply toggle replaced with Instagram-style
+//               "View X more replies" with short line + chevron
 // --- END CHANGE LOG ---
