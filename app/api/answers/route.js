@@ -239,28 +239,53 @@ export async function POST(request) {
         answerId: inserted.id,
       });
     } else {
-      // Reply — notify the parent answer author
-      const { data: parentAnswer } = await db
-        .from('community_answers')
-        .select('user_id')
-        .eq('id', parent_id)
-        .single()
+  // Reply — notify the parent answer author
+  const { data: parentAnswer } = await db
+    .from('community_answers')
+    .select('user_id')
+    .eq('id', parent_id)
+    .single()
 
-      if (parentAnswer?.user_id) {
+  if (parentAnswer?.user_id) {
+    await insertNotification(db, {
+      userId: parentAnswer.user_id,
+      type: 'new_reply',
+      actorId: user.id,
+      questionId: question_id,
+      answerId: inserted.id,
+    });
+  }
+
+  // Notify mentioned users — parse @username from reply body
+  const mentionMatches = answerBody.trim().match(/@(\w+)/g)
+  if (mentionMatches) {
+    const mentionedUsernames = Array.from(new Set(
+      mentionMatches.map(function getU(m) { return m.slice(1) })
+    ))
+    for (let i = 0; i < mentionedUsernames.length; i++) {
+      const username = mentionedUsernames[i]
+      const { data: mentionedProfile } = await db
+        .from('profiles')
+        .select('id')
+        .eq('community_username', username)
+        .maybeSingle()
+      if (mentionedProfile?.id && mentionedProfile.id !== user.id && mentionedProfile.id !== parentAnswer?.user_id) {
         await insertNotification(db, {
-          userId: parentAnswer.user_id,
+          userId: mentionedProfile.id,
           type: 'new_reply',
           actorId: user.id,
           questionId: question_id,
           answerId: inserted.id,
         });
       }
-
-      // Update last_activity_at on question for replies too
-      await db.from('community_questions').update({
-        last_activity_at: now,
-      }).eq('id', question_id)
     }
+  }
+
+  // Update last_activity_at on question for replies too
+  await db.from('community_questions').update({
+    last_activity_at: now,
+  }).eq('id', question_id)
+}
 
     return NextResponse.json({ id: inserted.id }, { status: 201 })
 
