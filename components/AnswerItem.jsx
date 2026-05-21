@@ -4,8 +4,8 @@
 // LAST CHANGED: May 21, 2026
 // ============================================================
 'use client'
-import { useState } from 'react'
-import { CheckCircle, ChevronDown, ChevronUp } from 'lucide-react'
+import { useState, useRef } from 'react'
+import { CheckCircle, ChevronDown, ChevronUp, MessageCircle } from 'lucide-react'
 import useAuthStore from '@/store/authStore'
 import VoteButton from '@/components/VoteButton'
 import ReplyThread from '@/components/ReplyThread'
@@ -29,6 +29,8 @@ export default function AnswerItem({ answer, questionAuthorId, questionId, getSc
   const [showReplies, setShowReplies] = useState(false)
   const [replyCount, setReplyCount] = useState(answer.reply_count || 0)
   const [accepting, setAccepting] = useState(false)
+  const [autoMention, setAutoMention] = useState(null)
+  const replyThreadRef = useRef(null)
   const isMem = answer.author_is_member
   const isAccepted = answer.is_accepted
   const isQuestionAuthor = user && user.id === questionAuthorId
@@ -56,6 +58,12 @@ export default function AnswerItem({ answer, questionAuthorId, questionId, getSc
 
   function handleReplyPosted() {
     setReplyCount(function(c) { return c + 1 })
+    setAutoMention(null)
+  }
+
+  function handleReplyButtonClick() {
+    setAutoMention(answer.author_username)
+    setShowReplies(true)
   }
 
   const borderColor = isAccepted ? 'var(--success)' : isMem && !isAccepted ? 'var(--member-border)' : 'transparent'
@@ -75,7 +83,6 @@ export default function AnswerItem({ answer, questionAuthorId, questionId, getSc
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <VoteButton score={getScore(answer.id)} userVote={getVote(answer.id)} onUpvote={function() { vote(null, answer.id, 1) }} onDownvote={function() { vote(null, answer.id, -1) }} />
-
           {isQuestionAuthor && !isOwnAnswer && (
             <button onClick={handleAccept} disabled={accepting} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: isAccepted ? 'var(--success)' : 'none', color: isAccepted ? '#fff' : 'var(--success)', border: '1.5px solid var(--success)', borderRadius: '6px', padding: '4px 10px', fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.75rem', fontWeight: 600, cursor: accepting ? 'not-allowed' : 'pointer', opacity: accepting ? 0.6 : 1 }}>
               <CheckCircle size={12} />{isAccepted ? 'Accepted' : 'Accept'}
@@ -86,23 +93,32 @@ export default function AnswerItem({ answer, questionAuthorId, questionId, getSc
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
           <a href={'/profile/' + answer.author_username} style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.78rem', fontWeight: 600, color: isMem ? 'var(--member-gold)' : 'var(--accent-primary)', textDecoration: 'none' }}>{isMem ? '👑 ' : ''}{answer.author_username}</a>
           <span style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.75rem', color: 'var(--text-muted)' }}>{timeAgo(answer.created_at)}</span>
+          {user && (
+            <button onClick={handleReplyButtonClick} style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.75rem', color: 'var(--text-muted)', padding: 0 }}>↩ Reply</button>
+          )}
         </div>
       </div>
 
+      {/* Reply indicator — always visible when replies exist */}
       <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '12px' }}>
         {replyCount > 0 && (
-          <button onClick={function() { setShowReplies(function(v) { return !v }) }} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.78rem', color: 'var(--accent-primary)', fontWeight: 600, padding: 0 }}>
-            {showReplies ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-            {showReplies ? 'Hide replies' : 'View ' + replyCount + ' ' + (replyCount === 1 ? 'reply' : 'replies')}
+          <button onClick={function() { setShowReplies(function(v) { return !v }) }} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: showReplies ? 'var(--accent-light)' : 'var(--bg-secondary)', border: '1px solid ' + (showReplies ? 'var(--accent-primary)' : 'var(--bg-tertiary)'), borderRadius: '20px', padding: '3px 10px', cursor: 'pointer', fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.75rem', color: 'var(--accent-primary)', fontWeight: 600 }}>
+            <MessageCircle size={12} />
+            {showReplies ? 'Hide replies' : replyCount + ' ' + (replyCount === 1 ? 'reply' : 'replies')}
+            {showReplies ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
           </button>
-        )}
-        {replyCount === 0 && user && (
-          <button onClick={function() { setShowReplies(true) }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.78rem', color: 'var(--text-muted)', padding: 0 }}>↩ Reply</button>
         )}
       </div>
 
       {showReplies && (
-        <ReplyThread questionId={questionId} parentAnswerId={answer.id} parentAuthorUsername={answer.author_username} onReplyPosted={handleReplyPosted} />
+        <ReplyThread
+          ref={replyThreadRef}
+          questionId={questionId}
+          parentAnswerId={answer.id}
+          parentAuthorUsername={answer.author_username}
+          autoMention={autoMention}
+          onReplyPosted={handleReplyPosted}
+        />
       )}
     </div>
   )
@@ -110,4 +126,7 @@ export default function AnswerItem({ answer, questionAuthorId, questionId, getSc
 
 // --- CHANGE LOG ---
 // [May 21, 2026] CREATED: Single answer with vote, accept, reply thread toggle
+// [May 21, 2026] FIXED: Reply button auto-mentions answer author
+//               Reply indicator always visible as pill badge
+//               autoMention prop passed to ReplyThread
 // --- END CHANGE LOG ---
