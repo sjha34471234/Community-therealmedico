@@ -117,11 +117,6 @@ export default function HomePage() {
         {/* ── Left column — feed ── */}
         <div style={{ flex: '1 1 0', minWidth: 0 }}>
 
-          <div style={{ marginBottom: '1.25rem' }}>
-            <h1 style={{ fontFamily: 'Merriweather, Georgia, serif', fontWeight: 700, fontSize: '1.4rem', color: 'var(--text-primary)', margin: '0 0 0.25rem 0' }}>Questions</h1>
-            <p style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.875rem', color: 'var(--text-secondary)', margin: 0 }}>Browse questions from the healthcare community</p>
-          </div>
-
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1rem' }}>
             <SortBar activeSort={sort} onSortChange={handleSortChange} />
             <a href="/ask" style={{ backgroundColor: 'var(--accent-primary)', color: '#FFFFFF', fontFamily: 'Inter, system-ui, sans-serif', fontWeight: 500, fontSize: '0.875rem', padding: '7px 18px', borderRadius: '7px', textDecoration: 'none', whiteSpace: 'nowrap' }}>+ Ask a Question</a>
@@ -152,7 +147,7 @@ export default function HomePage() {
             <div style={{ padding: '3rem 2rem', textAlign: 'center', backgroundColor: 'var(--bg-secondary)', borderRadius: '10px', border: '1px solid var(--bg-tertiary)' }}>
               <p style={{ fontFamily: 'Merriweather, Georgia, serif', fontWeight: 700, fontSize: '1.1rem', color: 'var(--text-primary)', margin: '0 0 0.5rem 0' }}>No questions yet</p>
               <p style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.875rem', color: 'var(--text-secondary)', margin: '0 0 1.5rem 0' }}>Be the first to ask something.</p>
-              <a href="/ask" style={{ backgroundColor: 'var(--accent-primary)', color: '#FFFFFF', fontFamily: 'Inter, system-ui, sans-serif', fontWeight: 500, fontSize: '0.875rem', padding: '8px 20px', borderRadius: '7px', textDecoration: 'none' }}>Ask the first question</a>
+              <a href="/ask" style={{ backgroundColor: 'var(--accent-primary)', color: '#FFFFFF', fontFamily: 'Inter, system-ui, sans-serif', fontWeight: 500, fontSize: '0.875rem', padding: '8px 20px', borderRadius: '7px', textDecoration: 'none', display: 'inline-block' }}>Ask the first question</a>
             </div>
           )}
 
@@ -162,17 +157,14 @@ export default function HomePage() {
             </div>
           )}
 
-          {/* Invisible sentinel — triggers infinite scroll */}
           <div ref={sentinelRef} style={{ height: '1px' }} />
 
-          {/* Loading more spinner */}
           {loadingMore && (
             <div style={{ textAlign: 'center', padding: '1.5rem 0' }}>
               <span style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.85rem', color: 'var(--text-muted)' }}>Loading more…</span>
             </div>
           )}
 
-          {/* End of feed */}
           {!hasMore && !loading && questions.length > 0 && (
             <p style={{ textAlign: 'center', fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '1.5rem' }}>You have reached the end</p>
           )}
@@ -207,7 +199,6 @@ export default function HomePage() {
 // --- CHANGE LOG ---
 // [May 14, 2026] CREATED: Initial build — Phase 2 live feed
 // [May 21, 2026] UPDATED: Two-column layout — feed left, RecentlyVisited sidebar right
-// [May 21, 2026] UPDATED: Infinite scroll — replaced Load more button with
-//               IntersectionObserver sentinel. Loads next page automatically
-//               when user scrolls within 200px of the bottom.
+// [May 21, 2026] UPDATED: Infinite scroll — IntersectionObserver sentinel
+// [May 21, 2026] REMOVED: "Questions / Browse questions from the healthcare community" header block
 // --- END CHANGE LOG ---
