@@ -32,6 +32,7 @@ function notificationText(n) {
     case 'upvote_question': return { bold: actor, rest: ' upvoted your question' };
     case 'upvote_answer':   return { bold: actor, rest: ' upvoted your answer' };
     case 'new_follower':    return { bold: actor, rest: ' started following you' };
+    case 'new_reply':       return { bold: actor, rest: ' replied to your answer' };
     default:                return { bold: null,  rest: 'New notification' };
   }
 }
