@@ -29,14 +29,16 @@ export default function AnswerFeed({ question, questionAuthorId, initialAnswers,
 
   const { getScore, getVote, vote } = useVotes(question, answers)
 
-  useEffect(function() {
-    sortRef.current = sort
-    pageRef.current = 1
-    setAnswers([])
-    setHasMore(false)
-    hasMoreRef.current = false
-    fetchAnswers(sort, 1, false)
-  }, [sort])
+  const mountedRef = useRef(false)
+useEffect(function() {
+  if (!mountedRef.current) { mountedRef.current = true; return }
+  sortRef.current = sort
+  pageRef.current = 1
+  setAnswers([])
+  setHasMore(false)
+  hasMoreRef.current = false
+  fetchAnswers(sort, 1, false)
+}, [sort])
 
   useEffect(function setupObserver() {
     const observer = new IntersectionObserver(function(entries) {
