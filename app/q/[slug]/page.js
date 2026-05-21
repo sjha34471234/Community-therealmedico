@@ -73,6 +73,7 @@ export default async function QuestionPage({ params }) {
     notFound()
   }
 
+  // Fetch top-level answers only (no replies)
   const { data: answers } = await supabase
     .from('community_answers')
     .select('id, body, upvotes, downvotes, is_accepted, created_at, user_id, parent_id')
@@ -82,14 +83,31 @@ export default async function QuestionPage({ params }) {
     .order('upvotes', { ascending: false })
     .order('created_at', { ascending: true })
 
+  const answerList = answers || []
+
+  // Fetch reply counts for all top-level answers in one query
+  let replyCounts = {}
+  if (answerList.length > 0) {
+    const answerIds = Array.from(new Set(answerList.map(function getId(a) { return a.id })))
+    const { data: replyRows } = await supabase
+      .from('community_answers')
+      .select('parent_id')
+      .in('parent_id', answerIds)
+    if (replyRows) {
+      replyRows.forEach(function count(r) {
+        replyCounts[r.parent_id] = (replyCounts[r.parent_id] || 0) + 1
+      })
+    }
+  }
+
   const { data: authorProfile } = await supabase
     .from('profiles')
     .select('community_username, community_flair, is_member')
     .eq('id', question.user_id)
     .single()
 
-  const answerUserIds = answers
-    ? Array.from(new Set(answers.map(function getId(a) { return a.user_id }).filter(Boolean)))
+  const answerUserIds = answerList.length > 0
+    ? Array.from(new Set(answerList.map(function getId(a) { return a.user_id }).filter(Boolean)))
     : []
 
   let answerProfiles = []
@@ -101,13 +119,18 @@ export default async function QuestionPage({ params }) {
     answerProfiles = profiles || []
   }
 
+  // Attach reply_count to each answer
+  const answersWithReplyCounts = answerList.map(function attach(a) {
+    return { ...a, reply_count: replyCounts[a.id] || 0 }
+  })
+
   supabase
     .from('community_questions')
     .update({ view_count: (question.view_count || 0) + 1 })
     .eq('id', question.id)
     .then(function noop() {})
 
-  const acceptedAnswer = answers ? answers.find(function findAccepted(a) { return a.is_accepted }) : null
+  const acceptedAnswer = answersWithReplyCounts.find(function findAccepted(a) { return a.is_accepted }) || null
 
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -137,7 +160,7 @@ export default async function QuestionPage({ params }) {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <QuestionDetail
         question={question}
-        answers={answers || []}
+        answers={answersWithReplyCounts}
         authorProfile={authorProfile || null}
         answerProfiles={answerProfiles}
       />
@@ -150,7 +173,7 @@ export default async function QuestionPage({ params }) {
 // [May 17, 2026] UPDATED: is_member added to profiles select
 // [May 20, 2026] FIXED: createServerClient → supabaseServer (correct named export)
 //               Added downvotes to question select for net score calculation
-// [May 21, 2026] FIXED: Added .is('parent_id', null) to initial answers query
-//               Replies were appearing as top-level answers on first page load
-//               Also added parent_id to select so AnswerFeed has full data
+// [May 21, 2026] FIXED: Added .is('parent_id', null) to exclude replies from feed
+// [May 21, 2026] FIXED: Fetch real reply counts on page load and attach to answers
+//               reply_count was always 0 on first load — toggle button never showed
 // --- END CHANGE LOG ---
