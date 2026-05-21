@@ -1,7 +1,7 @@
 // ============================================================
 // FILE: components/Navbar.jsx
 // PURPOSE: Top navigation — logo (left), bell/gear/sign-in (right)
-// LAST CHANGED: May 20, 2026
+// LAST CHANGED: May 21, 2026
 // WHY IT EXISTS: App-wide navigation.
 // DEPENDENCIES: components/NotificationBell.jsx,
 //               store/authStore.js, app/globals.css (navbar styles)
@@ -33,7 +33,7 @@ export default function Navbar() {
           {!loading && user ? (
             isOwnProfile ? (
               <Link href="/settings" className="navbar-gear" aria-label="Settings">
-                <Settings size={20} />
+                <Settings size={26} />
               </Link>
             ) : (
               <NotificationBell />
@@ -50,4 +50,5 @@ export default function Navbar() {
 // [May 19, 2026] REDESIGNED: Tags left, logo centre, bell/sign-in right.
 //               Removed: SearchBar (bottom nav), username (bottom nav Profile tab).
 // [May 20, 2026] UPDATED: Removed Tags link. Logo moved to left. Less cramped on mobile.
+// [May 21, 2026] UPDATED: Settings icon size 20 → 26 for better tap target
 // --- END CHANGE LOG ---
