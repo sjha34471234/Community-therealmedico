@@ -49,8 +49,21 @@ export default function ReplyThread({ questionId, parentAnswerId, parentAuthorUs
   const textareaRef = useRef(null)
 
   useEffect(function loadFirst() {
-    fetchReplies(1, false)
-  }, [])
+  fetchReplies(1, false)
+}, [])
+
+useEffect(function handleAutoMention() {
+  if (!autoMention) return
+  const mention = '@' + autoMention + ' '
+  setReplyBody(mention)
+  setReplyOpen(true)
+  setTimeout(function() {
+    if (textareaRef.current) {
+      textareaRef.current.focus()
+      textareaRef.current.setSelectionRange(mention.length, mention.length)
+    }
+  }, 100)
+}, [autoMention])
 
   useEffect(function setupObserver() {
     if (loading) return
