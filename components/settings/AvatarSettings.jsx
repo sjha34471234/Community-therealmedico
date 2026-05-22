@@ -14,9 +14,26 @@ import toast from 'react-hot-toast'
 import Avatar from '@/components/Avatar'
 import useAuthStore from '@/store/authStore'
 import {
+  Stethoscope, Pill, Microscope, Heart, Dna, Bone, Brain, Eye,
+  Syringe, Thermometer, Activity, Cross, Hospital, FlaskConical,
+  Biohazard, ClipboardList, Baby, Accessibility, Radiation,
+  FlaskRound, HeartPulse, Bandage, ScanLine, Ambulance,
+  BedDouble, ShieldPlus, TestTube, Scale, Wind, Virus,
+} from 'lucide-react'
+import {
   AVATAR_SHAPES, AVATAR_COLORS, AVATAR_ICONS,
   AVATAR_BORDERS, AVATAR_PATTERNS, AVATAR_DEFAULTS,
 } from '@/lib/avatarConfig'
+
+const LUCIDE_MAP = {
+  Stethoscope, Pill, Microscope, Heart, Dna, Bone, Brain, Eye,
+  Syringe, Thermometer, Activity, Cross, Hospital, FlaskConical,
+  Biohazard, ClipboardList, Baby, Accessibility, Radiation,
+  FlaskRound, HeartPulse, Bandage, ScanLine, Ambulance,
+  BedDouble, ShieldPlus, TestTube, Scale, Wind, Virus,
+  Tablets: Pill,
+  PillBottle: Pill,
+}
 
 const SECTION = { marginBottom: '24px' }
 const SEC_TITLE = { fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 10px' }
@@ -156,28 +173,34 @@ export default function AvatarSettings() {
         </div>
       </div>
 
-      {/* Icon picker */}
+      {/* Icon picker — Lucide icons, coloured by current avatar color */}
       <div style={SECTION}>
         <p style={SEC_TITLE}>Icon</p>
         <div style={GRID}>
           {AVATAR_ICONS.map(function(ic) {
             const active = avatar.icon === ic.key
             const locked = !ic.free && !isMember
+            const LucideIcon = LUCIDE_MAP[ic.lucide] || Stethoscope
+            const currentColor = AVATAR_COLORS.find(function(c) { return c.key === avatar.color }) || AVATAR_COLORS[0]
             return (
               <div key={ic.key} onClick={function() { pick('icon', ic.key, ic.free) }} title={ic.label} style={{ position: 'relative', cursor: locked ? 'not-allowed' : 'pointer' }}>
                 {locked && <LockBadge />}
                 <div style={{
                   width: '44px', height: '44px',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '22px',
-                  background: active ? 'var(--accent-light)' : 'var(--bg-secondary)',
-                  border: active ? '2px solid var(--accent-primary)' : '1px solid var(--bg-tertiary)',
+                  background: active ? currentColor.hex : 'var(--bg-secondary)',
+                  border: active ? '2px solid ' + currentColor.hex : '1px solid var(--bg-tertiary)',
                   borderRadius: '10px',
                   opacity: locked ? 0.45 : 1,
                   transition: 'all 0.15s',
                 }}>
-                  {ic.emoji}
+                  <LucideIcon
+                    size={20}
+                    color={active ? '#FFFFFF' : 'var(--text-secondary)'}
+                    strokeWidth={1.75}
+                  />
                 </div>
+                <p style={{ fontSize: '10px', color: active ? 'var(--accent-primary)' : 'var(--text-muted)', textAlign: 'center', margin: '4px 0 0', maxWidth: '44px', fontWeight: active ? 700 : 400 }}>{ic.label}</p>
               </div>
             )
           })}
@@ -253,6 +276,7 @@ export default function AvatarSettings() {
 
 // --- CHANGE LOG ---
 // [May 21, 2026] CREATED: Avatar customizer — live preview + all pickers
-//               Locked options shown at 45% opacity with gold + badge
-//               Free users see upgrade prompt, can't select paid options
+// [May 21, 2026] UPDATED: Icon picker now uses real Lucide icons
+//               Active icon shows on current avatar color background with white icon
+//               Inactive icons show on bg-secondary with muted color
 // --- END CHANGE LOG ---
