@@ -1,7 +1,7 @@
 // ============================================================
 // FILE: app/settings/page.js
 // PURPOSE: Settings page shell — tab router, auth guard, metadata
-// LAST CHANGED: May 17, 2026
+// LAST CHANGED: May 21, 2026
 // WHY IT EXISTS: Entry point for /settings. Imports the four tab
 //                components and switches between them. Auth-gated —
 //                redirects to /auth if not logged in.
@@ -11,9 +11,7 @@
 //                   Tab switching is client-side only — URL must NOT change.
 //                   Page file stays as a shell — no business logic here.
 // ============================================================
-
 'use client';
-
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import useAuthStore from '@/store/authStore';
@@ -21,9 +19,11 @@ import ProfileSettings from '@/components/settings/ProfileSettings';
 import MembershipSettings from '@/components/settings/MembershipSettings';
 import NotificationSettings from '@/components/settings/NotificationSettings';
 import AccountSettings from '@/components/settings/AccountSettings';
+import AvatarSettings from '@/components/settings/AvatarSettings';
 import '@/app/settings/settings.css';
 
 const TABS = [
+  { id: 'avatar',        label: 'Avatar' },
   { id: 'profile',       label: 'Profile' },
   { id: 'membership',    label: 'Membership' },
   { id: 'notifications', label: 'Notifications' },
@@ -33,7 +33,7 @@ const TABS = [
 export default function SettingsPage() {
   const { user, loading } = useAuthStore();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState('profile');
+  const [activeTab, setActiveTab] = useState('avatar');
 
   useEffect(() => {
     if (!loading && !user) {
@@ -48,10 +48,10 @@ export default function SettingsPage() {
       </div>
     );
   }
-
   if (!user) return null;
 
   function renderTab() {
+    if (activeTab === 'avatar')        return <AvatarSettings />;
     if (activeTab === 'profile')       return <ProfileSettings />;
     if (activeTab === 'membership')    return <MembershipSettings />;
     if (activeTab === 'notifications') return <NotificationSettings />;
@@ -62,7 +62,6 @@ export default function SettingsPage() {
   return (
     <div className="settings-page">
       <h1>Settings</h1>
-
       <nav className="settings-tabs" aria-label="Settings tabs">
         {TABS.map((tab) => (
           <button
@@ -75,7 +74,6 @@ export default function SettingsPage() {
           </button>
         ))}
       </nav>
-
       <div>
         {TABS.map((tab) => (
           <div
@@ -93,6 +91,5 @@ export default function SettingsPage() {
 
 // --- CHANGE LOG ---
 // [May 17, 2026] CREATED: Phase 8 — settings page shell
-// REASON: Entry point for /settings. Tab router only — no business logic.
-//         Auth guard redirects unauthenticated users to /auth.
+// [May 21, 2026] UPDATED: Added Avatar tab — first tab, opens by default
 // --- END CHANGE LOG ---
