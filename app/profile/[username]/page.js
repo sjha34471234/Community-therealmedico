@@ -2,16 +2,18 @@
 // FILE: app/profile/[username]/page.js
 // PURPOSE: Public profile page — user info, karma, follower/following
 //          counts, follow button, and recent questions
-// LAST CHANGED: May 19, 2026
+// LAST CHANGED: May 22, 2026
 // WHY IT EXISTS: Each user has a public profile at /profile/[username].
 // DEPENDENCIES: components/UserBadge.jsx, components/KarmaTag.jsx,
-//               components/ProfileFollowBlock.jsx, lib/supabaseServer.js,
-//               app/profile/profile.css
-// ⚠️ DO NOT CHANGE: ISR revalidate = 3600 — never force-dynamic (rule #27).
+//               components/ProfileFollowBlock.jsx, components/Avatar.jsx,
+//               lib/supabaseServer.js, app/profile/profile.css
+// ⚠️ DO NOT CHANGE: ISR revalidate = 60 — never force-dynamic (rule #27).
 //                   UserBadge takes a profile object — NOT separate props.
 //                   KarmaTag takes karma as a number — NOT an object.
 //                   params is { username: string } — NOT a Promise (rule #5).
 //                   ProfileFollowBlock is client — owns live follower count.
+//                   Avatar size="lg" = 72px. avatarRow comes from
+//                   community_avatars table — falls back to null safely.
 // ============================================================
 
 import { notFound } from 'next/navigation';
@@ -20,6 +22,7 @@ import { supabaseServer } from '@/lib/supabaseServer';
 import UserBadge from '@/components/UserBadge';
 import KarmaTag from '@/components/KarmaTag';
 import ProfileFollowBlock from '@/components/ProfileFollowBlock';
+import Avatar from '@/components/Avatar';
 import '@/app/profile/profile.css';
 
 export const revalidate = 60;
@@ -36,6 +39,9 @@ export default async function ProfilePage({ params }) {
   const { username } = params;
   const supabase = supabaseServer();
 
+  // --- WHY THIS CODE EXISTS ---
+  // Fetch the profile row. is_member MUST be included — missing it breaks
+  // avatar tier gating, member gold usernames, and all membership checks.
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
     .select(`
@@ -52,6 +58,16 @@ export default async function ProfilePage({ params }) {
   if (profileError || !profile) {
     notFound();
   }
+
+  // --- WHY THIS CODE EXISTS ---
+  // Fetch this user's avatar row from community_avatars.
+  // Every user has a row (created by trigger on signup, backfilled May 22).
+  // avatarRow will be null only if the trigger failed — Avatar handles null safely.
+  const { data: avatarRow } = await supabase
+    .from('community_avatars')
+    .select('shape, color, icon, border, pattern')
+    .eq('user_id', profile.id)
+    .maybeSingle();
 
   const { data: karmaRow } = await supabase
     .from('community_karma')
@@ -91,16 +107,24 @@ export default async function ProfilePage({ params }) {
       })
     : null;
 
-  const initial = (profile.community_username || '?')[0].toUpperCase();
-
   return (
     <div className="profile-page">
 
       <div className="profile-header">
+
+        {/* --- WHY THIS CODE EXISTS ---
+            Replaced the old letter-initial div with the real Avatar component.
+            size="lg" = 72px as defined in Avatar.jsx and avatarConfig.js.
+            avatarRow passes the 5 stored keys (shape, color, icon, border, pattern).
+            isMember passed so Avatar renders member-only options correctly.
+            username passed so Avatar can show the fallback initial if avatarRow is null. */}
         <div className="profile-avatar-wrap">
-          <div className={`profile-avatar${profile.is_member ? ' member-avatar' : ''}`}>
-            {initial}
-          </div>
+          <Avatar
+            avatarRow={avatarRow}
+            username={profile.community_username}
+            isMember={profile.is_member}
+            size="lg"
+          />
         </div>
 
         <div className="profile-info">
@@ -163,4 +187,9 @@ export default async function ProfilePage({ params }) {
 // [May 19, 2026] UPDATED: Replaced inline stats+FollowButton with ProfileFollowBlock.
 // REASON: ISR cache meant follower count never updated after a follow/unfollow.
 //         ProfileFollowBlock is a client component that owns the live count.
+// [May 22, 2026] UPDATED: Avatar system wired in.
+// REASON: Profile page was showing a letter-initial placeholder div instead of the
+//         real Avatar component. Added community_avatars fetch (avatarRow) and
+//         replaced the old div with <Avatar size="lg" />.
+//         Removed the old `initial` variable — no longer needed.
 // --- END CHANGE LOG ---
