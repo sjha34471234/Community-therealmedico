@@ -91,17 +91,25 @@ export default function AnswerItem({ answer, questionAuthorId, questionId, getSc
       )}
 
       {/* Author row with avatar */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-        <a href={'/profile/' + answer.author_username} style={{ textDecoration: 'none', flexShrink: 0 }}>
-          <Avatar avatar={avatarData} username={answer.author_username} size="sm" />
-        </a>
-        <div>
-          <a href={'/profile/' + answer.author_username} style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.82rem', fontWeight: 700, color: isMem ? 'var(--member-gold)' : 'var(--accent-primary)', textDecoration: 'none', display: 'block' }}>
-            {isMem ? '👑 ' : ''}{answer.author_username}
-          </a>
-          <span style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.72rem', color: 'var(--text-muted)' }}>{timeAgo(answer.created_at)}</span>
-        </div>
-      </div>
+<div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+  {answer.author_username ? (
+    <a href={'/profile/' + answer.author_username} style={{ textDecoration: 'none', flexShrink: 0 }}>
+      <Avatar avatar={avatarData} username={answer.author_username} size="sm" />
+    </a>
+  ) : (
+    <Avatar avatar={avatarData} username="AN" size="sm" />
+  )}
+  <div>
+    {answer.author_username ? (
+      <a href={'/profile/' + answer.author_username} style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.82rem', fontWeight: 700, color: isMem ? 'var(--member-gold)' : 'var(--accent-primary)', textDecoration: 'none', display: 'block' }}>
+        {isMem ? '👑 ' : ''}{answer.author_username}
+      </a>
+    ) : (
+      <span style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-muted)' }}>Anonymous User</span>
+    )}
+    <span style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.72rem', color: 'var(--text-muted)' }}>{timeAgo(answer.created_at)}</span>
+  </div>
+</div>
 
       <p style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.92rem', color: 'var(--text-primary)', lineHeight: 1.75, whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: '0 0 12px' }}>{answer.body}</p>
 
