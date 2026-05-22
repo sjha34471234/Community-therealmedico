@@ -4,11 +4,12 @@
 // LAST CHANGED: May 21, 2026
 // ============================================================
 'use client'
-import { useState, useRef } from 'react'
-import { CheckCircle, ChevronDown, ChevronUp, MessageCircle } from 'lucide-react'
+import { useState, useRef, useEffect } from 'react'
+import { CheckCircle, ChevronDown, ChevronUp } from 'lucide-react'
 import useAuthStore from '@/store/authStore'
 import VoteButton from '@/components/VoteButton'
 import ReplyThread from '@/components/ReplyThread'
+import Avatar from '@/components/Avatar'
 import toast from 'react-hot-toast'
 
 function timeAgo(iso) {
@@ -30,11 +31,22 @@ export default function AnswerItem({ answer, questionAuthorId, questionId, getSc
   const [replyCount, setReplyCount] = useState(answer.reply_count || 0)
   const [accepting, setAccepting] = useState(false)
   const [autoMention, setAutoMention] = useState(null)
+  const [avatarData, setAvatarData] = useState(null)
   const replyThreadRef = useRef(null)
   const isMem = answer.author_is_member
   const isAccepted = answer.is_accepted
   const isQuestionAuthor = user && user.id === questionAuthorId
   const isOwnAnswer = user && user.id === answer.user_id
+
+  useEffect(function() {
+    if (!answer.user_id) return
+    fetch(window.location.origin + '/api/avatar?user_id=' + answer.user_id, {
+      credentials: 'include', cache: 'no-store',
+    })
+      .then(function(r) { return r.json() })
+      .then(function(d) { if (d.avatar) setAvatarData(d.avatar) })
+      .catch(function() {})
+  }, [answer.user_id])
 
   async function handleAccept() {
     if (!user || !isQuestionAuthor) return
@@ -78,6 +90,19 @@ export default function AnswerItem({ answer, questionAuthorId, questionId, getSc
         </div>
       )}
 
+      {/* Author row with avatar */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+        <a href={'/profile/' + answer.author_username} style={{ textDecoration: 'none', flexShrink: 0 }}>
+          <Avatar avatar={avatarData} username={answer.author_username} size="sm" />
+        </a>
+        <div>
+          <a href={'/profile/' + answer.author_username} style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.82rem', fontWeight: 700, color: isMem ? 'var(--member-gold)' : 'var(--accent-primary)', textDecoration: 'none', display: 'block' }}>
+            {isMem ? '👑 ' : ''}{answer.author_username}
+          </a>
+          <span style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.72rem', color: 'var(--text-muted)' }}>{timeAgo(answer.created_at)}</span>
+        </div>
+      </div>
+
       <p style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.92rem', color: 'var(--text-primary)', lineHeight: 1.75, whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: '0 0 12px' }}>{answer.body}</p>
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
@@ -89,36 +114,18 @@ export default function AnswerItem({ answer, questionAuthorId, questionId, getSc
             </button>
           )}
         </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-          <a href={'/profile/' + answer.author_username} style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.78rem', fontWeight: 600, color: isMem ? 'var(--member-gold)' : 'var(--accent-primary)', textDecoration: 'none' }}>{isMem ? '👑 ' : ''}{answer.author_username}</a>
-          <span style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.75rem', color: 'var(--text-muted)' }}>{timeAgo(answer.created_at)}</span>
-          {user && (
-            <button onClick={handleReplyButtonClick} style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.75rem', color: 'var(--text-muted)', padding: 0 }}>↩ Reply</button>
-          )}
-        </div>
+        {user && (
+          <button onClick={handleReplyButtonClick} style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.75rem', color: 'var(--text-muted)', padding: 0 }}>↩ Reply</button>
+        )}
       </div>
 
-      {/* Instagram-style "View X more replies" row */}
+      {/* Instagram-style reply toggle */}
       {replyCount > 0 && (
         <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          {/* Short horizontal line */}
           <div style={{ width: '24px', height: '2px', background: 'var(--text-muted)', borderRadius: '2px', flexShrink: 0 }} />
           <button
             onClick={function() { setShowReplies(function(v) { return !v }) }}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '5px',
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              padding: 0,
-              fontFamily: 'Inter, system-ui, sans-serif',
-              fontSize: '0.78rem',
-              fontWeight: 700,
-              color: 'var(--text-secondary)',
-            }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)' }}
           >
             {showReplies
               ? <>Hide replies <ChevronUp size={13} /></>
@@ -144,9 +151,6 @@ export default function AnswerItem({ answer, questionAuthorId, questionId, getSc
 
 // --- CHANGE LOG ---
 // [May 21, 2026] CREATED: Single answer with vote, accept, reply thread toggle
-// [May 21, 2026] FIXED: Reply button auto-mentions answer author
-//               Reply indicator always visible as pill badge
-//               autoMention prop passed to ReplyThread
-// [May 21, 2026] UPDATED: Reply toggle replaced with Instagram-style
-//               "View X more replies" with short line + chevron
+// [May 21, 2026] UPDATED: Avatar wired in — sm size (36px), fetched per answer
+//               Author row moved to top with avatar + username + time
 // --- END CHANGE LOG ---
