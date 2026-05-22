@@ -3,19 +3,25 @@
 // PURPOSE: Renders a single question in the feed
 //          Shows new-reply badge + left border for resurfaced posts
 //          Shows gold left border for Real Medico+ member posts
-// LAST CHANGED: May 17, 2026
+//          Shows author avatar (sm, 36px) in footer row
+// LAST CHANGED: May 22, 2026
 // WHY IT EXISTS: Homepage feed, tag pages, search results all
 //               reuse this single card component
-// DEPENDENCIES: components/TagPill.jsx, app/globals.css CSS variables
+// DEPENDENCIES: components/TagPill.jsx, components/Avatar.jsx,
+//               app/globals.css CSS variables
 // ⚠️ DO NOT CHANGE: <a> tags must stay on single lines — iPad rule
 //                   hasNewActivity border + badge must stay together
 //                   body preview is capped at 200 chars by the API
 //                   is_member_post border must not override hasNewActivity border
+//                   author_avatar is the raw avatarRow object from community_avatars
+//                   Avatar is null-safe — missing author_avatar shows initial letter
+//                   Avatar link is null-safe — only renders if author_username exists
 // ============================================================
 
 'use client';
 
 import TagPill from '@/components/TagPill';
+import Avatar from '@/components/Avatar';
 
 function timeAgo(dateString) {
   const now = new Date();
@@ -99,7 +105,7 @@ export default function QuestionCard({ question }) {
         </div>
       )}
 
-      {/* Footer row — stats + meta */}
+      {/* Footer row — stats + author */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
 
         {/* Stats */}
@@ -109,13 +115,41 @@ export default function QuestionCard({ question }) {
           <span style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.78rem', color: 'var(--text-muted)' }}>👁 {question.view_count || 0}</span>
         </div>
 
-        {/* Author + time */}
-        <div style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-          <span style={{ color: isMemberPost ? 'var(--member-gold)' : 'var(--accent-primary)', fontWeight: 500 }}>
-            {isMemberPost ? '👑 ' : ''}{question.author_username || 'Anonymous'}
-          </span>
-          <span style={{ margin: '0 4px' }}>·</span>
-          <span>{timeAgo(question.created_at)}</span>
+        {/* --- WHY THIS CODE EXISTS ---
+            Avatar (sm, 36px) + username + time in the footer.
+            author_avatar is the raw avatarRow from community_avatars passed down
+            from the feed. Avatar is null-safe — if author_avatar is missing it
+            falls back to the first letter of author_username.
+            Link is null-safe — only wraps in <a> if author_username exists.
+            ⚠️ WARNING: Do not use <Link> here — external-style <a> tag required (rule). */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+
+          {question.author_username ? (
+            <a href={'/profile/' + question.author_username} style={{ display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
+              <Avatar
+                avatarRow={question.author_avatar || null}
+                username={question.author_username}
+                isMember={isMemberPost}
+                size="sm"
+              />
+            </a>
+          ) : (
+            <Avatar
+              avatarRow={null}
+              username="?"
+              isMember={false}
+              size="sm"
+            />
+          )}
+
+          <div style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+            <span style={{ color: isMemberPost ? 'var(--member-gold)' : 'var(--accent-primary)', fontWeight: 500 }}>
+              {isMemberPost ? '👑 ' : ''}{question.author_username || 'Anonymous'}
+            </span>
+            <span style={{ margin: '0 4px' }}>·</span>
+            <span>{timeAgo(question.created_at)}</span>
+          </div>
+
         </div>
 
       </div>
@@ -128,4 +162,9 @@ export default function QuestionCard({ question }) {
 // REASON: Homepage feed needs a card component for each question
 // [May 17, 2026] UPDATED: Real Medico+ gold border + subtle bg + gold author name
 // REASON: Phase 7 — member cosmetics on question cards
+// [May 22, 2026] UPDATED: Avatar wired in (sm, 36px) in footer author row
+// REASON: Avatar system complete — QuestionCard was the last feed component
+//         without a real avatar. author_avatar (avatarRow) passed from feed query.
+//         Null-safe: missing avatarRow shows initial letter fallback.
+//         Null-safe link: only wraps in <a> if author_username exists.
 // --- END CHANGE LOG ---
