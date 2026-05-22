@@ -185,9 +185,13 @@ export default function ReplyThread({ questionId, parentAnswerId, parentAuthorUs
           <div key={reply.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--bg-secondary)' }}>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
               {/* xs avatar — smaller than answer for hierarchy */}
-              <a href={'/profile/' + reply.author_username} style={{ textDecoration: 'none', flexShrink: 0, marginTop: '2px' }}>
-                <Avatar avatar={replyAvatar} username={reply.author_username} size="xs" />
-              </a>
+              {reply.author_username ? (
+  <a href={'/profile/' + reply.author_username} style={{ textDecoration: 'none', flexShrink: 0, marginTop: '2px' }}>
+    <Avatar avatar={replyAvatar} username={reply.author_username} size="xs" />
+  </a>
+) : (
+  <Avatar avatar={replyAvatar} username="AN" size="xs" />
+)}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px', flexWrap: 'wrap' }}>
                   <a href={'/profile/' + reply.author_username} style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.76rem', fontWeight: 700, color: isMem ? 'var(--member-gold)' : 'var(--accent-primary)', textDecoration: 'none' }}>{isMem ? '👑 ' : ''}{reply.author_username}</a>
