@@ -3,7 +3,7 @@
 // PURPOSE: Avatar customizer in settings page
 //          Live preview + pickers for shape, color, icon, border, pattern
 //          Free users see locked options with upgrade prompt
-// LAST CHANGED: May 21, 2026
+// LAST CHANGED: May 22, 2026
 // DEPENDENCIES: components/Avatar.jsx, lib/avatarConfig.js,
 //               app/api/avatar/route.js, store/authStore.js
 // ============================================================
@@ -15,10 +15,10 @@ import Avatar from '@/components/Avatar'
 import useAuthStore from '@/store/authStore'
 import {
   Stethoscope, Pill, Microscope, Heart, Dna, Bone, Brain, Eye,
-  Syringe, Thermometer, Activity, Cross, Hospital, FlaskConical,
-  Biohazard, ClipboardList, Baby, Accessibility, Radiation,
-  FlaskRound, HeartPulse, Bandage, ScanLine, Ambulance,
-  BedDouble, ShieldPlus, TestTube, Scale, Wind, Virus,
+  Syringe, Thermometer, Activity, Clipboard, FlaskConical,
+  Search, Zap, Shield, Star, Sun, Moon, Droplet, Wind,
+  Scale, Clock, Lock, Baby, User, Users, Map, Book, Award,
+  Camera, Cpu,
 } from 'lucide-react'
 import {
   AVATAR_SHAPES, AVATAR_COLORS, AVATAR_ICONS,
@@ -27,12 +27,10 @@ import {
 
 const LUCIDE_MAP = {
   Stethoscope, Pill, Microscope, Heart, Dna, Bone, Brain, Eye,
-  Syringe, Thermometer, Activity, Cross, Hospital, FlaskConical,
-  Biohazard, ClipboardList, Baby, Accessibility, Radiation,
-  FlaskRound, HeartPulse, Bandage, ScanLine, Ambulance,
-  BedDouble, ShieldPlus, TestTube, Scale, Wind, Virus,
-  Tablets: Pill,
-  PillBottle: Pill,
+  Syringe, Thermometer, Activity, Clipboard, FlaskConical,
+  Search, Zap, Shield, Star, Sun, Moon, Droplet, Wind,
+  Scale, Clock, Lock, Baby, User, Users, Map, Book, Award,
+  Camera, Cpu,
 }
 
 const SECTION = { marginBottom: '24px' }
@@ -173,7 +171,7 @@ export default function AvatarSettings() {
         </div>
       </div>
 
-      {/* Icon picker — Lucide icons, coloured by current avatar color */}
+      {/* Icon picker */}
       <div style={SECTION}>
         <p style={SEC_TITLE}>Icon</p>
         <div style={GRID}>
@@ -194,11 +192,7 @@ export default function AvatarSettings() {
                   opacity: locked ? 0.45 : 1,
                   transition: 'all 0.15s',
                 }}>
-                  <LucideIcon
-                    size={20}
-                    color={active ? '#FFFFFF' : 'var(--text-secondary)'}
-                    strokeWidth={1.75}
-                  />
+                  <LucideIcon size={20} color={active ? '#FFFFFF' : 'var(--text-secondary)'} strokeWidth={1.75} />
                 </div>
                 <p style={{ fontSize: '10px', color: active ? 'var(--accent-primary)' : 'var(--text-muted)', textAlign: 'center', margin: '4px 0 0', maxWidth: '44px', fontWeight: active ? 700 : 400 }}>{ic.label}</p>
               </div>
@@ -276,7 +270,9 @@ export default function AvatarSettings() {
 
 // --- CHANGE LOG ---
 // [May 21, 2026] CREATED: Avatar customizer — live preview + all pickers
-// [May 21, 2026] UPDATED: Icon picker now uses real Lucide icons
-//               Active icon shows on current avatar color background with white icon
-//               Inactive icons show on bg-secondary with muted color
+// [May 21, 2026] UPDATED: Icon picker uses real Lucide icons
+// [May 22, 2026] FIXED: Replaced broken Lucide imports with v0.303-safe names
+//               Removed Cross, Hospital, Biohazard, ClipboardList, Accessibility,
+//               Radiation, FlaskRound, HeartPulse, Bandage, ScanLine, Ambulance,
+//               BedDouble, ShieldPlus, TestTube, Virus — none exist in v0.303
 // --- END CHANGE LOG ---
