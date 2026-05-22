@@ -6,6 +6,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import useAuthStore from '@/store/authStore'
+import Avatar from '@/components/Avatar'
 import toast from 'react-hot-toast'
 
 function timeAgo(iso) {
@@ -36,6 +37,7 @@ function renderBody(text) {
 export default function ReplyThread({ questionId, parentAnswerId, parentAuthorUsername, autoMention, onReplyPosted }) {
   const { user, accessToken } = useAuthStore()
   const [replies, setReplies] = useState([])
+  const [avatarMap, setAvatarMap] = useState({})
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(false)
@@ -49,21 +51,21 @@ export default function ReplyThread({ questionId, parentAnswerId, parentAuthorUs
   const textareaRef = useRef(null)
 
   useEffect(function loadFirst() {
-  fetchReplies(1, false)
-}, [])
+    fetchReplies(1, false)
+  }, [])
 
-useEffect(function handleAutoMention() {
-  if (!autoMention) return
-  const mention = '@' + autoMention + ' '
-  setReplyBody(mention)
-  setReplyOpen(true)
-  setTimeout(function() {
-    if (textareaRef.current) {
-      textareaRef.current.focus()
-      textareaRef.current.setSelectionRange(mention.length, mention.length)
-    }
-  }, 100)
-}, [autoMention])
+  useEffect(function handleAutoMention() {
+    if (!autoMention) return
+    const mention = '@' + autoMention + ' '
+    setReplyBody(mention)
+    setReplyOpen(true)
+    setTimeout(function() {
+      if (textareaRef.current) {
+        textareaRef.current.focus()
+        textareaRef.current.setSelectionRange(mention.length, mention.length)
+      }
+    }, 100)
+  }, [autoMention])
 
   useEffect(function setupObserver() {
     if (loading) return
@@ -87,14 +89,33 @@ useEffect(function handleAutoMention() {
       const res = await fetch(url, { credentials: 'include', cache: 'no-store' })
       if (!res.ok) throw new Error('Failed')
       const data = await res.json()
+      const newReplies = data.answers || []
       if (append) {
-        setReplies(function(prev) { return prev.concat(data.answers || []) })
+        setReplies(function(prev) { return prev.concat(newReplies) })
       } else {
-        setReplies(data.answers || [])
+        setReplies(newReplies)
       }
       const more = data.hasMore === true
       setHasMore(more)
       hasMoreRef.current = more
+
+      // Fetch avatars for new reply authors
+      const userIds = Array.from(new Set(newReplies.map(function(r) { return r.user_id }).filter(Boolean)))
+      userIds.forEach(function(uid) {
+        fetch(window.location.origin + '/api/avatar?user_id=' + uid, { credentials: 'include', cache: 'no-store' })
+          .then(function(r) { return r.json() })
+          .then(function(d) {
+            if (d.avatar) {
+              setAvatarMap(function(prev) {
+                const next = {}
+                Object.keys(prev).forEach(function(k) { next[k] = prev[k] })
+                next[uid] = d.avatar
+                return next
+              })
+            }
+          })
+          .catch(function() {})
+      })
     } catch (err) {
       console.error('ReplyThread fetch error:', err)
     } finally {
@@ -113,14 +134,6 @@ useEffect(function handleAutoMention() {
         textareaRef.current.focus()
         textareaRef.current.setSelectionRange(mention.length, mention.length)
       }
-    }, 50)
-  }
-
-  function openBlankReply() {
-    setReplyBody('')
-    setReplyOpen(true)
-    setTimeout(function() {
-      if (textareaRef.current) textareaRef.current.focus()
     }, 50)
   }
 
@@ -163,20 +176,29 @@ useEffect(function handleAutoMention() {
   }
 
   return (
-    <div style={{ marginTop: '8px', paddingLeft: '20px', borderLeft: '2px solid var(--bg-tertiary)' }}>
+    <div style={{ marginTop: '8px', paddingLeft: '16px', borderLeft: '2px solid var(--bg-tertiary)' }}>
 
       {replies.map(function renderReply(reply) {
         const isMem = reply.author_is_member
+        const replyAvatar = avatarMap[reply.user_id] || null
         return (
-          <div key={reply.id} style={{ padding: '10px 0', borderBottom: '1px solid var(--bg-secondary)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
-              <a href={'/profile/' + reply.author_username} style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.78rem', fontWeight: 700, color: isMem ? 'var(--member-gold)' : 'var(--accent-primary)', textDecoration: 'none' }}>{isMem ? '👑 ' : ''}{reply.author_username}</a>
-              <span style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.72rem', color: 'var(--text-muted)' }}>{timeAgo(reply.created_at)}</span>
+          <div key={reply.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--bg-secondary)' }}>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+              {/* xs avatar — smaller than answer for hierarchy */}
+              <a href={'/profile/' + reply.author_username} style={{ textDecoration: 'none', flexShrink: 0, marginTop: '2px' }}>
+                <Avatar avatar={replyAvatar} username={reply.author_username} size="xs" />
+              </a>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px', flexWrap: 'wrap' }}>
+                  <a href={'/profile/' + reply.author_username} style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.76rem', fontWeight: 700, color: isMem ? 'var(--member-gold)' : 'var(--accent-primary)', textDecoration: 'none' }}>{isMem ? '👑 ' : ''}{reply.author_username}</a>
+                  <span style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.7rem', color: 'var(--text-muted)' }}>{timeAgo(reply.created_at)}</span>
+                </div>
+                <p style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.83rem', color: 'var(--text-primary)', margin: '0 0 4px', lineHeight: 1.6, wordBreak: 'break-word' }}>{renderBody(reply.body)}</p>
+                {user && (
+                  <button onClick={function() { openReplyTo(reply.author_username) }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.7rem', color: 'var(--text-muted)', padding: 0 }}>↩ Reply</button>
+                )}
+              </div>
             </div>
-            <p style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.85rem', color: 'var(--text-primary)', margin: '0 0 6px', lineHeight: 1.6, wordBreak: 'break-word' }}>{renderBody(reply.body)}</p>
-            {user && (
-              <button onClick={function() { openReplyTo(reply.author_username) }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.72rem', color: 'var(--text-muted)', padding: 0 }}>↩ Reply</button>
-            )}
           </div>
         )
       })}
@@ -197,7 +219,7 @@ useEffect(function handleAutoMention() {
                 onChange={function(e) { setReplyBody(e.target.value) }}
                 rows={2}
                 disabled={submitting}
-                placeholder={'Reply to this answer...'}
+                placeholder="Reply to this answer..."
                 style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.85rem', color: 'var(--text-primary)', background: 'var(--bg-secondary)', border: '1.5px solid var(--bg-tertiary)', borderRadius: '8px', padding: '8px 12px', resize: 'vertical', outline: 'none', lineHeight: 1.5, width: '100%', boxSizing: 'border-box' }}
               />
               <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
@@ -214,6 +236,7 @@ useEffect(function handleAutoMention() {
 
 // --- CHANGE LOG ---
 // [May 21, 2026] CREATED: Reply thread component
-// [May 21, 2026] FIXED: Auto-mention fills correctly, mention links clickable,
-//               reply box focuses on open, parentAuthorUsername prop added
+// [May 21, 2026] UPDATED: Avatar wired in — xs size (28px) for hierarchy
+//               avatarMap fetches per unique user_id as replies load
+//               Reply row restructured: avatar left, content right
 // --- END CHANGE LOG ---
