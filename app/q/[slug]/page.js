@@ -119,10 +119,20 @@ export default async function QuestionPage({ params }) {
     answerProfiles = profiles || []
   }
 
-  // Attach reply_count to each answer
-  const answersWithReplyCounts = answerList.map(function attach(a) {
-    return { ...a, reply_count: replyCounts[a.id] || 0 }
-  })
+  // Build profile map for fast lookup
+const profileMap = {}
+answerProfiles.forEach(function(p) { profileMap[p.id] = p })
+
+// Attach reply_count + author profile to each answer
+const answersWithReplyCounts = answerList.map(function attach(a) {
+  const profile = profileMap[a.user_id] || null
+  return {
+    ...a,
+    reply_count: replyCounts[a.id] || 0,
+    author_username: profile ? (profile.community_username || 'Anonymous User') : 'Anonymous User',
+    author_is_member: profile ? (profile.is_member || false) : false,
+  }
+})
 
   supabase
     .from('community_questions')
