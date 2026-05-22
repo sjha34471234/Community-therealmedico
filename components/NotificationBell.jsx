@@ -1,21 +1,26 @@
 // ============================================================
 // FILE: components/NotificationBell.jsx
 // PURPOSE: Bell icon with unread badge, dropdown preview, polls every 60s
-// LAST CHANGED: May 19, 2026
+// LAST CHANGED: May 22, 2026
 // WHY IT EXISTS: Phase 10 — Notification Centre
-// DEPENDENCIES: store/authStore.js, app/api/notifications/route.js
-//               app/notifications/notifications.css
+// DEPENDENCIES: store/authStore.js, app/api/notifications/route.js,
+//               components/Avatar.jsx, app/notifications/notifications.css
 // ⚠️ DO NOT CHANGE: polling interval, mark-read on open pattern
+//                   Avatar size="xs" = 28px — matches reply thread hierarchy
+//                   actor_avatar passed straight from API — never fetched here
+//                   notificationMeta still returns color for the unread dot
 // ============================================================
 
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Bell, MessageCircle, ThumbsUp, UserPlus, CheckCircle } from 'lucide-react';
+import { Bell, MessageCircle, ThumbsUp, UserPlus, CheckCircle, MessageSquare } from 'lucide-react';
 import Link from 'next/link';
 import useAuthStore from '@/store/authStore';
+import Avatar from '@/components/Avatar';
 import '@/app/notifications/notifications.css';
+
 function timeAgo(dateStr) {
   const diff = Math.floor((Date.now() - new Date(dateStr)) / 1000);
   if (diff < 60) return 'just now';
@@ -24,21 +29,27 @@ function timeAgo(dateStr) {
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
+// --- WHY THIS CODE EXISTS ---
+// notificationMeta now only drives the text label and accent color.
+// The icon is no longer shown — replaced by the actor's Avatar.
+// color is kept so we can tint the unread dot consistently per type.
 function notificationMeta(n) {
   const actor = n.actor?.community_username || 'Someone';
   switch (n.type) {
     case 'new_answer':
-      return { icon: MessageCircle, color: '#1D6FA4', text: `${actor} answered your question` };
+      return { color: '#1D6FA4', text: `${actor} answered your question` };
+    case 'new_reply':
+      return { color: '#1D6FA4', text: `${actor} replied to your answer` };
     case 'answer_accepted':
-      return { icon: CheckCircle, color: '#2E7D32', text: 'Your answer was accepted' };
+      return { color: '#2E7D32', text: 'Your answer was accepted' };
     case 'upvote_question':
-      return { icon: ThumbsUp, color: '#B45309', text: `${actor} upvoted your question` };
+      return { color: '#B45309', text: `${actor} upvoted your question` };
     case 'upvote_answer':
-      return { icon: ThumbsUp, color: '#B45309', text: `${actor} upvoted your answer` };
+      return { color: '#B45309', text: `${actor} upvoted your answer` };
     case 'new_follower':
-      return { icon: UserPlus, color: '#6B21A8', text: `${actor} started following you` };
+      return { color: '#6B21A8', text: `${actor} started following you` };
     default:
-      return { icon: Bell, color: '#9AA0AE', text: 'New notification' };
+      return { color: '#9AA0AE', text: 'New notification' };
   }
 }
 
@@ -64,18 +75,13 @@ export default function NotificationBell() {
 
   useEffect(() => { setMounted(true); }, []);
 
-  // Calculate position from bell button's actual location on screen
   function calcPosition() {
     if (!bellRef.current) return;
     const rect = bellRef.current.getBoundingClientRect();
     const dropdownWidth = 300;
     const left = Math.max(8, rect.right - dropdownWidth);
-    setDropdownPos({
-      top: rect.bottom + 8,
-      left: left,
-    });
+    setDropdownPos({ top: rect.bottom + 8, left });
   }
-
 
   const fetchUnreadCount = useCallback(async () => {
     if (!accessToken) return;
@@ -146,7 +152,7 @@ export default function NotificationBell() {
         onClick={handleOpen}
         aria-label="Notifications"
       >
-        <Bell size={20} />
+        <Bell size={26} />
         {unreadCount > 0 && (
           <span className="notif-bell-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
         )}
@@ -154,15 +160,12 @@ export default function NotificationBell() {
 
       {mounted && open && createPortal(
         <>
-          {/* Backdrop */}
           <div className="notif-backdrop" onClick={() => setOpen(false)} />
 
-          {/* Dropdown — positioned directly below bell button */}
           <div
             className="notif-dropdown"
             ref={dropdownRef}
             style={{ top: dropdownPos.top, left: dropdownPos.left }}
-
           >
             {/* Header */}
             <div className="notif-dropdown-header">
@@ -196,7 +199,7 @@ export default function NotificationBell() {
               )}
 
               {!loading && notifications.slice(0, 8).map((n) => {
-                const { icon: Icon, color, text } = notificationMeta(n);
+                const { color, text } = notificationMeta(n);
                 const href = notificationLink(n);
                 return (
                   <Link
@@ -205,9 +208,32 @@ export default function NotificationBell() {
                     className={`notif-item${n.read ? '' : ' notif-item--unread'}`}
                     onClick={() => setOpen(false)}
                   >
-                    <span className="notif-item-icon" style={{ background: `${color}18`, color }}>
-                      <Icon size={14} />
+                    {/* --- WHY THIS CODE EXISTS ---
+                        Actor avatar (xs, 28px) replaces the old generic type icon.
+                        actor_avatar comes from the API — already fetched in bulk.
+                        Null-safe: if actor or avatar is missing, Avatar shows
+                        the first letter of actor username as fallback.
+                        Link wraps the avatar only if actor username exists. */}
+                    <span className="notif-item-icon">
+                      {n.actor?.community_username ? (
+                        <a href={'/profile/' + n.actor.community_username} onClick={(e) => e.stopPropagation()} style={{ display: 'flex', textDecoration: 'none' }}>
+                          <Avatar
+                            avatarRow={n.actor_avatar || null}
+                            username={n.actor.community_username}
+                            isMember={n.actor.is_member === true}
+                            size="xs"
+                          />
+                        </a>
+                      ) : (
+                        <Avatar
+                          avatarRow={null}
+                          username="?"
+                          isMember={false}
+                          size="xs"
+                        />
+                      )}
                     </span>
+
                     <div className="notif-item-body">
                       <p className="notif-item-text">{text}</p>
                       {n.question?.title && (
@@ -242,4 +268,10 @@ export default function NotificationBell() {
 // [May 19, 2026] REDESIGNED: Portal-based dropdown, backdrop, type icons
 // [May 19, 2026] FIXED: Dynamic positioning via getBoundingClientRect()
 //               Dropdown now anchors precisely below the bell button.
+// [May 22, 2026] UPDATED: Actor avatar (xs, 28px) replaces generic type icon.
+//               REASON: Avatar system complete — notification dropdown was the
+//               last place showing a generic icon instead of the real actor avatar.
+//               actor_avatar comes from API (bulk fetched in notifications/route.js).
+//               Added new_reply case to notificationMeta (was showing "New notification").
+//               Bell size kept at 26 (set earlier this session).
 // --- END CHANGE LOG ---
