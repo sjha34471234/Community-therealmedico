@@ -1,7 +1,7 @@
 // ============================================================
 // FILE: app/api/questions/route.js
 // PURPOSE: API route for community questions — GET feed + POST new question
-// LAST CHANGED: May 19, 2026
+// LAST CHANGED: May 22, 2026
 // WHY IT EXISTS: GET powers the live question feed (Phase 2).
 //   POST added in Phase 3 — handles new question submission with auth,
 //   rate limiting, slug generation, and Supabase insert.
@@ -14,6 +14,7 @@
 //   - Array.from(new Set(...)) — never [...new Set(...)].
 //   - Never return user emails or sensitive fields in GET response.
 //   - body preview capped at 200 chars in GET — never return full body in feed.
+//   - author_avatar is the raw avatarRow object — QuestionCard resolves it via Avatar.jsx
 // ============================================================
 
 export const dynamic = 'force-dynamic'
@@ -137,12 +138,42 @@ export async function GET(request) {
       }
     }
 
+    // --- WHY THIS CODE EXISTS ---
+    // Fetch avatar rows for all question authors in one bulk query.
+    // QuestionCard needs author_avatar (the raw avatarRow) to render Avatar.jsx.
+    // One query for all userIds — never one query per question.
+    // avatarMap[user_id] = { shape, color, icon, border, pattern }
+    // Missing rows (trigger failure edge case) safely produce null in the map.
+    let avatarMap = {}
+    if (userIds.length > 0) {
+      const { data: avatars } = await supabase
+        .from('community_avatars')
+        .select('user_id, shape, color, icon, border, pattern')
+        .in('user_id', userIds)
+      if (avatars) {
+        avatars.forEach(function mapA(a) {
+          avatarMap[a.user_id] = {
+            shape: a.shape,
+            color: a.color,
+            icon: a.icon,
+            border: a.border,
+            pattern: a.pattern,
+          }
+        })
+      }
+    }
+
+    // Attach profile + avatar to each question
     const final = processed.map(function attachProfile(q) {
       const profile = profileMap[q.user_id] || null
       return {
         ...q,
         author_username: profile ? (profile.community_username || 'Anonymous User') : 'Anonymous User',
         is_member_post: profile ? (profile.is_member === true) : false,
+        // --- WHY THIS EXISTS ---
+        // author_avatar is the raw avatarRow. QuestionCard passes it straight
+        // into <Avatar avatarRow={...} />. Null if no row found — Avatar handles safely.
+        author_avatar: avatarMap[q.user_id] || null,
       }
     })
 
@@ -256,4 +287,8 @@ export async function POST(request) {
 // [May 19, 2026] FIXED: Auth switched from cookie-based to Bearer token (rule #36).
 //               Removed createClient cookie approach — iPad drops cookies on API calls.
 //               Now uses supabaseServer().auth.getUser(token) consistently.
+// [May 22, 2026] UPDATED: Avatar data added to GET response.
+//               Added bulk community_avatars query using same userIds already collected.
+//               author_avatar (avatarRow) now attached to every question in final[].
+//               QuestionCard passes it straight into <Avatar /> — no extra fetch needed.
 // --- END CHANGE LOG ---
