@@ -1,22 +1,14 @@
 // --- WHY THIS CODE EXISTS ---
 // Client component that renders a "Message" button on profile pages.
 // When clicked, creates or retrieves a DM conversation then navigates to /chat.
-// Must be a client component — needs session + router.
-// Kept separate from the server-rendered profile page — follows modular architecture rule.
-
-// --- WHAT THIS MADE WORK ---
-// Message button on /profile/[username] → opens DM with that user in /chat
-// Uses POST /api/chat/dm to create or retrieve conversation
-// Stores the conversation id in sessionStorage so ChatLayout can auto-open it
-
 // --- PITFALLS ---
-// ⚠️ Never show this button on your own profile — check currentUserId vs targetUserId
-// ⚠️ Bearer token required for POST /api/chat/dm
+// ⚠️ Never show this button on your own profile — check user?.id vs targetUserId
+// ⚠️ Bearer token required for POST /api/chat/dm — read from accessToken not session
 // ⚠️ sessionStorage key is 'chat_open_convo' — ChatLayout reads this on mount
-// ⚠️ Guests see nothing — button only renders when session exists
-
+// ⚠️ Guests see nothing — button only renders when user exists
 // --- CHANGE LOG ---
 // [May 23, 2026] CREATED: Phase 12 Chat — Message button for profile pages
+// [May 23, 2026] FIXED: session replaced with user + accessToken from authStore
 // --- END CHANGE LOG ---
 
 'use client';
@@ -32,33 +24,26 @@ export default function ProfileMessageButton({ targetUserId }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Don't show if not signed in
-  if (!session) return null;
-
-  // Don't show on your own profile
-  if (session?.user?.id === targetUserId) return null;
+  if (!user) return null;
+  if (user?.id === targetUserId) return null;
 
   async function handleMessage() {
-    if (!session?.access_token) return;
+    if (!accessToken) return;
     setLoading(true);
     setError('');
     try {
       const res = await fetch('/api/chat/dm', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: 'Bearer ' + session.access_token,
-        },
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + accessToken },
         credentials: 'include',
         body: JSON.stringify({ other_user_id: targetUserId }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed');
-      // Store conversation id so ChatLayout auto-opens it on mount
       try {
         sessionStorage.setItem('chat_open_convo', JSON.stringify(data.conversation));
       } catch {
-        // sessionStorage may be unavailable — still navigate, user can find the DM manually
+        // sessionStorage unavailable — navigate anyway
       }
       router.push('/chat');
     } catch (err) {
