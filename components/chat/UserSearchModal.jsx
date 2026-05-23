@@ -28,7 +28,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Search, X } from 'lucide-react';
 import Avatar from '@/components/Avatar';
-import { useAuthStore } from '@/store/authStore';
+import useAuthStore from '@/store/authStore';
 
 const PAGE_SIZE = 10;
 
