@@ -47,7 +47,7 @@ function shortTime(isoString) {
 const PAGE_SIZE = 15;
 
 export default function DMList({ activeConvoId, onSelectConvo, onNewDM }) {
-  const { session } = useAuthStore();
+  const { user, accessToken } = useAuthStore();
   const [convos, setConvos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
