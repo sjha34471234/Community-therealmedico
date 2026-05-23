@@ -229,7 +229,7 @@ export default function QuestionDetail({ question, answers: initialAnswers, auth
       <button
         onClick={() => setShowSheet(true)}
         className="qd-answer-fab"
-        style={{ position: 'fixed', bottom: '76px', right: '16px', zIndex: 900, display: 'none', alignItems: 'center', gap: '6px', background: 'var(--accent-primary)', color: '#fff', border: 'none', borderRadius: '24px', padding: '12px 20px', fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.9rem', fontWeight: 700, boxShadow: '0 4px 16px rgba(29,111,164,0.35)', cursor: 'pointer' }}
+        style={{ position: 'fixed', bottom: '76px', right: '16px', zIndex: 900, alignItems: 'center', gap: '6px', background: 'var(--accent-primary)', color: '#fff', border: 'none', borderRadius: '24px', padding: '12px 20px', fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.9rem', fontWeight: 700, boxShadow: '0 4px 16px rgba(29,111,164,0.35)', cursor: 'pointer' }}
       >
         <PenLine size={16} /> Answer
       </button>
