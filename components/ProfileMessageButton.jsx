@@ -24,7 +24,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { MessageCircle } from 'lucide-react';
-import { useAuthStore } from '@/store/authStore';
+import useAuthStore from '@/store/authStore';
 
 export default function ProfileMessageButton({ targetUserId }) {
   const { session, profile } = useAuthStore();
