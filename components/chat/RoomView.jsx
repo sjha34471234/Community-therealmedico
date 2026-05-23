@@ -30,7 +30,7 @@ const supabaseClient = createClient(
 );
 
 export default function RoomView({ room, onBack }) {
-  const { session } = useAuthStore();
+  const { user, accessToken } = useAuthStore();
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingOlder, setLoadingOlder] = useState(false);
