@@ -1,0 +1,23 @@
+/* --- WHY THIS CODE EXISTS ---
+   Styles for the /chat page only.
+   Never added to globals.css — per-page CSS rule.
+   Sets the chat wrapper to fill all available height correctly
+   so the two-column layout and internal scrolling work properly.
+   --- CHANGE LOG ---
+   [May 23, 2026] CREATED: Phase 12 Chat — chat page styles
+   --- END CHANGE LOG --- */
+
+/* Chat page wrapper — fills the full scroll container height */
+.chat-page-wrapper {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background-color: var(--bg-primary);
+}
+
+/* Ensure chat layout fills wrapper */
+.chat-page-wrapper > * {
+  flex: 1;
+  min-height: 0;
+}
