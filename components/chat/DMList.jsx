@@ -29,7 +29,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { MessageSquare, Plus } from 'lucide-react';
 import Avatar from '@/components/Avatar';
-import { useAuthStore } from '@/store/authStore';
+import useAuthStore from '@/store/authStore';
 
 // Format last message time — short format
 function shortTime(isoString) {
