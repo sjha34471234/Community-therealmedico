@@ -30,7 +30,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Send, Loader, ChevronLeft } from 'lucide-react';
 import MessageBubble from './MessageBubble';
 import Avatar from '@/components/Avatar';
-import { useAuthStore } from '@/store/authStore';
+import useAuthStore from '@/store/authStore';
 import { createClient } from '@supabase/supabase-js';
 
 // Supabase client for Realtime — declared outside component
