@@ -108,6 +108,13 @@ export default function MessageBubble({ message, isDM = false }) {
             }}
           >
             {author_username ? (
+  <a href={'/profile/' + author_username} style={{ fontSize: '12px', fontWeight: 600, color: author_is_member ? '#B8860B' : 'var(--text-primary)', textDecoration: 'none', fontFamily: 'Inter, sans-serif' }}>
+    {author_username}
+    {author_is_member && (<span style={{ marginLeft: '4px', fontSize: '10px', color: '#B8860B', border: '1px solid #D4AF37', borderRadius: '3px', padding: '0 3px', fontWeight: 700 }}>✦</span>)}
+  </a>
+) : (
+  <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', fontFamily: 'Inter, sans-serif' }}>Anonymous</span>
+)}
               
                 href={`/profile/${author_username}`}
                 style={{
