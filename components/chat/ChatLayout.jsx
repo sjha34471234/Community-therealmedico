@@ -70,6 +70,21 @@ export default function ChatLayout() {
     handleSelectConvo(convo);
   }, [handleSelectConvo]);
 
+  // Auto-open a conversation passed from profile Message button
+  // sessionStorage key 'chat_open_convo' is set by ProfileMessageButton before navigating here
+  useEffect(() => {
+    try {
+      const stored = sessionStorage.getItem('chat_open_convo');
+      if (stored) {
+        const convo = JSON.parse(stored);
+        sessionStorage.removeItem('chat_open_convo');
+        if (convo?.id) handleSelectConvo(convo);
+      }
+    } catch {
+      // sessionStorage unavailable — ignore silently
+    }
+  }, []);
+
   return (
     <div style={{ display: 'flex', height: '100%', backgroundColor: 'var(--bg-primary)', overflow: 'hidden', position: 'relative' }}>
 
