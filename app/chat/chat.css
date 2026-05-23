@@ -3,8 +3,11 @@
    Never added to globals.css — per-page CSS rule.
    Sets the chat wrapper to fill all available height correctly
    so the two-column layout and internal scrolling work properly.
+   Footer is hidden on the chat page — it would waste vertical space
+   and interfere with the fixed-height chat layout.
    --- CHANGE LOG ---
    [May 23, 2026] CREATED: Phase 12 Chat — chat page styles
+   [May 23, 2026] UPDATED: Footer hidden on chat page
    --- END CHANGE LOG --- */
 
 /* Chat page wrapper — fills the full scroll container height */
@@ -20,4 +23,10 @@
 .chat-page-wrapper > * {
   flex: 1;
   min-height: 0;
+}
+
+/* Hide footer on chat page — not needed, wastes vertical space */
+.chat-page-wrapper ~ footer,
+#page-scroll-container:has(.chat-page-wrapper) footer {
+  display: none;
 }
