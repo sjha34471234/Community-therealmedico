@@ -1,7 +1,8 @@
 // ============================================================
 // FILE: components/ReplyThread.jsx
 // PURPOSE: Lazy-loaded reply thread under an answer.
-// LAST CHANGED: May 21, 2026
+// LAST CHANGED: May 23, 2026
+// ⚠️ DO NOT CHANGE: Avatar prop is avatarRow — NOT avatar (rule in Avatar.jsx)
 // ============================================================
 'use client'
 import { useState, useEffect, useRef } from 'react'
@@ -100,6 +101,8 @@ export default function ReplyThread({ questionId, parentAnswerId, parentAuthorUs
       hasMoreRef.current = more
 
       // Fetch avatars for new reply authors
+      // ⚠️ avatarMap stores raw avatarRow objects — keyed by user_id
+      // Avatar.jsx receives them as avatarRow= prop
       const userIds = Array.from(new Set(newReplies.map(function(r) { return r.user_id }).filter(Boolean)))
       userIds.forEach(function(uid) {
         fetch(window.location.origin + '/api/avatar?user_id=' + uid, { credentials: 'include', cache: 'no-store' })
@@ -184,14 +187,14 @@ export default function ReplyThread({ questionId, parentAnswerId, parentAuthorUs
         return (
           <div key={reply.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--bg-secondary)' }}>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
-              {/* xs avatar — smaller than answer for hierarchy */}
+              {/* ⚠️ avatarRow= NOT avatar= — Avatar.jsx expects avatarRow */}
               {reply.author_username ? (
-  <a href={'/profile/' + reply.author_username} style={{ textDecoration: 'none', flexShrink: 0, marginTop: '2px' }}>
-    <Avatar avatar={replyAvatar} username={reply.author_username} size="xs" />
-  </a>
-) : (
-  <Avatar avatar={replyAvatar} username="AN" size="xs" />
-)}
+                <a href={'/profile/' + reply.author_username} style={{ textDecoration: 'none', flexShrink: 0, marginTop: '2px' }}>
+                  <Avatar avatarRow={replyAvatar} username={reply.author_username} size="xs" />
+                </a>
+              ) : (
+                <Avatar avatarRow={replyAvatar} username="AN" size="xs" />
+              )}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px', flexWrap: 'wrap' }}>
                   <a href={'/profile/' + reply.author_username} style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.76rem', fontWeight: 700, color: isMem ? 'var(--member-gold)' : 'var(--accent-primary)', textDecoration: 'none' }}>{isMem ? '👑 ' : ''}{reply.author_username}</a>
@@ -243,4 +246,7 @@ export default function ReplyThread({ questionId, parentAnswerId, parentAuthorUs
 // [May 21, 2026] UPDATED: Avatar wired in — xs size (28px) for hierarchy
 //               avatarMap fetches per unique user_id as replies load
 //               Reply row restructured: avatar left, content right
+// [May 23, 2026] FIXED: avatar= renamed to avatarRow= in both Avatar usages.
+//               CAUSE: Avatar.jsx expects prop named avatarRow. Using avatar=
+//               passed undefined — replyAvatar was ignored, default shown always.
 // --- END CHANGE LOG ---
