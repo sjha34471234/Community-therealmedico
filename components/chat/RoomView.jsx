@@ -5,15 +5,14 @@
 // Guests can read but cannot send — shows sign in prompt instead of input.
 // --- PITFALLS ---
 // ⚠️ ALWAYS unsubscribe Realtime channel on unmount
-// ⚠️ Only subscribe to ONE channel at a time
 // ⚠️ On Realtime new message: fetch enriched message from API — never use raw payload
-// ⚠️ Scroll to bottom on initial load and new message — NOT when loading older
 // ⚠️ mountedRef pattern — prevents state updates after unmount
 // ⚠️ Deduplicate messages by id
 // ⚠️ All anchor tags single line — iPad clipboard rule
+// ⚠️ Use user + accessToken from authStore — never session
 // --- CHANGE LOG ---
 // [May 23, 2026] CREATED: Phase 12 Chat — room chat window with Realtime + lazy load
-// [May 23, 2026] FIXED: Multiline anchor tags collapsed to single line — iPad clipboard bug
+// [May 23, 2026] FIXED: session replaced with user + accessToken from authStore
 // --- END CHANGE LOG ---
 
 'use client';
@@ -144,13 +143,13 @@ export default function RoomView({ room, onBack }) {
 
   const handleSend = useCallback(async () => {
     const text = input.trim();
-    if (!text || sending || !session?.access_token) return;
+    if (!text || sending || !accessToken) return;
     setSending(true);
     setError('');
     try {
       const res = await fetch('/api/chat/messages', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + accessToken },
         credentials: 'include',
         body: JSON.stringify({ room_id: room.id, body: text }),
       });
@@ -167,7 +166,7 @@ export default function RoomView({ room, onBack }) {
     } finally {
       setSending(false);
     }
-  }, [input, sending, session?.access_token, room?.id, scrollToBottom]);
+  }, [input, sending, accessToken, room?.id, scrollToBottom]);
 
   const handleKeyDown = useCallback((e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
@@ -182,19 +181,16 @@ export default function RoomView({ room, onBack }) {
       </div>
 
       <div ref={scrollRef} onScroll={handleScroll} style={{ flex: 1, overflowY: 'auto', padding: '8px 0', display: 'flex', flexDirection: 'column' }}>
-
         {loadingOlder && (
           <div style={{ padding: '8px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>
             <Loader size={14} style={{ animation: 'spin 1s linear infinite' }} />
           </div>
         )}
-
         {!hasMore && messages.length > 0 && !loading && (
           <div style={{ padding: '12px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '11px', fontFamily: 'Inter, sans-serif', opacity: 0.5 }}>
             Beginning of #{room.name}
           </div>
         )}
-
         {loading ? (
           Array.from({ length: 6 }).map((_, i) => (
             <div key={i} style={{ height: '48px', margin: '4px 16px', borderRadius: '8px', backgroundColor: 'var(--bg-secondary)', opacity: 0.4 }} />
@@ -206,7 +202,6 @@ export default function RoomView({ room, onBack }) {
         ) : (
           messages.map(msg => <MessageBubble key={msg.id} message={msg} isDM={false} />)
         )}
-
         <div ref={bottomRef} />
       </div>
 
@@ -217,7 +212,7 @@ export default function RoomView({ room, onBack }) {
       )}
 
       <div style={{ padding: '12px 16px', borderTop: '1px solid var(--bg-secondary)', flexShrink: 0 }}>
-        {session ? (
+        {user ? (
           <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end', backgroundColor: 'var(--bg-secondary)', borderRadius: '12px', padding: '8px 12px' }}>
             <textarea
               value={input}
@@ -243,7 +238,6 @@ export default function RoomView({ room, onBack }) {
             {' '}to join the conversation
           </div>
         )}
-
         {input.length > 400 && (
           <div style={{ textAlign: 'right', fontSize: '11px', color: input.length > 480 ? 'var(--danger)' : 'var(--text-muted)', fontFamily: 'Inter, sans-serif', marginTop: '4px' }}>
             {500 - input.length} left
