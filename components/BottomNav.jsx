@@ -1,14 +1,39 @@
 // ============================================================
 // FILE: components/BottomNav.jsx
 // PURPOSE: Bottom navigation bar — Home, Search, Ask, Chat, Profile
-// LAST CHANGED: May 18, 2026
+// LAST CHANGED: May 23, 2026
 // WHY IT EXISTS: Phase 10 — Instagram-style bottom nav for all screen sizes
 // DEPENDENCIES: store/authStore.js, app/globals.css (bottom nav styles)
 // ⚠️ DO NOT CHANGE: Auth gate pattern — never redirect, always prompt.
 //                   Ask is always centred with raised style.
-//                   Chat shows "Coming soon" toast — Phase 11 will make it real.
 //                   5 items keeps layout balanced around the Ask pill.
 // ============================================================
+
+// --- WHY THIS CODE EXISTS ---
+// Bottom navigation bar fixed at the bottom of every page.
+// 5 items: Home · Search · Ask (raised pill) · Chat · Profile
+// Auth-gated items redirect to /auth if not signed in.
+// Profile tab navigates to the user's own profile page.
+
+// --- WHAT CHANGED May 23, 2026 ---
+// Chat tab: removed isComingSoon flag and "Coming soon" toast.
+// Chat now links directly to /chat — Phase 12 Chat is live.
+
+// --- PITFALLS ---
+// ⚠️ Never add a 6th item — layout is balanced for exactly 5
+// ⚠️ Ask item must always have isAsk: true — drives the raised pill style
+// ⚠️ Never redirect on auth gate — always push to /auth and let user come back
+// ⚠️ Profile href is dynamic — built from profile.community_username at render time
+
+// --- CHANGE LOG ---
+// [May 18, 2026] CREATED: Phase 10 — bottom navigation
+// [May 18, 2026] UPDATED: Added Chat tab between Ask and Profile
+// REASON: 4 items looked unbalanced. 5 items (Home·Search·Ask·Chat·Profile)
+//         centres the Ask pill perfectly with 2 items on each side.
+// [May 23, 2026] UPDATED: Chat tab now links to /chat — Phase 12 Chat is live.
+//                         Removed isComingSoon flag and toast. href set to /chat.
+// --- END CHANGE LOG ---
+
 'use client';
 
 import Link from 'next/link';
@@ -43,10 +68,9 @@ const NAV_ITEMS = [
   {
     key: 'chat',
     label: 'Chat',
-    href: null,
+    href: '/chat',
     icon: MessageCircle,
     authRequired: false,
-    isComingSoon: true,
   },
   {
     key: 'profile',
@@ -75,16 +99,6 @@ export default function BottomNav() {
   }
 
   function handleTap(e, item) {
-    // Coming soon — show toast, go nowhere
-    if (item.isComingSoon) {
-      e.preventDefault();
-      toast('Chat is coming soon! 💬', {
-        icon: '🚧',
-        duration: 2500,
-      });
-      return;
-    }
-
     // Auth required and not logged in — send to sign in
     if (item.authRequired && !user && !loading) {
       e.preventDefault();
@@ -143,11 +157,3 @@ export default function BottomNav() {
     </nav>
   );
 }
-
-// --- CHANGE LOG ---
-// [May 18, 2026] CREATED: Phase 10 — bottom navigation
-// [May 18, 2026] UPDATED: Added Chat tab between Ask and Profile
-// REASON: 4 items looked unbalanced. 5 items (Home·Search·Ask·Chat·Profile)
-//         centres the Ask pill perfectly with 2 items on each side.
-//         Chat shows "Coming soon" toast until Phase 11 is built.
-// --- END CHANGE LOG ---
