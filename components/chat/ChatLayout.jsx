@@ -29,7 +29,7 @@ import useAuthStore from '@/store/authStore';
 const MOBILE_BREAKPOINT = 720;
 
 export default function ChatLayout() {
-  const { session } = useAuthStore();
+  const { user } = useAuthStore();
   const [activeRoom, setActiveRoom] = useState(null);
   const [activeConvo, setActiveConvo] = useState(null);
   const [activeView, setActiveView] = useState(null);
