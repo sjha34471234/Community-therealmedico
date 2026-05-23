@@ -24,6 +24,7 @@ import KarmaTag from '@/components/KarmaTag';
 import ProfileFollowBlock from '@/components/ProfileFollowBlock';
 import Avatar from '@/components/Avatar';
 import '@/app/profile/profile.css';
+import ProfileMessageButton from '@/components/ProfileMessageButton';
 
 export const revalidate = 60;
 
