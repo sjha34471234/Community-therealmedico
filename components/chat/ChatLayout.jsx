@@ -13,6 +13,7 @@
 // --- CHANGE LOG ---
 // [May 23, 2026] CREATED: Phase 12 Chat — master layout, sidebar + view wiring
 // [May 23, 2026] FIXED: Mangled sign-in block replaced — iPad clipboard corruption
+// [May 23, 2026] UPDATED: Added sessionStorage useEffect — auto-opens DM from profile Message button
 // --- END CHANGE LOG ---
 
 'use client';
