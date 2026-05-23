@@ -33,7 +33,7 @@ import useAuthStore from '@/store/authStore';
 const PAGE_SIZE = 10;
 
 export default function UserSearchModal({ onSelectConvo, onClose }) {
-  const { session, profile } = useAuthStore();
+  const { user, accessToken } = useAuthStore();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
