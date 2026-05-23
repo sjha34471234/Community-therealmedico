@@ -151,6 +151,7 @@ export default async function ProfilePage({ params }) {
             initialFollowerCount={followerCount ?? 0}
             followingCount={followingCount ?? 0}
           />
+          <ProfileMessageButton targetUserId={profile.id} />
         </div>
       </div>
 
