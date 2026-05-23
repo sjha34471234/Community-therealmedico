@@ -6,6 +6,7 @@
 // LAST CHANGED: May 22, 2026
 // DEPENDENCIES: components/Avatar.jsx, lib/avatarConfig.js,
 //               app/api/avatar/route.js, store/authStore.js
+// ⚠️ DO NOT CHANGE: Avatar prop is avatarRow — NOT avatar (rule in Avatar.jsx)
 // ============================================================
 
 'use client'
@@ -107,7 +108,11 @@ export default function AvatarSettings() {
 
       {/* Live preview */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '28px', padding: '20px', background: 'var(--bg-secondary)', borderRadius: '12px' }}>
-        <Avatar avatar={avatar} username={profile?.community_username || user?.email} size="xl" />
+        {/* --- WHY THIS CODE EXISTS ---
+            avatarRow={avatar} — NOT avatar={avatar}.
+            Avatar.jsx expects the prop named avatarRow.
+            Using avatar= here caused the preview to always show defaults. */}
+        <Avatar avatarRow={avatar} username={profile?.community_username || user?.email} size="xl" />
         <div>
           <p style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-primary)', margin: '0 0 4px' }}>{profile?.community_username || 'Your username'}</p>
           <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: 0 }}>Live preview</p>
@@ -275,4 +280,7 @@ export default function AvatarSettings() {
 //               Removed Cross, Hospital, Biohazard, ClipboardList, Accessibility,
 //               Radiation, FlaskRound, HeartPulse, Bandage, ScanLine, Ambulance,
 //               BedDouble, ShieldPlus, TestTube, Virus — none exist in v0.303
+// [May 22, 2026] FIXED: Live preview prop renamed from avatar= to avatarRow=
+//               CAUSE: Avatar.jsx expects avatarRow — using avatar= passed undefined,
+//               so preview always showed default stethoscope regardless of selection.
 // --- END CHANGE LOG ---
