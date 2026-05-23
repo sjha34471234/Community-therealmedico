@@ -486,10 +486,17 @@ export default function RoomView({ room }) {
                 fontWeight: 600,
                 textDecoration: 'none',
               }}
-            >
-              Sign in
-            </a>
-            {' '}to join the conversation
+            ) : (
+          // Guest — show sign in prompt instead of input
+          <div
+            style={{
+              textAlign: 'center',
+              padding: '10px',
+              fontSize: '13px',
+              color: 'var(--text-muted)',
+              fontFamily: 'Inter, sans-serif',
+            }}
+          >
           </div>
         )}
 
