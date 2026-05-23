@@ -114,7 +114,7 @@ export default function ChatLayout() {
             <div style={{ fontSize: '40px' }}>💬</div>
             <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>Welcome to The Real Medico Chat</div>
             <div style={{ fontSize: '13px', maxWidth: '300px', lineHeight: 1.6 }}>Pick a room to join a discussion, or start a direct message with someone.</div>
-            {!session && (
+            {!user && (
               <div style={{ fontSize: '13px', marginTop: '8px' }}>
                 <a href="/auth" style={{ color: 'var(--accent-primary)', fontWeight: 600, textDecoration: 'none' }}>Sign in</a>
                 {' '}to send messages
