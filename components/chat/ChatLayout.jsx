@@ -240,7 +240,12 @@ export default function ChatLayout() {
                   }}
                 {!session && (
                 <div style={{ fontSize: '13px', marginTop: '8px' }}>
-                  <a href="/auth" style={{ color: 'var(--accent-primary)', fontWeight: 600, textDecoration: 'none' }}>Sign in</a>
+                  {!session && (
+  <div style={{ fontSize: '13px', marginTop: '8px' }}>
+    <a href="/auth" style={{ color: 'var(--accent-primary)', fontWeight: 600, textDecoration: 'none' }}>Sign in</a>
+    {' '}to send messages
+  </div>
+)}
                   {' '}to send messages
                 </div>
               )}
