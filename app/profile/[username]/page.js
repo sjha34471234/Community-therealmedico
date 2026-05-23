@@ -189,7 +189,9 @@ export default async function ProfilePage({ params }) {
 // [May 19, 2026] UPDATED: Replaced inline stats+FollowButton with ProfileFollowBlock.
 // REASON: ISR cache meant follower count never updated after a follow/unfollow.
 //         ProfileFollowBlock is a client component that owns the live count.
-// [May 22, 2026] UPDATED: Avatar system wired in.
+// [May 23, 2026] UPDATED: Message button added — Phase 12 Chat.
+// ProfileMessageButton renders below ProfileFollowBlock.
+// Hidden on own profile and for guests — client component handles both checks.
 // REASON: Profile page was showing a letter-initial placeholder div instead of the
 //         real Avatar component. Added community_avatars fetch (avatarRow) and
 //         replaced the old div with <Avatar size="lg" />.
