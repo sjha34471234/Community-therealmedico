@@ -24,7 +24,7 @@ import DMList from './DMList';
 import RoomView from './RoomView';
 import DMView from './DMView';
 import UserSearchModal from './UserSearchModal';
-import { useAuthStore } from '@/store/authStore';
+import useAuthStore from '@/store/authStore';
 
 const MOBILE_BREAKPOINT = 720;
 
