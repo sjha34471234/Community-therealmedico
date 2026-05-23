@@ -21,7 +21,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Send, Loader } from 'lucide-react';
 import MessageBubble from './MessageBubble';
-import { useAuthStore } from '@/store/authStore';
+import useAuthStore from '@/store/authStore';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseClient = createClient(
