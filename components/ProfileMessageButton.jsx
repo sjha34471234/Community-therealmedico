@@ -27,7 +27,7 @@ import { MessageCircle } from 'lucide-react';
 import useAuthStore from '@/store/authStore';
 
 export default function ProfileMessageButton({ targetUserId }) {
-  const { session, profile } = useAuthStore();
+  const { user, accessToken } = useAuthStore();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
