@@ -64,7 +64,8 @@ export async function GET(request) {
 
     let query = supabase
       .from('community_questions')
-      .select('id, slug, title, body, tags, upvotes, view_count, answer_count, is_answered, is_pinned, last_activity_at, created_at, user_id')
+      .select('id, slug, title, body, tags, upvotes, downvotes, view_count, answer_count, is_answered, is_pinned, last_activity_at, created_at, user_id')
+      .eq('is_hidden', false)
       .range(offset, offset + limit - 1)
 
     if (sort === 'new') {
