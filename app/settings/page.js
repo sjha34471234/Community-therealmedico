@@ -103,6 +103,11 @@ export default function SettingsPage() {
     <div className="settings-page">
       <h1>Settings</h1>
 
+      {/* ── Mod section — above tabs so it's immediately visible to mods ── */}
+      {(profile && (profile.is_mod || isAdmin)) && (
+        <ModSettings isAdmin={isAdmin} />
+      )}
+
       {/* ── Main settings tabs ── */}
       <nav className="settings-tabs" aria-label="Settings tabs">
         {TABS.map((tab) => (
@@ -129,12 +134,4 @@ export default function SettingsPage() {
         ))}
       </div>
 
-      {/* ── Mod section — only renders if profile.is_mod or isAdmin ── */}
-      {/* ⚠️ WARNING: ModSettings gates itself internally too —        */}
-      {/*             this outer check just avoids a redundant render  */}
-      {(profile && (profile.is_mod || isAdmin)) && (
-        <ModSettings isAdmin={isAdmin} />
-      )}
-    </div>
-  );
-}
+   
