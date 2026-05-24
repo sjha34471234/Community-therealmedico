@@ -39,6 +39,7 @@ import VoteButton from '@/components/VoteButton'
 import AnswerFeed from '@/components/AnswerFeed'
 import toast from 'react-hot-toast'
 import { CheckCircle, Eye, Clock, User, Send, AlertCircle, LogIn, MessageSquare, X, PenLine } from 'lucide-react'
+import ReportButton from '@/components/ReportButton'
 
 const supabase = createClient()
 const ANSWER_MAX = 5000
@@ -188,12 +189,19 @@ export default function QuestionDetail({ question, answers: initialAnswers, auth
 
             <div style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '0.95rem', color: 'var(--text-primary)', lineHeight: 1.8, whiteSpace: 'pre-wrap', wordBreak: 'break-word', marginBottom: '24px', paddingBottom: '20px', borderBottom: '1px solid var(--bg-tertiary)' }}>{question.body}</div>
 
-            <VoteButton
-              score={getScore(question.id)}
-              userVote={getVote(question.id)}
-              onUpvote={function() { vote(question.id, null, 1) }}
-              onDownvote={function() { vote(question.id, null, -1) }}
-            />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+              <VoteButton
+                score={getScore(question.id)}
+                userVote={getVote(question.id)}
+                onUpvote={function() { vote(question.id, null, 1) }}
+                onDownvote={function() { vote(question.id, null, -1) }}
+              />
+              <ReportButton
+                contentType="question"
+                contentId={question.id}
+                ownerId={question.user_id}
+              />
+            </div>
           </article>
 
           {/* Answer feed */}
