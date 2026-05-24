@@ -8,6 +8,16 @@
    ⚠️ DO NOT CHANGE: CSS variable names — they match globals.css tokens
    ============================================================ */
 
+/* ── Hide footer on settings page — all screen sizes ── */
+/* ⚠️ WARNING: Do not remove — footer shows on /settings without this */
+body:has(.settings-page) footer {
+  display: none !important;
+}
+
+/* Remove the bottom gap that was reserved for footer */
+body:has(.settings-page) #page-scroll-container {
+  padding-bottom: 0 !important;
+}
 /* ─── Page wrapper ─────────────────────────────────────────── */
 .settings-page {
   max-width: 768px;
