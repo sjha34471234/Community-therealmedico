@@ -202,4 +202,10 @@ export default async function ProfilePage({ params }) {
 //         real Avatar component. Added community_avatars fetch (avatarRow) and
 //         replaced the old div with <Avatar size="lg" />.
 //         Removed the old `initial` variable — no longer needed.
+// [May 2026]     UPDATED: Block button added — Phase 13 Moderation.
+//                BlockButton renders below ProfileMessageButton.
+//                variant="button" = full pill with text.
+//                Hides itself for own profile and guests — client component handles both.
 // --- END CHANGE LOG ---
+
+
