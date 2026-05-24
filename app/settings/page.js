@@ -1,23 +1,11 @@
 // ============================================================
 // FILE: app/settings/page.js
-// PURPOSE: Settings page shell — tab router, auth guard, metadata
 // LAST CHANGED: May 2026
-// WHY IT EXISTS: Entry point for /settings. Imports the four tab
-//                components and switches between them. Auth-gated —
-//                redirects to /auth if not logged in.
-// DEPENDENCIES: components/settings/*.jsx, app/settings/settings.css,
-//               store/authStore.js
-// ⚠️ DO NOT CHANGE: Must have noindex metadata — private page (rule #26).
-//                   Tab switching is client-side only — URL must NOT change.
-//                   Page file stays as a shell — no business logic here.
 // ============================================================
-
 // --- CHANGE LOG ---
 // [May 17, 2026] CREATED: Phase 8 — settings page shell
-// [May 21, 2026] UPDATED: Added Avatar tab — first tab, opens by default
-// [May 2026]     UPDATED: Phase 13 — ModSettings section added at bottom
-//                         isAdmin check via GET /api/mod/promote
-//                         Added profile + accessToken to authStore destructure
+// [May 21, 2026] UPDATED: Added Avatar tab
+// [May 2026]     UPDATED: Phase 13 — ModSettings added above tabs
 // --- END CHANGE LOG ---
 
 'use client';
@@ -42,18 +30,10 @@ const TABS = [
 ];
 
 export default function SettingsPage() {
-  // ⚠️ WARNING: accessToken and profile added in Phase 13 for mod check
-  // Do not remove — ModSettings and isAdmin check depend on them
   const { user, loading, profile, accessToken } = useAuthStore();
   const router = useRouter();
 
   const [activeTab, setActiveTab] = useState('avatar');
-
-  // ── isAdmin check ──
-  // ADMIN_USER_ID is a server-only env var — we cannot read it client-side
-  // Safest way: call GET /api/mod/promote — 200 = admin, 403 = not admin
-  // ⚠️ WARNING: Do not replace this with a client-side ID comparison —
-  //             env vars are not exposed to the browser
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
@@ -62,9 +42,11 @@ export default function SettingsPage() {
     }
   }, [user, loading, router]);
 
+  // ── Admin check via GET /api/mod/promote ──
+  // ⚠️ WARNING: ADMIN_USER_ID is server-only — cannot read client-side
+  // 200 = admin, 403 = not admin
   useEffect(() => {
     if (!accessToken || !profile) return;
-
     async function checkAdmin() {
       try {
         const res = await fetch('/api/mod/promote', {
@@ -76,7 +58,6 @@ export default function SettingsPage() {
         setIsAdmin(false);
       }
     }
-
     checkAdmin();
   }, [accessToken, profile]);
 
@@ -103,7 +84,8 @@ export default function SettingsPage() {
     <div className="settings-page">
       <h1>Settings</h1>
 
-      {/* ── Mod section — above tabs so it's immediately visible to mods ── */}
+      {/* ── Mod panel — RIGHT after heading, before everything else ── */}
+      {/* Only renders for mods and admin — invisible to regular users  */}
       {(profile && (profile.is_mod || isAdmin)) && (
         <ModSettings isAdmin={isAdmin} />
       )}
@@ -134,4 +116,6 @@ export default function SettingsPage() {
         ))}
       </div>
 
-   
+    </div>
+  );
+}
