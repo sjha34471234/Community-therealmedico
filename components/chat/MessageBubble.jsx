@@ -16,6 +16,7 @@
 'use client';
 
 import Avatar from '@/components/Avatar';
+import ReportButton from '@/components/ReportButton';
 
 function formatTime(isoString) {
   if (!isoString) return '';
@@ -65,6 +66,19 @@ export default function MessageBubble({ message, isDM = false }) {
           <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '3px', fontFamily: 'Inter, sans-serif' }}>{formatTime(created_at)}</span>
         )}
 
+        {/* Report button — room messages only, never on own messages or DMs */}
+        {/* ⚠️ WARNING: Do not show on DMs — DM messages use a different report flow */}
+        {/* ⚠️ WARNING: Do not show on sentByMe messages — cannot report own content */}
+        {!isDM && !sentByMe && message.user_id && (
+          <div style={{ marginTop: '3px' }}>
+            <ReportButton
+              contentType="room_message"
+              contentId={message.id}
+              ownerId={message.user_id}
+              size="xs"
+            />
+          </div>
+        )}
       </div>
     </div>
   );
