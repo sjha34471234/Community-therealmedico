@@ -16,6 +16,8 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Send, Loader, ChevronLeft } from 'lucide-react';
+import ReportButton from '@/components/ReportButton';
+import BlockButton from '@/components/BlockButton';
 import MessageBubble from './MessageBubble';
 import Avatar from '@/components/Avatar';
 import useAuthStore from '@/store/authStore';
@@ -193,13 +195,21 @@ export default function DMView({ convo, onBack }) {
           </button>
         )}
         <Avatar avatarRow={other?.avatar} username={other?.username} size="sm" />
-        <div>
+        <div style={{ flex: 1 }}>
           <div style={{ fontSize: '15px', fontWeight: 700, color: other?.is_member ? '#B8860B' : 'var(--text-primary)', fontFamily: 'Inter, sans-serif' }}>
             {other?.username || 'Unknown'}
             {other?.is_member && <span style={{ marginLeft: '5px', fontSize: '10px', color: '#B8860B', border: '1px solid #D4AF37', borderRadius: '3px', padding: '0 3px', fontWeight: 700 }}>✦</span>}
           </div>
           <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'Inter, sans-serif' }}>🔒 End-to-end encrypted</div>
         </div>
+        {/* Block button — icon variant, sits in header */}
+        {other?.id && (
+          <BlockButton
+            targetUserId={other.id}
+            targetUsername={other.username || 'this user'}
+            variant="icon"
+          />
+        )}
       </div>
 
       <div ref={scrollRef} onScroll={handleScroll} style={{ flex: 1, overflowY: 'auto', padding: '8px 0', display: 'flex', flexDirection: 'column' }}>
