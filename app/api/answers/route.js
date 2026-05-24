@@ -70,6 +70,7 @@ export async function GET(request) {
       .from('community_answers')
       .select('id, body, upvotes, downvotes, is_accepted, created_at, user_id, parent_id')
       .eq('question_id', questionId)
+      .eq('is_hidden', false)
       .range(offset, offset + limit - 1)
 
     if (parentId) {
@@ -100,8 +101,8 @@ export async function GET(request) {
 
     // Get reply counts for top-level answers
     let replyCounts = {}
-    if (!parentId && list.length > 0) {
-      const answerIds = list.map(function getId(a) { return a.id })
+    if (!parentId && filteredList.length > 0) {
+      const answerIds = filteredList.map(function getId(a) { return a.id })
       const { data: counts } = await db
         .from('community_answers')
         .select('parent_id')
@@ -113,8 +114,39 @@ export async function GET(request) {
       }
     }
 
+    // ── Block filtering ──
+    // If the requester passes their userId, filter out answers from blocked users.
+    // Checks both directions — A blocks B and B blocks A.
+    // ⚠️ WARNING: requesterId comes from query param — never trust it for auth writes
+    //             It is only used for read-side filtering here — safe to use as param
+    const requesterId = searchParams.get('userId') || null
+    let filteredList = list
+
+    if (requesterId) {
+      try {
+        const { data: blocks } = await db
+          .from('community_blocks')
+          .select('blocker_id, blocked_id')
+          .or('blocker_id.eq.' + requesterId + ',blocked_id.eq.' + requesterId)
+
+        if (blocks && blocks.length > 0) {
+          const blockedUserIds = new Set()
+          blocks.forEach(function collectBlocked(b) {
+            if (b.blocker_id === requesterId) blockedUserIds.add(b.blocked_id)
+            if (b.blocked_id === requesterId) blockedUserIds.add(b.blocker_id)
+          })
+          filteredList = list.filter(function filterBlocked(a) {
+            return !blockedUserIds.has(a.user_id)
+          })
+        }
+      } catch {
+        // Block filter failure should never break the answer feed — fail open
+        filteredList = list
+      }
+    }
+
     // Fetch author profiles
-    const userIds = Array.from(new Set(list.map(function getId(a) { return a.user_id }).filter(Boolean)))
+    const userIds = Array.from(new Set(filteredList.map(function getId(a) { return a.user_id }).filter(Boolean)))
     let profileMap = {}
     if (userIds.length > 0) {
       const { data: profiles } = await db
@@ -126,7 +158,7 @@ export async function GET(request) {
       }
     }
 
-    const final = list.map(function attach(a) {
+      const final = filteredList.map(function attach(a) {
       const profile = profileMap[a.user_id] || null
       return {
         ...a,
@@ -301,4 +333,7 @@ export async function POST(request) {
 // [May 20, 2026] FIXED: awardKarma calls added
 // [May 21, 2026] UPDATED: parent_id support for replies, sort + pagination,
 //               reply_count in response, new_reply notification
+// [May 2026]     UPDATED: Phase 13 — is_hidden filter added to GET query.
+//                Block filtering added — answers from blocked users hidden.
+//                Checks both directions: A blocks B and B blocks A.
 // --- END CHANGE LOG ---
