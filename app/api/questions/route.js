@@ -275,22 +275,24 @@ export async function POST(request) {
     // Insert question
     const now = new Date().toISOString()
     const { data: inserted, error: insertError } = await supabase
-      .from('community_questions')
-      .insert({
-        slug,
-        title: title.trim(),
-        body: questionBody.trim(),
-        tags: cleanTags,
-        user_id: user.id,
-        upvotes: 0,
-        view_count: 0,
-        answer_count: 0,
-        is_answered: false,
-        is_pinned: false,
-        last_activity_at: now,
-        created_at: now,
-        updated_at: now,
-      })
+        .from('community_questions')
+        .insert({
+          slug,
+          title: title.trim(),
+          body: questionBody.trim(),
+          tags: cleanTags,
+          user_id: user.id,
+          upvotes: 0,
+          downvotes: 0,
+          view_count: 0,
+          answer_count: 0,
+          is_answered: false,
+          is_pinned: false,
+          is_hidden: false,
+          last_activity_at: now,
+          created_at: now,
+          updated_at: now,
+        })
       .select('id, slug')
       .single()
 
