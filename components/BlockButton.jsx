@@ -57,13 +57,11 @@ export default function BlockButton({
   const [working, setWorking]       = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  // Do not render for own profile or when not signed in
-  if (!user || !accessToken) return null;
-  if (targetUserId === user.id) return null;
-
   // ── Load initial block status on mount ──
+  // ⚠️ WARNING: useEffect MUST be before any conditional returns — Rules of Hooks
+  // If conditions below mean we return null, useEffect still runs but does nothing
   useEffect(() => {
-    if (!targetUserId || !accessToken) return;
+    if (!targetUserId || !accessToken || !user || targetUserId === user.id) return;
 
     let cancelled = false;
 
@@ -88,7 +86,11 @@ export default function BlockButton({
 
     fetchBlockStatus();
     return () => { cancelled = true; };
-  }, [targetUserId, accessToken]);
+  }, [targetUserId, accessToken, user]);
+
+  // Do not render if not signed in or viewing own profile
+  if (!user || !accessToken) return null;
+  if (targetUserId === user.id) return null;
 
   // ── Block action ──
   async function handleBlock() {
