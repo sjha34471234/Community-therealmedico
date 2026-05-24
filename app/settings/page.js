@@ -5,8 +5,8 @@
 // --- CHANGE LOG ---
 // [May 17, 2026] CREATED: Phase 8 — settings page shell
 // [May 21, 2026] UPDATED: Added Avatar tab
-// [May 2026]     UPDATED: Phase 13 — ModSettings between tab bar and content
-//                Footer hidden on settings page via settings.css
+// [May 2026]     UPDATED: Phase 13 — Moderation tab added (mod/admin only)
+//                Footer hidden on settings page
 // --- END CHANGE LOG ---
 
 'use client';
@@ -21,14 +21,6 @@ import AccountSettings from '@/components/settings/AccountSettings';
 import AvatarSettings from '@/components/settings/AvatarSettings';
 import ModSettings from '@/components/settings/ModSettings';
 import '@/app/settings/settings.css';
-
-const TABS = [
-  { id: 'avatar',        label: 'Avatar' },
-  { id: 'profile',       label: 'Profile' },
-  { id: 'membership',    label: 'Membership' },
-  { id: 'notifications', label: 'Notifications' },
-  { id: 'account',       label: 'Account' },
-];
 
 export default function SettingsPage() {
   const { user, loading, profile, accessToken } = useAuthStore();
@@ -72,12 +64,26 @@ export default function SettingsPage() {
 
   if (!user) return null;
 
+  // ── Build tab list ──
+  // Moderation tab only appears for mods and admin
+  const isMod = profile && (profile.is_mod || isAdmin);
+
+  const TABS = [
+    { id: 'avatar',        label: 'Avatar' },
+    { id: 'profile',       label: 'Profile' },
+    { id: 'membership',    label: 'Membership' },
+    { id: 'notifications', label: 'Notifications' },
+    { id: 'account',       label: 'Account' },
+    ...(isMod ? [{ id: 'moderation', label: '🛡️ Moderation' }] : []),
+  ];
+
   function renderTab() {
     if (activeTab === 'avatar')        return <AvatarSettings />;
     if (activeTab === 'profile')       return <ProfileSettings />;
     if (activeTab === 'membership')    return <MembershipSettings />;
     if (activeTab === 'notifications') return <NotificationSettings />;
     if (activeTab === 'account')       return <AccountSettings />;
+    if (activeTab === 'moderation' && isMod) return <ModSettings isAdmin={isAdmin} />;
     return null;
   }
 
@@ -85,7 +91,6 @@ export default function SettingsPage() {
     <div className="settings-page">
       <h1>Settings</h1>
 
-      {/* ── Main settings tabs ── */}
       <nav className="settings-tabs" aria-label="Settings tabs">
         {TABS.map((tab) => (
           <button
@@ -99,13 +104,6 @@ export default function SettingsPage() {
         ))}
       </nav>
 
-      {/* ── Mod panel — between tab bar and tab content ── */}
-      {/* Only renders for mods and admin — invisible to regular users */}
-      {(profile && (profile.is_mod || isAdmin)) && (
-        <ModSettings isAdmin={isAdmin} />
-      )}
-
-      {/* ── Tab content ── */}
       <div>
         {TABS.map((tab) => (
           <div
