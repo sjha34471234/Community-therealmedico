@@ -5,7 +5,8 @@
 // --- CHANGE LOG ---
 // [May 17, 2026] CREATED: Phase 8 — settings page shell
 // [May 21, 2026] UPDATED: Added Avatar tab
-// [May 2026]     UPDATED: Phase 13 — ModSettings added above tabs
+// [May 2026]     UPDATED: Phase 13 — ModSettings between tab bar and content
+//                Footer hidden on settings page via settings.css
 // --- END CHANGE LOG ---
 
 'use client';
@@ -84,12 +85,6 @@ export default function SettingsPage() {
     <div className="settings-page">
       <h1>Settings</h1>
 
-      {/* ── Mod panel — RIGHT after heading, before everything else ── */}
-      {/* Only renders for mods and admin — invisible to regular users  */}
-      {(profile && (profile.is_mod || isAdmin)) && (
-        <ModSettings isAdmin={isAdmin} />
-      )}
-
       {/* ── Main settings tabs ── */}
       <nav className="settings-tabs" aria-label="Settings tabs">
         {TABS.map((tab) => (
@@ -104,6 +99,13 @@ export default function SettingsPage() {
         ))}
       </nav>
 
+      {/* ── Mod panel — between tab bar and tab content ── */}
+      {/* Only renders for mods and admin — invisible to regular users */}
+      {(profile && (profile.is_mod || isAdmin)) && (
+        <ModSettings isAdmin={isAdmin} />
+      )}
+
+      {/* ── Tab content ── */}
       <div>
         {TABS.map((tab) => (
           <div
