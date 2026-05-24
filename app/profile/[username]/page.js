@@ -25,6 +25,7 @@ import ProfileFollowBlock from '@/components/ProfileFollowBlock';
 import Avatar from '@/components/Avatar';
 import '@/app/profile/profile.css';
 import ProfileMessageButton from '@/components/ProfileMessageButton';
+import BlockButton from '@/components/BlockButton';
 
 export const revalidate = 60;
 
@@ -152,6 +153,11 @@ export default async function ProfilePage({ params }) {
             followingCount={followingCount ?? 0}
           />
           <ProfileMessageButton targetUserId={profile.id} />
+          <BlockButton
+            targetUserId={profile.id}
+            targetUsername={profile.community_username}
+            variant="button"
+          />
         </div>
       </div>
 
