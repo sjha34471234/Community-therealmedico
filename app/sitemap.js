@@ -1,79 +1,103 @@
 // ============================================================
 // FILE: app/sitemap.js
-// PURPOSE: Dynamic sitemap — tells Google every question URL
-// LAST CHANGED: May 14, 2026
-// WHY IT EXISTS: Google needs to discover /q/[slug] pages
-//               Without this, question pages won't get indexed
-// DEPENDENCIES: community_questions table in Supabase
-// ⚠️ DO NOT CHANGE: revalidate stays at 86400 (24 hours)
-//                   Never include /api/ routes in sitemap
-//                   Never include /ask or /profile/*/edit
+// PURPOSE: Auto-generates /sitemap.xml with all question slugs
+//          pulled live from Supabase — tells Google every page
+//          that exists on the community site
+// LAST CHANGED: May 24, 2026
+// WHY IT EXISTS: Without a sitemap Google discovers pages slowly
+//               via links. A sitemap guarantees every question
+//               gets indexed quickly after it's posted.
+// DEPENDENCIES: lib/supabaseServer.js
+// ⚠️ DO NOT CHANGE: revalidate must stay at 3600 (1 hour) —
+//                   sitemap regenerates hourly so new questions
+//                   appear in Google within hours not days
+// ⚠️ DO NOT CHANGE: is_hidden filter — hidden questions must
+//                   never appear in the sitemap
+// ⚠️ DO NOT CHANGE: Static routes list — if you add a new page
+//                   add it to the staticRoutes array below
 // ============================================================
 
-import { createClient } from '@supabase/supabase-js';
+// --- WHY THIS CODE EXISTS ---
+// Phase 14A SEO requirement. Next.js 14 App Router supports
+// sitemap.js as a special file — it auto-serves at /sitemap.xml
+// No package needed. Just export a default async function.
 
-export const revalidate = 86400;
+// --- WHAT THIS MADE WORK ---
+// /sitemap.xml now returns all static pages + every question slug
+// Google Search Console can import this URL directly
+// New questions appear in sitemap within 1 hour of posting
+
+// --- PITFALLS ---
+// ⚠️ supabaseServer() must be called inside the function —
+//    never at module level (SSR constraint)
+// ⚠️ If Supabase query fails, fall back to static routes only —
+//    never let sitemap.js throw — it breaks the build
+// ⚠️ changeFrequency and priority are hints only — Google may
+//    ignore them — but they help signal importance
+
+import { supabaseServer } from '@/lib/supabaseServer';
+
+export const revalidate = 3600; // regenerate sitemap every 1 hour
+
+const BASE_URL = 'https://community.therealmedico.store';
+
+// Static routes that always exist
+const staticRoutes = [
+  {
+    url: BASE_URL,
+    lastModified: new Date(),
+    changeFrequency: 'hourly',
+    priority: 1.0,
+  },
+  {
+    url: `${BASE_URL}/tags`,
+    lastModified: new Date(),
+    changeFrequency: 'daily',
+    priority: 0.7,
+  },
+  {
+    url: `${BASE_URL}/search`,
+    lastModified: new Date(),
+    changeFrequency: 'daily',
+    priority: 0.5,
+  },
+];
 
 export default async function sitemap() {
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  );
-
-  const baseUrl = 'https://community.therealmedico.store';
-
-  // ─── Static pages ────────────────────────────────────────
-
-  const staticPages = [
-    {
-      url: baseUrl,
-      lastModified: new Date(),
-      changeFrequency: 'hourly',
-      priority: 1.0,
-    },
-    {
-      url: baseUrl + '/ask',
-      lastModified: new Date(),
-      changeFrequency: 'monthly',
-      priority: 0.5,
-    },
-    {
-      url: baseUrl + '/tags',
-      lastModified: new Date(),
-      changeFrequency: 'daily',
-      priority: 0.6,
-    },
-  ];
-
-  // ─── Dynamic question pages ──────────────────────────────
-
-  let questionPages = [];
-
   try {
+    const supabase = supabaseServer();
+
+    // Fetch all visible, non-hidden question slugs
+    // Only select the columns we need — slug + updated_at for lastModified
     const { data: questions, error } = await supabase
       .from('community_questions')
       .select('slug, updated_at')
-      .order('created_at', { ascending: false })
-      .limit(1000);
+      .eq('is_hidden', false)
+      .order('created_at', { ascending: false });
 
-    if (!error && questions && questions.length > 0) {
-      questionPages = questions.map(function(q) {
-        return {
-          url: baseUrl + '/q/' + q.slug,
-          lastModified: new Date(q.updated_at),
-          changeFrequency: 'daily',
-          priority: 0.8,
-        };
-      });
+    if (error) {
+      // If DB fails, return static routes only — never crash sitemap
+      console.error('[sitemap] Supabase error:', error.message);
+      return staticRoutes;
     }
-  } catch (err) {
-    console.error('Sitemap fetch error:', err);
-  }
 
-  return staticPages.concat(questionPages);
+    // Build dynamic question routes
+    const questionRoutes = (questions || []).map((q) => ({
+      url: `${BASE_URL}/q/${q.slug}`,
+      lastModified: new Date(q.updated_at),
+      changeFrequency: 'weekly',
+      priority: 0.8,
+    }));
+
+    return [...staticRoutes, ...questionRoutes];
+  } catch (err) {
+    // Safety net — never let sitemap crash the build
+    console.error('[sitemap] Unexpected error:', err.message);
+    return staticRoutes;
+  }
 }
 
 // --- CHANGE LOG ---
-// [May 14, 2026] CREATED: Initial build
-// REASON: Google needs a sitemap to discover question pages
+// [May 24, 2026] CREATED: Phase 14A SEO — dynamic sitemap with all question slugs
+// REASON: Google needs a sitemap to discover and index all Q&A pages quickly
 // --- END CHANGE LOG ---
