@@ -316,6 +316,10 @@ export async function POST(request) {
 // [May 19, 2026] FIXED: Auth switched from cookie-based to Bearer token (rule #36).
 //               Removed createClient cookie approach — iPad drops cookies on API calls.
 //               Now uses supabaseServer().auth.getUser(token) consistently.
+// [May 2026]     UPDATED: Phase 13 — is_hidden filter added to GET query.
+//                downvotes added to SELECT and POST insert.
+//                Block filtering added — questions from blocked users hidden from feed.
+//                Checks both directions: A blocks B and B blocks A.
 // [May 22, 2026] UPDATED: Avatar data added to GET response.
 //               Added bulk community_avatars query using same userIds already collected.
 //               author_avatar (avatarRow) now attached to every question in final[].
