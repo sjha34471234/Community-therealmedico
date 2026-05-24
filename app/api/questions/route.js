@@ -126,6 +126,32 @@ export async function GET(request) {
       })
     }
 
+    // ── Block filtering ──
+    // If a userId is provided, fetch all block relationships involving them.
+    // Filter out questions from users they have blocked OR who have blocked them.
+    // ⚠️ WARNING: Check BOTH directions — A blocks B AND B blocks A
+    if (userId) {
+      try {
+        const { data: blocks } = await supabase
+          .from('community_blocks')
+          .select('blocker_id, blocked_id')
+          .or('blocker_id.eq.' + userId + ',blocked_id.eq.' + userId)
+
+        if (blocks && blocks.length > 0) {
+          const blockedUserIds = new Set()
+          blocks.forEach(function collectBlocked(b) {
+            if (b.blocker_id === userId) blockedUserIds.add(b.blocked_id)
+            if (b.blocked_id === userId) blockedUserIds.add(b.blocker_id)
+          })
+          processed = processed.filter(function filterBlocked(q) {
+            return !blockedUserIds.has(q.user_id)
+          })
+        }
+      } catch {
+        // Block filter failure should never break the feed — fail open
+      }
+    }
+
     // Fetch author usernames + member status
     const userIds = Array.from(new Set(processed.map(function getId(q) { return q.user_id }).filter(Boolean)))
     let profileMap = {}
