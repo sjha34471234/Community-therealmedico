@@ -1,0 +1,290 @@
+/* ============================================================
+   FILE: app/admin/errors/admin-errors.css
+   PURPOSE: Styles for the developer error console
+   LAST CHANGED: May 24, 2026
+   WHY IT EXISTS: Per-page CSS rule from architecture mandate
+   ============================================================ */
+
+.admin-errors-page {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 6rem;
+  font-family: Inter, system-ui, sans-serif;
+}
+
+.admin-errors-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1.5rem;
+}
+
+.admin-errors-header h1 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text-primary, #1A1D23);
+  margin: 0 0 4px;
+}
+
+.admin-errors-header p {
+  font-size: 0.85rem;
+  color: var(--text-muted, #9AA0AE);
+  margin: 0;
+}
+
+.admin-refresh-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-secondary, #EAECF0);
+  border: none;
+  border-radius: 8px;
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary, #5B6474);
+  cursor: pointer;
+}
+
+.admin-refresh-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Filters */
+.admin-errors-filters {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
+  padding: 1rem;
+  background: var(--bg-secondary, #EAECF0);
+  border-radius: 10px;
+}
+
+.admin-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--text-secondary, #5B6474);
+}
+
+.admin-filter-group select {
+  border: 1px solid var(--bg-tertiary, #D8DBE2);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 0.85rem;
+  color: var(--text-primary, #1A1D23);
+  background: #fff;
+  cursor: pointer;
+}
+
+/* States */
+.admin-errors-loading,
+.admin-errors-empty,
+.admin-errors-denied {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 3rem 1rem;
+  color: var(--text-muted, #9AA0AE);
+  font-size: 0.95rem;
+  text-align: center;
+}
+
+/* Error cards */
+.admin-errors-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.admin-error-card {
+  background: #fff;
+  border: 1px solid var(--bg-tertiary, #D8DBE2);
+  border-radius: 12px;
+  padding: 1.25rem;
+}
+
+.admin-error-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.admin-error-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.admin-error-source {
+  font-size: 0.78rem;
+  color: var(--text-secondary, #5B6474);
+}
+
+.admin-error-stats {
+  display: flex;
+  gap: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary, #5B6474);
+  font-weight: 500;
+}
+
+.admin-error-message {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary, #1A1D23);
+  margin: 0 0 0.5rem;
+  word-break: break-word;
+}
+
+.admin-error-url {
+  font-size: 0.78rem;
+  color: var(--accent-primary, #1D6FA4);
+  margin: 0 0 0.5rem;
+  font-family: monospace;
+}
+
+.admin-error-user-desc {
+  background: var(--accent-light, #EBF4FB);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+  color: var(--text-primary, #1A1D23);
+  margin-bottom: 0.5rem;
+}
+
+.admin-error-times {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.78rem;
+  color: var(--text-muted, #9AA0AE);
+  margin-bottom: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.admin-stack-toggle {
+  background: none;
+  border: none;
+  font-size: 0.8rem;
+  color: var(--accent-primary, #1D6FA4);
+  cursor: pointer;
+  padding: 0;
+  margin-bottom: 0.5rem;
+  text-decoration: underline;
+}
+
+.admin-error-stack {
+  background: #1A1D23;
+  color: #A8FF78;
+  border-radius: 8px;
+  padding: 0.75rem;
+  font-size: 0.72rem;
+  overflow-x: auto;
+  margin-bottom: 0.75rem;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* Actions */
+.admin-error-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 0.75rem;
+}
+
+.admin-resolution-input {
+  flex: 1;
+  min-width: 160px;
+  border: 1px solid var(--bg-tertiary, #D8DBE2);
+  border-radius: 6px;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.83rem;
+  color: var(--text-primary, #1A1D23);
+  outline: none;
+}
+
+.admin-btn-resolve {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #F0FDF4;
+  color: #2E7D32;
+  border: 1px solid #A7F3D0;
+  border-radius: 6px;
+  padding: 0.4rem 0.85rem;
+  font-size: 0.83rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.admin-btn-ignore {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-secondary, #EAECF0);
+  color: var(--text-secondary, #5B6474);
+  border: none;
+  border-radius: 6px;
+  padding: 0.4rem 0.85rem;
+  font-size: 0.83rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.admin-btn-reopen {
+  background: none;
+  border: 1px solid var(--bg-tertiary, #D8DBE2);
+  border-radius: 6px;
+  padding: 0.35rem 0.85rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary, #5B6474);
+  cursor: pointer;
+  margin-top: 0.5rem;
+}
+
+/* Pagination */
+.admin-errors-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary, #5B6474);
+}
+
+.admin-errors-pagination button {
+  background: var(--bg-secondary, #EAECF0);
+  border: none;
+  border-radius: 6px;
+  padding: 0.4rem 0.85rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.admin-errors-pagination button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* --- CHANGE LOG ---
+   [May 24, 2026] CREATED: Phase 14B admin error console styles
+   --- END CHANGE LOG --- */
