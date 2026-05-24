@@ -25,26 +25,14 @@ import { MOD_ACTIONS, isAdmin } from '@/lib/modConfig';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-
-// ─────────────────────────────────────────
-// HELPER — extract and verify bearer token
-// ─────────────────────────────────────────
-
 async function getAuthedUser(request, supabase) {
   const authHeader = request.headers.get('authorization') || '';
   const token = authHeader.replace('Bearer ', '').trim();
   if (!token) return null;
-
   const { data: { user }, error } = await supabase.auth.getUser(token);
   if (error || !user) return null;
   return user;
 }
-
-
-// ─────────────────────────────────────────
-// GET — List all current mods
-// Admin only — returns all profiles where is_mod = true
-// ─────────────────────────────────────────
 
 export async function GET(request) {
   const supabase = supabaseServer();
@@ -54,7 +42,6 @@ export async function GET(request) {
     return NextResponse.json({ error: 'Unauthorised' }, { status: 401 });
   }
 
-  // Admin only
   if (!isAdmin(user.id)) {
     return NextResponse.json({ error: 'Forbidden — admin only' }, { status: 403 });
   }
@@ -74,29 +61,18 @@ export async function GET(request) {
   });
 }
 
-
-// ─────────────────────────────────────────
-// POST — Promote or demote a user
-// Body:
-//   action         — 'promote' | 'demote'
-//   target_user_id — UUID of the user to promote or demote
-// ─────────────────────────────────────────
-
 export async function POST(request) {
   const supabase = supabaseServer();
 
-  // Auth
   const user = await getAuthedUser(request, supabase);
   if (!user) {
     return NextResponse.json({ error: 'Unauthorised' }, { status: 401 });
   }
 
-  // Admin only — this is the strictest check in the entire mod system
   if (!isAdmin(user.id)) {
     return NextResponse.json({ error: 'Forbidden — admin only' }, { status: 403 });
   }
 
-  // Parse body
   let body;
   try {
     body = await request.json();
@@ -106,7 +82,6 @@ export async function POST(request) {
 
   const { action, target_user_id } = body;
 
-  // Validate action
   if (!action || !['promote', 'demote'].includes(action)) {
     return NextResponse.json(
       { error: 'action must be promote or demote' },
@@ -114,7 +89,6 @@ export async function POST(request) {
     );
   }
 
-  // Validate target
   if (!target_user_id || typeof target_user_id !== 'string') {
     return NextResponse.json(
       { error: 'target_user_id is required' },
@@ -122,7 +96,6 @@ export async function POST(request) {
     );
   }
 
-  // Admin cannot demote themselves
   if (action === 'demote' && isAdmin(target_user_id)) {
     return NextResponse.json(
       { error: 'The admin account cannot be demoted' },
@@ -130,7 +103,6 @@ export async function POST(request) {
     );
   }
 
-  // Cannot promote or demote yourself
   if (target_user_id === user.id && action === 'demote') {
     return NextResponse.json(
       { error: 'You cannot demote yourself' },
@@ -138,7 +110,6 @@ export async function POST(request) {
     );
   }
 
-  // Check target user exists
   const { data: targetProfile, error: profileError } = await supabase
     .from('profiles')
     .select('id, community_username, is_mod')
@@ -149,5 +120,51 @@ export async function POST(request) {
     return NextResponse.json({ error: 'User not found' }, { status: 404 });
   }
 
-  // Pointless action checks — give clear feedback
-  if (action === 'promote' && targetProfile.is_mo
+  if (action === 'promote' && targetProfile.is_mod) {
+    return NextResponse.json(
+      { error: targetProfile.community_username + ' is already a moderator' },
+      { status: 409 }
+    );
+  }
+
+  if (action === 'demote' && !targetProfile.is_mod) {
+    return NextResponse.json(
+      { error: targetProfile.community_username + ' is not a moderator' },
+      { status: 409 }
+    );
+  }
+
+  const newModStatus = action === 'promote';
+
+  const { error: updateError } = await supabase
+    .from('profiles')
+    .update({ is_mod: newModStatus })
+    .eq('id', target_user_id);
+
+  if (updateError) {
+    return NextResponse.json(
+      { error: 'Failed to ' + action + ' user' },
+      { status: 500 }
+    );
+  }
+
+  try {
+    await supabase
+      .from('community_mod_actions')
+      .insert({
+        mod_id:         user.id,
+        action_type:    action === 'promote' ? MOD_ACTIONS.PROMOTE : MOD_ACTIONS.DEMOTE,
+        target_user_id: target_user_id,
+        note:           action === 'promote' ? 'Promoted to moderator' : 'Removed moderator status',
+      });
+  } catch {
+    // Audit log failure should never block the main action
+  }
+
+  return NextResponse.json({
+    success:  true,
+    action:   action,
+    username: targetProfile.community_username,
+    is_mod:   newModStatus,
+  });
+}
