@@ -21,10 +21,14 @@
 
 // --- CHANGE LOG ---
 // [May 23, 2026] CREATED: Phase 12 Chat — DM conversations GET + POST
+// [May 2026]     UPDATED: Phase 13 — block + ban check added to POST.
+//                other_user.id now included in GET + POST responses for BlockButton.
+//                isBlocked() and isBanned() imported from modConfig.js.
 // --- END CHANGE LOG ---
 
 import { supabaseServer } from '@/lib/supabaseServer';
 import { decrypt, CHAT_LIMITS } from '@/lib/chatConfig';
+import { isBlocked, isBanned } from '@/lib/modConfig';
 import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
@@ -136,9 +140,10 @@ export async function GET(request) {
         id: c.id,
         last_message_at: c.last_message_at,
         other_user: {
-          username: profileMap[otherId]?.community_username || 'Unknown',
+          id:        otherId,
+          username:  profileMap[otherId]?.community_username || 'Unknown',
           is_member: profileMap[otherId]?.is_member || false,
-          avatar: avatarMap[otherId] || null,
+          avatar:    avatarMap[otherId] || null,
         },
         lastMessage: latest ? {
           preview,
@@ -181,6 +186,23 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Cannot message yourself' }, { status: 400 });
     }
 
+    // ── Ban check — banned users cannot start new DM conversations ──
+    const banned = await isBanned(supabase, user.id);
+    if (banned) {
+      return NextResponse.json({ error: 'Your account has been suspended' }, { status: 403 });
+    }
+
+    // ── Block check — cannot start a DM if either user has blocked the other ──
+    // ⚠️ WARNING: Check before verifying other user exists — avoids leaking
+    //             whether a user exists to someone they have blocked
+    const blocked = await isBlocked(supabase, user.id, other_user_id);
+    if (blocked) {
+      return NextResponse.json(
+        { error: 'You cannot send messages to this user' },
+        { status: 403 }
+      );
+    }
+
     // Verify other user exists
     const { data: otherProfile, error: profileError } = await supabase
       .from('profiles')
@@ -217,9 +239,10 @@ export async function POST(request) {
           id: existing.id,
           last_message_at: existing.last_message_at,
           other_user: {
-            username: otherProfile.community_username || 'Unknown',
+            id:        other_user_id,
+            username:  otherProfile.community_username || 'Unknown',
             is_member: otherProfile.is_member || false,
-            avatar: avatar || null,
+            avatar:    avatar || null,
           },
           lastMessage: null,
         },
@@ -248,13 +271,14 @@ export async function POST(request) {
         id: newConvo.id,
         last_message_at: newConvo.last_message_at,
         other_user: {
-          username: otherProfile.community_username || 'Unknown',
-          is_member: otherProfile.is_member || false,
-          avatar: avatar || null,
+            id:        other_user_id,
+            username:  otherProfile.community_username || 'Unknown',
+            is_member: otherProfile.is_member || false,
+            avatar:    avatar || null,
+          },
+          lastMessage: null,
         },
-        lastMessage: null,
-      },
-      created: true,
+        created: true,
     }, { status: 201 });
 
   } catch (err) {
