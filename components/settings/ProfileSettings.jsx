@@ -1,13 +1,14 @@
 // ============================================================
 // FILE: components/settings/ProfileSettings.jsx
 // PURPOSE: Profile tab — view username (locked) + edit community_bio
-// LAST CHANGED: May 19, 2026
+// LAST CHANGED: May 25, 2026
 // WHY IT EXISTS: Users need to edit their profile bio.
 //                Username is locked after creation — cannot be changed.
 // DEPENDENCIES: store/authStore.js, react-hot-toast
 // ⚠️ DO NOT CHANGE: Must use Bearer token in Authorization header.
 //                   Must call fetchProfile after save to refresh store.
 //                   Username field is intentionally disabled — never re-enable.
+//                   Optimistic update applied before fetchProfile for instant UI feel.
 // ============================================================
 
 'use client';
@@ -56,7 +57,6 @@ export default function ProfileSettings() {
           'Authorization': `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
-          community_username: profile.community_username,
           community_bio: trimmedBio,
         }),
       });
@@ -68,9 +68,17 @@ export default function ProfileSettings() {
         return;
       }
 
-      await fetchProfile(user.id, accessToken);
+      // Optimistic update — patch store immediately so UI reflects change instantly
+      useAuthStore.setState(function(state) {
+        return { profile: { ...state.profile, community_bio: trimmedBio } };
+      });
+
       toast.success('Profile saved.');
       showFeedback('success', 'Your profile has been updated.');
+
+      // Background sync to keep store fully in sync with DB
+      fetchProfile(user.id);
+
     } catch (err) {
       console.error('ProfileSettings save error:', err);
       showFeedback('error', 'Something went wrong. Please try again.');
@@ -132,4 +140,9 @@ export default function ProfileSettings() {
 // [May 17, 2026] CREATED: Phase 8 — profile editing tab
 // [May 19, 2026] UPDATED: Username field locked — disabled + not-allowed cursor.
 // REASON: Username should be permanent after creation. Only bio is editable.
+// [May 25, 2026] FIXED: Bio change now reflects immediately in UI.
+// REASON: fetchProfile(user.id, accessToken) was passing wrong args and lagging.
+// FIX: Optimistic store patch via useAuthStore.setState applied instantly after
+//   successful save. Background fetchProfile still runs to keep DB in sync.
+//   Also removed community_username from POST body — API only needs community_bio.
 // --- END CHANGE LOG ---
