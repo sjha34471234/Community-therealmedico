@@ -2,12 +2,9 @@
 // FILE: app/api/chat/dm/unread/route.js
 // PURPOSE: Returns count of DM conversations with unread messages
 // LAST CHANGED: May 25, 2026
-// WHY IT EXISTS: BottomNav Chat tab needs an unread badge like
-//   NotificationBell. Separate lightweight endpoint — never
-//   piggyback unread count onto the full DM list endpoint.
-// ⚠️ DO NOT CHANGE: Bearer token auth only — never cookies.
-//   Counts conversations where latest message is not from the
-//   current user AND is newer than last_read_at for that convo.
+// WHY IT EXISTS: BottomNav Chat tab unread badge.
+// ⚠️ Uses user_a/user_b columns — NOT user1_id/user2_id
+// ⚠️ Returns { count: 0 } on any error — never breaks the nav
 // ============================================================
 
 import { supabaseServer } from '@/lib/supabaseServer'
@@ -32,45 +29,39 @@ async function getUserFromHeader(request) {
 export async function GET(request) {
   try {
     const user = await getUserFromHeader(request)
-    if (!user) {
-      return NextResponse.json({ count: 0 }, { status: 200 })
-    }
+    if (!user) return NextResponse.json({ count: 0 })
 
     const db = supabaseServer()
 
-    // Get all DM conversations this user is part of
-    const { data: convos, error: convosError } = await db
+    const { data: convos } = await db
       .from('community_dm_conversations')
-      .select('id, user1_id, user2_id, last_message_at, user1_last_read_at, user2_last_read_at')
-      .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
+      .select('id, user_a, user_b, last_message_at, user_a_last_read_at, user_b_last_read_at')
+      .or(`user_a.eq.${user.id},user_b.eq.${user.id}`)
 
-    if (convosError || !convos || convos.length === 0) {
-      return NextResponse.json({ count: 0 })
-    }
+    if (!convos || convos.length === 0) return NextResponse.json({ count: 0 })
 
+    // Filter to conversations that might be unread
+    const candidates = convos.filter(function(c) {
+      const myLastRead = c.user_a === user.id ? c.user_a_last_read_at : c.user_b_last_read_at
+      if (!c.last_message_at) return false
+      return !myLastRead || new Date(c.last_message_at) > new Date(myLastRead)
+    })
+
+    if (candidates.length === 0) return NextResponse.json({ count: 0 })
+
+    // For each candidate check the latest message is not from me
     let unreadCount = 0
+    for (const convo of candidates) {
+      const { data: latestMsg } = await db
+        .from('community_dm_messages')
+        .select('sender_id')
+        .eq('conversation_id', convo.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
 
-    for (const convo of convos) {
-      const isUser1 = convo.user1_id === user.id
-      const myLastRead = isUser1 ? convo.user1_last_read_at : convo.user2_last_read_at
-      const lastMessageAt = convo.last_message_at
-
-      if (!lastMessageAt) continue
-
-      // If never read, or last message is newer than last read
-      if (!myLastRead || new Date(lastMessageAt) > new Date(myLastRead)) {
-        // Make sure the latest message is not from me
-        const { data: latestMsg } = await db
-          .from('community_dm_messages')
-          .select('user_id')
-          .eq('conversation_id', convo.id)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle()
-
-        if (latestMsg && latestMsg.user_id !== user.id) {
-          unreadCount++
-        }
+      if (latestMsg && latestMsg.sender_id !== user.id) {
+        unreadCount++
       }
     }
 
@@ -81,8 +72,7 @@ export async function GET(request) {
 }
 
 // --- CHANGE LOG ---
-// [May 25, 2026] CREATED: Unread DM count endpoint for BottomNav badge
-// REASON: BottomNav Chat tab needed a red dot badge like NotificationBell.
-// LOGIC: Counts conversations where last_message_at > my last_read_at
-//   AND the latest message sender is not me.
+// [May 25, 2026] CREATED: Unread DM count for BottomNav badge
+// [May 25, 2026] FIXED: Uses user_a/user_b columns correctly
+//   (earlier version wrongly used user1_id/user2_id which don't exist)
 // --- END CHANGE LOG ---
