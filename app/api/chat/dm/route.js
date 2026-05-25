@@ -19,6 +19,10 @@
 // [May 25, 2026] UPDATED: Added isUnread flag to each conversation in GET.
 //                Added PATCH handler to mark conversation as read.
 //                Uses user_a_last_read_at / user_b_last_read_at columns
+// [May 25, 2026] FIXED: Unread dot reappearing after page refresh.
+// REASON: Setting last_read_at = NOW() caused timing race — last_message_at
+//   could equal or exceed last_read_at making isUnread true again after refresh.
+// FIX: Set last_read_at = convo.last_message_at so comparison is exactly equal.
 //                added to community_dm_conversations table May 25, 2026.
 // --- END CHANGE LOG ---
 
@@ -299,10 +303,15 @@ export async function PATCH(request) {
 
     // Update the correct last_read_at column
     const updateField = isUserA ? 'user_a_last_read_at' : 'user_b_last_read_at';
-    await supabase
-      .from('community_dm_conversations')
-      .update({ [updateField]: new Date().toISOString() })
-      .eq('id', conversation_id);
+
+// ⚠️ Set last_read_at to the conversation's last_message_at — NOT to NOW().
+// Using NOW() causes a race condition where last_message_at == last_read_at
+// fails the strict > check after refresh, showing the dot again.
+// Setting it to last_message_at makes them exactly equal so > returns false.
+await supabase
+  .from('community_dm_conversations')
+  .update({ [updateField]: convo.last_message_at || new Date().toISOString() })
+  .eq('id', conversation_id);
 
     return NextResponse.json({ success: true });
 
