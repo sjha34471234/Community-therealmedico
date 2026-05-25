@@ -1,30 +1,31 @@
 // ============================================================
 // FILE: components/BottomNav.jsx
-// PURPOSE: Bottom navigation bar — Home, Search, Ask, Chat, Profile
+// PURPOSE: Bottom navigation bar — Home, Reels, Ask, Chat, Profile
 //          Chat tab shows red dot badge when there are unread DMs
-// LAST CHANGED: May 25, 2026
+// LAST CHANGED: May 26, 2026
 // WHY IT EXISTS: Phase 10 — Instagram-style bottom nav for all screen sizes
 // DEPENDENCIES: store/authStore.js, app/globals.css (bottom nav styles)
 // ⚠️ DO NOT CHANGE: Auth gate pattern — never redirect, always prompt.
 //                   Ask is always centred with raised style.
 //                   5 items keeps layout balanced around the Ask pill.
 //                   DM unread poll interval is 30s — matches chat UX expectations.
+//                   Search moved to Navbar — Reels replaces it here.
 // ============================================================
 
 'use client';
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Home, Search, PlusCircle, MessageCircle, User } from 'lucide-react';
+import { Home, Film, PlusCircle, MessageCircle, User } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import useAuthStore from '@/store/authStore';
 
 const NAV_ITEMS = [
-  { key: 'home', label: 'Home', href: '/', icon: Home, authRequired: false },
-  { key: 'search', label: 'Search', href: '/search', icon: Search, authRequired: false },
-  { key: 'ask', label: 'Ask', href: '/ask', icon: PlusCircle, authRequired: true, isAsk: true },
-  { key: 'chat', label: 'Chat', href: '/chat', icon: MessageCircle, authRequired: false },
-  { key: 'profile', label: 'Profile', href: null, icon: User, authRequired: true },
+  { key: 'home',    label: 'Home',    href: '/',       icon: Home,          authRequired: false },
+  { key: 'reels',   label: 'Reels',   href: '/reels',  icon: Film,          authRequired: false },
+  { key: 'ask',     label: 'Ask',     href: '/ask',    icon: PlusCircle,    authRequired: true, isAsk: true },
+  { key: 'chat',    label: 'Chat',    href: '/chat',   icon: MessageCircle, authRequired: false },
+  { key: 'profile', label: 'Profile', href: null,      icon: User,          authRequired: true },
 ];
 
 export default function BottomNav() {
@@ -37,8 +38,8 @@ export default function BottomNav() {
   // ── Poll unread DM count every 30s ───────────────────────
   useEffect(function() {
     if (!user || !accessToken) {
-      setDmUnread(0)
-      return
+      setDmUnread(0);
+      return;
     }
 
     async function fetchUnread() {
@@ -50,30 +51,30 @@ export default function BottomNav() {
             credentials: 'include',
             cache: 'no-store',
           }
-        )
-        if (!res.ok) return
-        const data = await res.json()
-        setDmUnread(data.count || 0)
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        setDmUnread(data.count || 0);
       } catch (_) {}
     }
 
-    fetchUnread()
-    pollRef.current = setInterval(fetchUnread, 30000)
-    return function() { clearInterval(pollRef.current) }
-  }, [user, accessToken])
+    fetchUnread();
+    pollRef.current = setInterval(fetchUnread, 30000);
+    return function() { clearInterval(pollRef.current); };
+  }, [user, accessToken]);
 
   // Clear unread badge when user is on /chat
   useEffect(function() {
     if (pathname.startsWith('/chat')) {
-      setDmUnread(0)
+      setDmUnread(0);
     }
-  }, [pathname])
+  }, [pathname]);
 
   function isActive(item) {
-    if (item.key === 'home') return pathname === '/';
-    if (item.key === 'search') return pathname.startsWith('/search');
-    if (item.key === 'ask') return pathname === '/ask';
-    if (item.key === 'chat') return pathname.startsWith('/chat');
+    if (item.key === 'home')    return pathname === '/';
+    if (item.key === 'reels')   return pathname.startsWith('/reels');
+    if (item.key === 'ask')     return pathname === '/ask';
+    if (item.key === 'chat')    return pathname.startsWith('/chat');
     if (item.key === 'profile') {
       if (!user || !profile?.community_username) return false;
       return pathname === `/profile/${profile.community_username}`;
@@ -115,7 +116,7 @@ export default function BottomNav() {
             <Link
               key={item.key}
               href={href}
-              onClick={function(e) { handleTap(e, item) }}
+              onClick={function(e) { handleTap(e, item); }}
               className={[
                 'bottom-nav-item',
                 item.isAsk ? 'bottom-nav-ask' : '',
@@ -169,9 +170,6 @@ export default function BottomNav() {
 // [May 18, 2026] UPDATED: Added Chat tab
 // [May 23, 2026] UPDATED: Chat tab now links to /chat — Phase 12 Chat is live.
 // [May 25, 2026] ADDED: Unread DM badge on Chat tab
-// REASON: Users had no way to know they had unread DMs without opening chat.
-// FIX: Polls /api/chat/dm/unread every 30s when logged in.
-//   Shows red dot with count on Chat icon — same visual pattern as NotificationBell.
-//   Badge clears immediately when user navigates to /chat.
-//   Badge hidden when count is 0 or user is not logged in.
+// [May 26, 2026] UPDATED: Search tab replaced with Reels (Film icon, /reels).
+//               Search moved to Navbar icon. All other logic preserved exactly.
 // --- END CHANGE LOG ---
