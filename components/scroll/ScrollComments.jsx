@@ -155,7 +155,7 @@ export default function ScrollComments({ question, onClose }) {
                     {replies.map(function(reply) {
                       return (
                         <div key={reply.id} className="scroll-reply-item">
-                          <Avatar avatarRow={reply.avatar} username={reply.community_username} size="sm" />
+  <Avatar avatarRow={reply.avatar} username={reply.community_username} size="xs" />
                           <div className="scroll-comment-body">
                             <div className="scroll-comment-username">@{reply.community_username || 'anon'}</div>
                             <div className="scroll-comment-text">{reply.body}</div>
