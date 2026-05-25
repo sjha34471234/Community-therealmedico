@@ -27,7 +27,7 @@ import '@/app/profile/profile.css';
 import ProfileMessageButton from '@/components/ProfileMessageButton';
 import BlockButton from '@/components/BlockButton';
 
-export const revalidate = 60;
+export const revalidate = 10;
 
 export async function generateMetadata({ params }) {
   const { username } = params;
