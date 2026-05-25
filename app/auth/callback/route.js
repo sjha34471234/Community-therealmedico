@@ -1,29 +1,24 @@
 // ============================================================
 // FILE: app/auth/callback/route.js
-// PURPOSE: Handles Google OAuth redirect — exchanges code for session
+// PURPOSE: Receives Google OAuth code and hands it to client page
 // LAST CHANGED: May 25, 2026
 // WHY IT EXISTS: Google OAuth redirects here after sign in.
-//               Without this, Google login silently fails.
-// DEPENDENCIES: @supabase/auth-helpers-nextjs, next/headers
-// ⚠️ DO NOT CHANGE: Must be a route handler (not a page).
-//                   Never add 'use client' here.
-//                   Must use createRouteHandlerClient — NOT createClient.
-//                   createClient is a browser client and cannot set cookies
-//                   in a server route handler. That was the original bug.
+// ⚠️ DO NOT exchange the code here — this is a server route.
+//    lib/supabase.js uses plain supabase-js with localStorage.
+//    exchangeCodeForSession() called server-side loses the session
+//    immediately because there is no localStorage on the server.
+//    Fix: redirect to /auth/confirm (a client page) with the code
+//    so the browser client can do the exchange in localStorage.
 // ============================================================
-
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 
 export async function GET(request) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
+  const next = searchParams.get('next') || '/'
 
   if (code) {
-    const cookieStore = cookies()
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
-    await supabase.auth.exchangeCodeForSession(code)
+    return NextResponse.redirect(`${origin}/auth/confirm?code=${code}&next=${encodeURIComponent(next)}`)
   }
 
   return NextResponse.redirect(`${origin}/`)
@@ -31,12 +26,8 @@ export async function GET(request) {
 
 // --- CHANGE LOG ---
 // [May 16, 2026] CREATED: Google OAuth callback handler
-// REASON: Google redirects here after sign in — must exchange code for session
-
-// [May 25, 2026] FIXED: Silent login failure for all new Google sign-ins
-// BUG: Was using createClient() (browser client) in a server route handler.
-//      exchangeCodeForSession() succeeded but could not set session cookie
-//      server-side, so user was redirected to / with no session.
-// FIX: Replaced with createRouteHandlerClient from @supabase/auth-helpers-nextjs
-//      which correctly reads/writes cookies in the server context.
+// [May 25, 2026] FIXED: Silent login failure — was calling exchangeCodeForSession
+//   server-side which lost the session because localStorage does not exist on server.
+//   Now redirects to /auth/confirm (client page) with the code so browser client
+//   can do the exchange and persist session to localStorage correctly.
 // --- END CHANGE LOG ---
