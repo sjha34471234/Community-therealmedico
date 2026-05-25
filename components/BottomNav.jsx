@@ -10,6 +10,7 @@
 //                   DM unread poll interval is 30s.
 //                   + centre button is a popup menu, NOT a direct link.
 //                   Search moved to Navbar — Scroll replaces it here.
+//                   Scroll icon does not exist in lucide v0.303 — use Film.
 // ============================================================
 'use client';
 
@@ -21,7 +22,7 @@ import useAuthStore from '@/store/authStore';
 
 const NAV_ITEMS = [
   { key: 'home',    label: 'Home',   href: '/',       icon: Home,          authRequired: false },
-  { key: 'scroll',  label: 'Scroll', href: '/scroll', icon: Scroll,        authRequired: false },
+  { key: 'scroll',  label: 'Scroll', href: '/scroll', icon: Film,          authRequired: false },
   { key: 'plus',    label: null,     href: null,      icon: PlusCircle,    authRequired: false, isAsk: true },
   { key: 'chat',    label: 'Chat',   href: '/chat',   icon: MessageCircle, authRequired: false },
   { key: 'profile', label: 'Profile',href: null,      icon: User,          authRequired: true },
@@ -116,7 +117,6 @@ export default function BottomNav() {
 
   return (
     <nav className="bottom-nav">
-      {/* + popup menu */}
       {showPlusMenu && (
         <div
           ref={menuRef}
@@ -209,8 +209,10 @@ export default function BottomNav() {
 // [May 18, 2026] CREATED: Phase 10 — bottom navigation.
 // [May 23, 2026] UPDATED: Chat tab links to /chat.
 // [May 25, 2026] ADDED: Unread DM badge on Chat tab.
-// [May 26, 2026] UPDATED: Search → Scroll tab (Scroll icon, /scroll).
+// [May 26, 2026] UPDATED: Search → Scroll tab (Film icon, /scroll).
 //               + centre button now opens popup menu:
 //               "Ask a Question" → /ask | "Create a Scroll" → /scroll/create.
 //               Search moved to Navbar. All other logic preserved exactly.
+//               FIXED: Removed Scroll icon import — does not exist in lucide v0.303.
+//               Using Film icon for Scroll tab instead.
 // --- END CHANGE LOG ---
