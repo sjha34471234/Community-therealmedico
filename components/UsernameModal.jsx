@@ -2,7 +2,7 @@
 // FILE: components/UsernameModal.jsx
 // PURPOSE: Forces logged-in users without a community_username
 //   to pick one before they can interact
-// LAST CHANGED: May 16, 2026
+// LAST CHANGED: May 25, 2026
 // WHY IT EXISTS: community_username is required for posting,
 //   answering, and voting. Without this modal, a user could
 //   submit content with no display name, breaking AnswerCard
@@ -10,9 +10,10 @@
 // DEPENDENCIES: store/authStore.js, react-hot-toast,
 //   app/api/profile/route.js
 // ⚠️ DO NOT CHANGE: Modal must be undismissable — no close
-//   button, no backdrop click to close. fetchProfile() must be
-//   called after save so authStore updates immediately.
+//   button, no backdrop click to close.
 //   accessToken comes from authStore — never call getSession().
+//   accessToken must be in Authorization header — never in body.
+//   After save, page reloads to pick up new username reliably.
 // ============================================================
 
 'use client'
@@ -27,7 +28,6 @@ export default function UsernameModal() {
   const user = useAuthStore((state) => state.user)
   const profile = useAuthStore((state) => state.profile)
   const accessToken = useAuthStore((state) => state.accessToken)
-  const fetchProfile = useAuthStore((state) => state.fetchProfile)
 
   const [username, setUsername] = useState('')
   const [saving, setSaving] = useState(false)
@@ -57,16 +57,16 @@ export default function UsernameModal() {
 
     try {
       const res = await fetch(`${window.location.origin}/api/profile`, {
-  method: 'POST',
-  credentials: 'include',
-  headers: {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${accessToken}`,
-  },
-  body: JSON.stringify({
-    username: trimmed,
-  }),
-})
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          username: trimmed,
+        }),
+      })
 
       const data = await res.json()
 
@@ -76,8 +76,9 @@ export default function UsernameModal() {
         return
       }
 
-      await fetchProfile(user.id)
       toast.success(`Welcome to the community, ${trimmed}!`)
+      setSaving(false)
+      setTimeout(() => { window.location.reload() }, 800)
 
     } catch (err) {
       console.error('[UsernameModal] Unexpected error:', err)
@@ -190,4 +191,8 @@ export default function UsernameModal() {
 // [May 25, 2026] FIXED: accessToken moved from body to Authorization header
 // REASON: POST /api/profile reads token from header not body.
 //   Was causing "Not authenticated" error for all new users on username save.
+// [May 25, 2026] FIXED: Modal stuck on "Saving…" after username set
+// REASON: fetchProfile via browser client was hanging after OAuth login.
+// FIX: Replaced fetchProfile with window.location.reload() after success.
+//   Fresh page load reliably picks up the new username from Supabase.
 // --- END CHANGE LOG ---
