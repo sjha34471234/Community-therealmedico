@@ -57,14 +57,16 @@ export default function UsernameModal() {
 
     try {
       const res = await fetch(`${window.location.origin}/api/profile`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username: trimmed,
-          accessToken,
-        }),
-      })
+  method: 'POST',
+  credentials: 'include',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${accessToken}`,
+  },
+  body: JSON.stringify({
+    username: trimmed,
+  }),
+})
 
       const data = await res.json()
 
@@ -185,4 +187,7 @@ export default function UsernameModal() {
 // [May 16, 2026] FIXED: accessToken now read from authStore
 // REASON: Safari/iPad blocks getSession() — token stored in
 //   Zustand from onAuthStateChange is reliable on all devices
+// [May 25, 2026] FIXED: accessToken moved from body to Authorization header
+// REASON: POST /api/profile reads token from header not body.
+//   Was causing "Not authenticated" error for all new users on username save.
 // --- END CHANGE LOG ---
