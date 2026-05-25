@@ -90,8 +90,14 @@ export default function AvatarSettings() {
         body: JSON.stringify(avatar),
       })
       const data = await res.json()
-      if (!res.ok) { toast.error(data.error || 'Failed to save'); return }
-      toast.success('Avatar saved!')
+if (!res.ok) { toast.error(data.error || 'Failed to save'); return }
+
+// Optimistic update — patch store immediately so avatar reflects everywhere instantly
+useAuthStore.setState(function(state) {
+  return { profile: { ...state.profile, avatar: avatar } };
+});
+
+toast.success('Avatar saved!')
     } catch (err) {
       toast.error('Network error')
     } finally {
@@ -283,4 +289,7 @@ export default function AvatarSettings() {
 // [May 22, 2026] FIXED: Live preview prop renamed from avatar= to avatarRow=
 //               CAUSE: Avatar.jsx expects avatarRow — using avatar= passed undefined,
 //               so preview always showed default stethoscope regardless of selection.
+// [May 25, 2026] FIXED: Avatar change now reflects immediately everywhere.
+// REASON: handleSave had no store update after save — avatar only updated on page reload.
+// FIX: Optimistic useAuthStore.setState patches profile.avatar instantly after save.
 // --- END CHANGE LOG ---
