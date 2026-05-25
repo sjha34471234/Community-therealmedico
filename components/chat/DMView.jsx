@@ -10,6 +10,11 @@
 // --- CHANGE LOG ---
 // [May 23, 2026] CREATED: Phase 12 Chat — DM window with Realtime + AES-256 + lazy load
 // [May 23, 2026] FIXED: session replaced with user + accessToken from authStore
+// [May 25, 2026] FIXED: Unread dot not clearing after opening conversation.
+// REASON: markAsRead was only called from DMList click handler.
+//   If user was already in chat or navigated directly, PATCH never fired.
+// FIX: PATCH /api/chat/dm called on DMView mount whenever convo.id changes.
+//   This guarantees the read timestamp is updated the moment messages are visible.
 // --- END CHANGE LOG ---
 
 'use client';
@@ -129,6 +134,20 @@ export default function DMView({ convo, onBack }) {
     if (!convo?.id) return;
     mountedRef.current = true;
     loadInitial();
+
+    // Mark conversation as read when opened
+    // This clears the unread dot in DMList and BottomNav badge
+    if (accessToken) {
+      fetch('/api/chat/dm', {
+        method: 'PATCH',
+        headers: {
+          'Authorization': 'Bearer ' + accessToken,
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ conversation_id: convo.id }),
+      }).catch(function() {}) // silent fail — non-critical
+    }
     const channel = supabaseClient
       .channel('dm:' + convo.id)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'community_dm_messages', filter: 'conversation_id=eq.' + convo.id },
@@ -152,7 +171,7 @@ export default function DMView({ convo, onBack }) {
       mountedRef.current = false;
       supabaseClient.removeChannel(channel);
     };
-  }, [convo?.id]);
+  }, [convo?.id, accessToken]);
 
   const handleSend = useCallback(async () => {
     const text = input.trim();
