@@ -1,29 +1,25 @@
 // --- WHY THIS CODE EXISTS ---
 // API route for DM conversations (not messages — just the conversation threads themselves).
 // GET → returns paginated list of all DM conversations for the logged-in user
+//        Each conversation now includes isUnread flag for the blue dot in DMList
 // POST → creates a new DM conversation between two users (or returns existing one)
-
-// --- WHAT THIS MADE WORK ---
-// GET /api/chat/dm → sidebar DM list with last message preview (decrypted)
-// POST /api/chat/dm { other_user_id } → start or resume a DM conversation
-// Used by DMList.jsx (sidebar) and UserSearchModal.jsx (new DM button)
+// PATCH → marks a conversation as read (called when user opens a DM)
 
 // --- PITFALLS ---
-// ⚠️ user_a is ALWAYS the alphabetically smaller UUID — this enforces the UNIQUE constraint
-//    If you insert with user_a and user_b swapped, you get a duplicate conversation
-//    Always sort: const [a, b] = [uid1, uid2].sort()
+// ⚠️ user_a is ALWAYS the alphabetically smaller UUID — enforces UNIQUE constraint
 // ⚠️ Last message preview must be decrypted before returning — never return raw cipher text
-// ⚠️ If no messages exist yet, lastMessage is null — that is valid (new empty conversation)
-// ⚠️ Bearer token required for both GET and POST — DMs are never public
-// ⚠️ Never expose the other user's user_id in the response — only username and avatar
-// ⚠️ dmListPageSize = 15 — load more on scroll using `offset` param (cursor not needed here
-//    because DM list order rarely changes mid-scroll unlike message streams)
+// ⚠️ Bearer token required for all methods — DMs are never public
+// ⚠️ user_a_last_read_at and user_b_last_read_at added May 25 — used for unread tracking
+// ⚠️ isUnread = last_message_at > my_last_read_at AND latest message not sent by me
 
 // --- CHANGE LOG ---
 // [May 23, 2026] CREATED: Phase 12 Chat — DM conversations GET + POST
 // [May 2026]     UPDATED: Phase 13 — block + ban check added to POST.
-//                other_user.id now included in GET + POST responses for BlockButton.
-//                isBlocked() and isBanned() imported from modConfig.js.
+//                other_user.id included in responses for BlockButton.
+// [May 25, 2026] UPDATED: Added isUnread flag to each conversation in GET.
+//                Added PATCH handler to mark conversation as read.
+//                Uses user_a_last_read_at / user_b_last_read_at columns
+//                added to community_dm_conversations table May 25, 2026.
 // --- END CHANGE LOG ---
 
 import { supabaseServer } from '@/lib/supabaseServer';
@@ -34,9 +30,6 @@ import { NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-// ============================================================
-// HELPER — verify Bearer token, return user or null
-// ============================================================
 async function getAuthUser(request, supabase) {
   const authHeader = request.headers.get('authorization');
   if (!authHeader?.startsWith('Bearer ')) return null;
@@ -48,7 +41,6 @@ async function getAuthUser(request, supabase) {
 
 // ============================================================
 // GET — list DM conversations for logged-in user
-// Query params: offset (optional, default 0)
 // ============================================================
 export async function GET(request) {
   try {
@@ -62,11 +54,9 @@ export async function GET(request) {
     const offset = parseInt(searchParams.get('offset') || '0');
     const limit = CHAT_LIMITS.dmListPageSize;
 
-    // Fetch conversations where user is either user_a or user_b
-    // Order by last_message_at DESC so most recent appears first
     const { data: convos, error } = await supabase
       .from('community_dm_conversations')
-      .select('id, user_a, user_b, last_message_at, created_at')
+      .select('id, user_a, user_b, last_message_at, created_at, user_a_last_read_at, user_b_last_read_at')
       .or(`user_a.eq.${user.id},user_b.eq.${user.id}`)
       .order('last_message_at', { ascending: false })
       .range(offset, offset + limit - 1);
@@ -76,34 +66,26 @@ export async function GET(request) {
       return NextResponse.json({ conversations: [], hasMore: false }, { status: 200 });
     }
 
-    // Collect the "other" user's ID for each conversation
     const otherUserIds = Array.from(new Set(
       convos.map(c => c.user_a === user.id ? c.user_b : c.user_a)
     ));
 
-    // Bulk fetch other users' profiles
     const { data: profiles } = await supabase
       .from('profiles')
       .select('id, community_username, is_member')
       .in('id', otherUserIds);
 
     const profileMap = {};
-    for (const p of (profiles || [])) {
-      profileMap[p.id] = p;
-    }
+    for (const p of (profiles || [])) profileMap[p.id] = p;
 
-    // Bulk fetch other users' avatars
     const { data: avatars } = await supabase
       .from('community_avatars')
       .select('user_id, shape, color, icon, border, pattern')
       .in('user_id', otherUserIds);
 
     const avatarMap = {};
-    for (const a of (avatars || [])) {
-      avatarMap[a.user_id] = a;
-    }
+    for (const a of (avatars || [])) avatarMap[a.user_id] = a;
 
-    // For each conversation fetch the latest DM message (for preview)
     const convoIds = convos.map(c => c.id);
     const { data: latestMsgs } = await supabase
       .from('community_dm_messages')
@@ -112,7 +94,6 @@ export async function GET(request) {
       .order('created_at', { ascending: false })
       .limit(convoIds.length * 1);
 
-    // Build map of conversation_id → latest message
     const latestByConvo = {};
     for (const msg of (latestMsgs || [])) {
       if (!latestByConvo[msg.conversation_id]) {
@@ -120,7 +101,6 @@ export async function GET(request) {
       }
     }
 
-    // Decrypt previews and build final response
     const conversations = await Promise.all(convos.map(async c => {
       const otherId = c.user_a === user.id ? c.user_b : c.user_a;
       const latest = latestByConvo[c.id];
@@ -129,21 +109,32 @@ export async function GET(request) {
       if (latest?.body && latest?.iv) {
         try {
           const decrypted = await decrypt(latest.body, latest.iv);
-          // Truncate to 60 chars for sidebar preview
           preview = decrypted.slice(0, 60) + (decrypted.length > 60 ? '…' : '');
         } catch {
           preview = '🔒 Encrypted message';
         }
       }
 
+      // ── Unread logic ──────────────────────────────────────
+      // isUnread = latest message exists + not sent by me
+      //            + last_message_at is newer than my last read time
+      const myLastRead = c.user_a === user.id ? c.user_a_last_read_at : c.user_b_last_read_at;
+      const isUnread = !!(
+        latest &&
+        latest.sender_id !== user.id &&
+        c.last_message_at &&
+        (!myLastRead || new Date(c.last_message_at) > new Date(myLastRead))
+      );
+
       return {
         id: c.id,
         last_message_at: c.last_message_at,
+        isUnread,
         other_user: {
-          id:        otherId,
-          username:  profileMap[otherId]?.community_username || 'Unknown',
+          id: otherId,
+          username: profileMap[otherId]?.community_username || 'Unknown',
           is_member: profileMap[otherId]?.is_member || false,
-          avatar:    avatarMap[otherId] || null,
+          avatar: avatarMap[otherId] || null,
         },
         lastMessage: latest ? {
           preview,
@@ -154,7 +145,6 @@ export async function GET(request) {
     }));
 
     const hasMore = convos.length === limit;
-
     return NextResponse.json({ conversations, hasMore }, { status: 200 });
 
   } catch (err) {
@@ -165,8 +155,6 @@ export async function GET(request) {
 
 // ============================================================
 // POST — create or retrieve a DM conversation
-// Body: { other_user_id }
-// Returns the conversation object (existing or newly created)
 // ============================================================
 export async function POST(request) {
   try {
@@ -177,33 +165,23 @@ export async function POST(request) {
     }
 
     const { other_user_id } = await request.json();
-
     if (!other_user_id) {
       return NextResponse.json({ error: 'other_user_id is required' }, { status: 400 });
     }
-
     if (other_user_id === user.id) {
       return NextResponse.json({ error: 'Cannot message yourself' }, { status: 400 });
     }
 
-    // ── Ban check — banned users cannot start new DM conversations ──
     const banned = await isBanned(supabase, user.id);
     if (banned) {
       return NextResponse.json({ error: 'Your account has been suspended' }, { status: 403 });
     }
 
-    // ── Block check — cannot start a DM if either user has blocked the other ──
-    // ⚠️ WARNING: Check before verifying other user exists — avoids leaking
-    //             whether a user exists to someone they have blocked
     const blocked = await isBlocked(supabase, user.id, other_user_id);
     if (blocked) {
-      return NextResponse.json(
-        { error: 'You cannot send messages to this user' },
-        { status: 403 }
-      );
+      return NextResponse.json({ error: 'You cannot send messages to this user' }, { status: 403 });
     }
 
-    // Verify other user exists
     const { data: otherProfile, error: profileError } = await supabase
       .from('profiles')
       .select('id, community_username, is_member')
@@ -214,11 +192,8 @@ export async function POST(request) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    // ⚠️ CRITICAL: always sort so user_a < user_b alphabetically
-    // This enforces the UNIQUE constraint — prevents duplicate conversations
     const [userA, userB] = [user.id, other_user_id].sort();
 
-    // Try to find existing conversation first
     const { data: existing } = await supabase
       .from('community_dm_conversations')
       .select('id, user_a, user_b, last_message_at, created_at')
@@ -227,7 +202,6 @@ export async function POST(request) {
       .single();
 
     if (existing) {
-      // Fetch other user avatar
       const { data: avatar } = await supabase
         .from('community_avatars')
         .select('user_id, shape, color, icon, border, pattern')
@@ -238,11 +212,12 @@ export async function POST(request) {
         conversation: {
           id: existing.id,
           last_message_at: existing.last_message_at,
+          isUnread: false,
           other_user: {
-            id:        other_user_id,
-            username:  otherProfile.community_username || 'Unknown',
+            id: other_user_id,
+            username: otherProfile.community_username || 'Unknown',
             is_member: otherProfile.is_member || false,
-            avatar:    avatar || null,
+            avatar: avatar || null,
           },
           lastMessage: null,
         },
@@ -250,7 +225,6 @@ export async function POST(request) {
       }, { status: 200 });
     }
 
-    // Create new conversation
     const { data: newConvo, error: insertError } = await supabase
       .from('community_dm_conversations')
       .insert({ user_a: userA, user_b: userB })
@@ -259,7 +233,6 @@ export async function POST(request) {
 
     if (insertError) throw insertError;
 
-    // Fetch other user avatar for response
     const { data: avatar } = await supabase
       .from('community_avatars')
       .select('user_id, shape, color, icon, border, pattern')
@@ -270,19 +243,71 @@ export async function POST(request) {
       conversation: {
         id: newConvo.id,
         last_message_at: newConvo.last_message_at,
+        isUnread: false,
         other_user: {
-            id:        other_user_id,
-            username:  otherProfile.community_username || 'Unknown',
-            is_member: otherProfile.is_member || false,
-            avatar:    avatar || null,
-          },
-          lastMessage: null,
+          id: other_user_id,
+          username: otherProfile.community_username || 'Unknown',
+          is_member: otherProfile.is_member || false,
+          avatar: avatar || null,
         },
-        created: true,
+        lastMessage: null,
+      },
+      created: true,
     }, { status: 201 });
 
   } catch (err) {
     console.error('[POST /api/chat/dm]', err.message);
     return NextResponse.json({ error: 'Failed to create conversation' }, { status: 500 });
+  }
+}
+
+// ============================================================
+// PATCH — mark a conversation as read
+// Body: { conversation_id }
+// Called when user opens a DM conversation
+// ============================================================
+export async function PATCH(request) {
+  try {
+    const supabase = supabaseServer();
+    const user = await getAuthUser(request, supabase);
+    if (!user) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
+
+    const { conversation_id } = await request.json();
+    if (!conversation_id) {
+      return NextResponse.json({ error: 'conversation_id is required' }, { status: 400 });
+    }
+
+    // Verify user is part of this conversation
+    const { data: convo } = await supabase
+      .from('community_dm_conversations')
+      .select('id, user_a, user_b')
+      .eq('id', conversation_id)
+      .single();
+
+    if (!convo) {
+      return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
+    }
+
+    const isUserA = convo.user_a === user.id;
+    const isUserB = convo.user_b === user.id;
+
+    if (!isUserA && !isUserB) {
+      return NextResponse.json({ error: 'Not part of this conversation' }, { status: 403 });
+    }
+
+    // Update the correct last_read_at column
+    const updateField = isUserA ? 'user_a_last_read_at' : 'user_b_last_read_at';
+    await supabase
+      .from('community_dm_conversations')
+      .update({ [updateField]: new Date().toISOString() })
+      .eq('id', conversation_id);
+
+    return NextResponse.json({ success: true });
+
+  } catch (err) {
+    console.error('[PATCH /api/chat/dm]', err.message);
+    return NextResponse.json({ error: 'Failed to mark as read' }, { status: 500 });
   }
 }
