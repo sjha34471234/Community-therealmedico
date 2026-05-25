@@ -7,7 +7,7 @@
 //               store/authStore.js, app/globals.css (navbar styles)
 // ⚠️ DO NOT CHANGE: Sign In navigates to /auth — never a modal.
 //                   Sign Out does NOT live here — AccountSettings only.
-//                   Search icon added to navbar right — Search page removed from BottomNav.
+//                   Search icon added to navbar right — removed from BottomNav.
 //                   Username removed from navbar — lives in bottom nav Profile tab.
 //                   On own profile page: bell swaps to gear icon → /settings.
 // ============================================================
@@ -28,18 +28,18 @@ export default function Navbar() {
     <nav className="navbar">
       <div className="navbar-inner">
         <div className="navbar-left">
-          <Link href="/" className="navbar-logo" style={{ textDecoration: 'none' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15 }}>
+          <Link href="/" className="navbar-logo">
+            <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
               <span className="navbar-logo-bold">The Real Medico</span>
-              <span style={{ fontSize: '11px', fontWeight: 400, color: '#5B6474', letterSpacing: '0.4px' }}>Community</span>
+              <span className="navbar-logo-light" style={{ fontSize: '11px', letterSpacing: '0.3px' }}>Community</span>
             </div>
           </Link>
         </div>
-        <div className="navbar-right" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+        <div className="navbar-right" style={{ gap: '4px' }}>
           <button
             onClick={() => router.push('/search')}
             aria-label="Search"
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', borderRadius: '8px', color: '#5B6474', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '7px', borderRadius: '8px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.15s ease' }}
           >
             <Search size={22} />
           </button>
@@ -62,10 +62,8 @@ export default function Navbar() {
 
 // --- CHANGE LOG ---
 // [May 19, 2026] REDESIGNED: Tags left, logo centre, bell/sign-in right.
-//               Removed: SearchBar (bottom nav), username (bottom nav Profile tab).
-// [May 20, 2026] UPDATED: Removed Tags link. Logo moved to left. Less cramped on mobile.
-// [May 21, 2026] UPDATED: Settings icon size 20 → 26 for better tap target
+// [May 20, 2026] UPDATED: Logo moved to left. Less cramped on mobile.
+// [May 21, 2026] UPDATED: Settings icon size 20 → 26 for better tap target.
 // [May 26, 2026] UPDATED: Brand split to two lines (The Real Medico / Community).
-//               Search icon added to navbar right side (left of bell/gear).
-//               Search removed from BottomNav — Reels tab added instead.
+//               Search icon added left of bell/gear — Search removed from BottomNav.
 // --- END CHANGE LOG ---
