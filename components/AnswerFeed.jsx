@@ -2,12 +2,14 @@
 // FILE: components/AnswerFeed.jsx
 // PURPOSE: Infinite scroll answer feed with sort tabs
 //          Loads 10 top-level answers at a time automatically
-// LAST CHANGED: May 21, 2026
+//          Realtime — new answers appear instantly without refresh
+// LAST CHANGED: May 25, 2026
 // ============================================================
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import AnswerItem from '@/components/AnswerItem'
 import { useVotes } from '@/hooks/useVotes'
+import supabase from '@/lib/supabase'
 
 const SORT_TABS = [
   { key: 'best', label: '⭐ Best' },
@@ -30,15 +32,53 @@ export default function AnswerFeed({ question, questionAuthorId, initialAnswers,
   const { getScore, getVote, vote } = useVotes(question, answers)
 
   const mountedRef = useRef(false)
-useEffect(function() {
-  if (!mountedRef.current) { mountedRef.current = true; return }
-  sortRef.current = sort
-  pageRef.current = 1
-  setAnswers([])
-  setHasMore(false)
-  hasMoreRef.current = false
-  fetchAnswers(sort, 1, false)
-}, [sort])
+  useEffect(function() {
+    if (!mountedRef.current) { mountedRef.current = true; return }
+    sortRef.current = sort
+    pageRef.current = 1
+    setAnswers([])
+    setHasMore(false)
+    hasMoreRef.current = false
+    fetchAnswers(sort, 1, false)
+  }, [sort])
+
+  // ── Realtime — prepend new answers instantly ──────────────
+  useEffect(function() {
+    if (!question?.id) return
+
+    const channel = supabase
+      .channel('answers-' + question.id)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'community_answers',
+          filter: 'question_id=eq.' + question.id,
+        },
+        function(payload) {
+          const newAnswer = payload.new
+          if (!newAnswer) return
+          // Only top-level answers — ignore replies
+          if (newAnswer.parent_id !== null) return
+          // Ignore hidden answers
+          if (newAnswer.is_hidden) return
+          // On 'best' sort prepend doesn't make sense (sorted by votes)
+          // On 'newest' prepend is correct
+          // On 'oldest' append is correct but complex — just prepend for now
+          if (sortRef.current === 'oldest') return
+          setAnswers(function(prev) {
+            const alreadyExists = prev.some(function(a) { return a.id === newAnswer.id })
+            if (alreadyExists) return prev
+            if (sortRef.current === 'newest') return [newAnswer, ...prev]
+            return [newAnswer, ...prev]
+          })
+        }
+      )
+      .subscribe()
+
+    return function() { supabase.removeChannel(channel) }
+  }, [question?.id])
 
   useEffect(function setupObserver() {
     const observer = new IntersectionObserver(function(entries) {
@@ -157,4 +197,12 @@ useEffect(function() {
 
 // --- CHANGE LOG ---
 // [May 21, 2026] CREATED: Infinite scroll answer feed with sort tabs
+// [May 25, 2026] ADDED: Supabase realtime subscription for new answers
+// REASON: New answers only appeared after manual page refresh.
+// FIX: postgres_changes INSERT listener on community_answers filtered by
+//   question_id prepends new top-level answers instantly.
+//   Skips replies (parent_id !== null), hidden answers, and 'oldest' sort.
+//   Duplicate guard prevents double render if poster's own submit already added it.
+//   Channel name is unique per question — answers-{question.id}.
+//   Channel cleaned up on unmount via supabase.removeChannel().
 // --- END CHANGE LOG ---
