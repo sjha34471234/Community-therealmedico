@@ -507,6 +507,14 @@ a:hover {
   color: var(--text-muted);
 }
 
+/* ─── PLUS MENU ANIMATION ───────────────────────────────────── */
+@keyframes plusMenuIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+.bottom-nav-ask--open {
+  background: var(--accent-hover);
+}
 /* --- CHANGE LOG ---
    [May 18, 2026] FIXED: body height:100dvh + overflow:hidden + #page-scroll-container
    REASON: Prevents browser chrome (address bar) from sliding on scroll.
