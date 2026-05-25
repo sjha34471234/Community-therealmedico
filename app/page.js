@@ -3,7 +3,8 @@
 // PURPOSE: Homepage — live question feed with sort tabs
 //          Two-column layout: feed left, recently visited right
 //          Infinite scroll — loads more as user scrolls down
-// LAST CHANGED: May 21, 2026
+//          Realtime — new questions appear instantly for all users
+// LAST CHANGED: May 25, 2026
 // ============================================================
 
 'use client';
@@ -47,6 +48,36 @@ export default function HomePage() {
     hasMoreRef.current = false;
     fetchQuestions(sort, 1, userId, false);
   }, [sort, userId]);
+
+  // ── Realtime — prepend new questions instantly for all users ──
+  useEffect(function() {
+    const channel = supabase
+      .channel('homepage-questions')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'community_questions',
+          filter: 'is_hidden=eq.false',
+        },
+        function(payload) {
+          const newQuestion = payload.new
+          if (!newQuestion) return
+          // Only prepend on 'new' or 'hot' sort — 'top' is by votes so prepending doesn't make sense
+          if (sortRef.current === 'top') return
+          setQuestions(function(prev) {
+            // Avoid duplicates if the poster's own redirect already loaded it
+            const alreadyExists = prev.some(function(q) { return q.id === newQuestion.id })
+            if (alreadyExists) return prev
+            return [newQuestion, ...prev]
+          })
+        }
+      )
+      .subscribe()
+
+    return function() { supabase.removeChannel(channel) }
+  }, [])
 
   function buildUrl(sortKey, pageNum, uid) {
     const base = window.location.origin + '/api/questions';
@@ -199,8 +230,12 @@ export default function HomePage() {
 
 // --- CHANGE LOG ---
 // [May 14, 2026] CREATED: Initial build — Phase 2 live feed
-// [May 21, 2026] UPDATED: Two-column layout — feed left, RecentlyVisited sidebar right
-// [May 21, 2026] UPDATED: Infinite scroll — IntersectionObserver sentinel
-// [May 21, 2026] REMOVED: "Questions / Browse questions from the healthcare community" header block
-// [May 21, 2026] UPDATED: Hide "+ Ask a Question" button on mobile (uses BottomNav + instead)
+// [May 21, 2026] UPDATED: Two-column layout, infinite scroll, sidebar
+// [May 25, 2026] ADDED: Supabase realtime subscription for new questions
+// REASON: New questions were only visible after manual refresh.
+// FIX: postgres_changes INSERT listener on community_questions prepends new
+//   questions to the feed instantly for all users. Skipped on 'top' sort
+//   since that sort is by votes — prepending makes no sense there.
+//   Duplicate guard prevents double-render if poster's redirect already loaded it.
+//   Channel cleaned up on unmount via supabase.removeChannel().
 // --- END CHANGE LOG ---
