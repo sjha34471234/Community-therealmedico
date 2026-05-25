@@ -285,10 +285,10 @@ export async function PATCH(request) {
 
     // Verify user is part of this conversation
     const { data: convo } = await supabase
-      .from('community_dm_conversations')
-      .select('id, user_a, user_b')
-      .eq('id', conversation_id)
-      .single();
+  .from('community_dm_conversations')
+  .select('id, user_a, user_b, last_message_at')
+  .eq('id', conversation_id)
+  .single();
 
     if (!convo) {
       return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
