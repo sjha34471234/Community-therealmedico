@@ -15,7 +15,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Home, Scroll, PlusCircle, MessageCircle, User, FileQuestion, Film } from 'lucide-react';
+import { Home, Film, PlusCircle, MessageCircle, User, FileQuestion } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import useAuthStore from '@/store/authStore';
 
