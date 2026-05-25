@@ -1,0 +1,383 @@
+/* ============================================================
+   FILE: app/scroll/scroll.css
+   PURPOSE: Styles for the Scroll feed — full-screen snap-scroll cards
+   LAST CHANGED: May 26, 2026
+   ============================================================ */
+
+/* Scroll container — full screen snap scroll */
+.scroll-container {
+  height: 100dvh;
+  overflow-y: scroll;
+  scroll-snap-type: y mandatory;
+  -webkit-overflow-scrolling: touch;
+  background: #0a0a0a;
+  scrollbar-width: none;
+  /* Must cover navbar and bottomnav — position fixed from top:0 */
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 500;
+}
+.scroll-container::-webkit-scrollbar {
+  display: none;
+}
+
+/* Each card — exactly one viewport height */
+.scroll-card {
+  height: 100dvh;
+  width: 100%;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  overflow: hidden;
+  background: #0a0a0a;
+}
+
+/* Gradient overlay from bottom */
+.scroll-card-gradient {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to top,
+    rgba(0,0,0,0.88) 0%,
+    rgba(0,0,0,0.3) 45%,
+    transparent 70%
+  );
+  pointer-events: none;
+}
+
+/* Subtle background dot pattern */
+.scroll-card-bg {
+  position: absolute;
+  inset: 0;
+  opacity: 0.05;
+  background-image: radial-gradient(circle, #1D6FA4 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+/* Bottom content area */
+.scroll-card-bottom {
+  position: relative;
+  z-index: 2;
+  padding: 0 16px 88px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* User row */
+.scroll-card-user-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.scroll-card-username {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: 'Inter', sans-serif;
+}
+
+/* Question content */
+.scroll-card-content {
+  color: #ffffff;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: -0.4px;
+  max-width: calc(100% - 70px);
+  font-family: 'Merriweather', Georgia, serif;
+}
+
+/* Tags row */
+.scroll-card-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.scroll-card-tag {
+  background: rgba(29,111,164,0.35);
+  color: #7EC8F0;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 99px;
+  border: 1px solid rgba(29,111,164,0.5);
+  font-family: 'Inter', sans-serif;
+}
+
+/* Right sidebar action buttons */
+.scroll-card-actions {
+  position: absolute;
+  right: 14px;
+  bottom: 110px;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+}
+.scroll-action-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+.scroll-action-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.12);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255,255,255,0.15);
+  transition: background 0.15s ease;
+}
+.scroll-action-icon:active {
+  background: rgba(255,255,255,0.25);
+}
+.scroll-action-icon.voted-up {
+  background: rgba(29,111,164,0.45);
+  border-color: #1D6FA4;
+}
+.scroll-action-icon.voted-down {
+  background: rgba(198,40,40,0.35);
+  border-color: #C62828;
+}
+.scroll-action-label {
+  color: rgba(255,255,255,0.85);
+  font-size: 11px;
+  font-weight: 600;
+  font-family: 'Inter', sans-serif;
+}
+
+/* Double-tap heart animation */
+.scroll-heart-burst {
+  position: absolute;
+  pointer-events: none;
+  z-index: 10;
+  font-size: 90px;
+  left: 50%;
+  top: 38%;
+  transform: translateX(-50%) scale(0);
+  opacity: 0;
+  animation: scrollHeartBurst 0.72s ease forwards;
+}
+@keyframes scrollHeartBurst {
+  0%   { transform: translateX(-50%) scale(0);   opacity: 1; }
+  40%  { transform: translateX(-50%) scale(1.3); opacity: 1; }
+  70%  { transform: translateX(-50%) scale(1.1); opacity: 0.85; }
+  100% { transform: translateX(-50%) scale(1.4); opacity: 0; }
+}
+
+/* Comments drawer overlay */
+.scroll-comments-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: rgba(0,0,0,0.55);
+  display: flex;
+  align-items: flex-end;
+}
+.scroll-comments-drawer {
+  width: 100%;
+  max-height: 72dvh;
+  background: #1a1a1a;
+  border-radius: 20px 20px 0 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.scroll-comments-header {
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+}
+.scroll-comments-title {
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: 'Inter', sans-serif;
+}
+.scroll-comments-close {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.5);
+  cursor: pointer;
+  padding: 4px 8px;
+  font-size: 22px;
+  line-height: 1;
+}
+.scroll-comments-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overscroll-behavior: contain;
+}
+.scroll-comment-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.scroll-comment-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.scroll-comment-body {
+  flex: 1;
+}
+.scroll-comment-username {
+  color: #7EC8F0;
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 3px;
+  font-family: 'Inter', sans-serif;
+}
+.scroll-comment-text {
+  color: rgba(255,255,255,0.88);
+  font-size: 13px;
+  line-height: 1.5;
+  font-family: 'Inter', sans-serif;
+}
+.scroll-comment-actions {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  margin-top: 5px;
+}
+.scroll-comment-action-btn {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.45);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  font-family: 'Inter', sans-serif;
+}
+.scroll-comment-action-btn:hover {
+  color: rgba(255,255,255,0.75);
+}
+.scroll-replies {
+  padding-left: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+}
+.scroll-reply-item {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.scroll-comments-input-row {
+  padding: 12px 16px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+  flex-shrink: 0;
+}
+.scroll-comments-input {
+  flex: 1;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 20px;
+  padding: 9px 16px;
+  color: #fff;
+  font-size: 13px;
+  outline: none;
+  font-family: 'Inter', sans-serif;
+}
+.scroll-comments-input::placeholder {
+  color: rgba(255,255,255,0.3);
+}
+.scroll-comments-send {
+  background: var(--accent-primary);
+  border: none;
+  border-radius: 50%;
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s ease;
+}
+.scroll-comments-send:hover {
+  background: var(--accent-hover);
+}
+.scroll-comments-send:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Music player bar */
+.scroll-music-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 600;
+  padding: 12px 16px;
+  display: flex;
+  justify-content: flex-end;
+  pointer-events: none;
+}
+.scroll-music-btn {
+  pointer-events: all;
+  background: rgba(0,0,0,0.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 99px;
+  padding: 7px 14px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'Inter', sans-serif;
+  transition: background 0.15s ease;
+}
+.scroll-music-btn:hover {
+  background: rgba(0,0,0,0.7);
+}
+
+/* Reply inline input row */
+.scroll-reply-input-row {
+  padding-left: 40px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 6px;
+}
+
+/* --- CHANGE LOG ---
+   [May 26, 2026] CREATED: Scroll CSS — full screen snap scroll cards, dark theme,
+   right sidebar actions, comments drawer, double-tap heart, music bar.
+   Uses Inter + Merriweather matching globals.css fonts.
+   --- END CHANGE LOG --- */
