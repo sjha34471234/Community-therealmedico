@@ -1,12 +1,15 @@
 /* --- WHY THIS CODE EXISTS ---
    Per-page CSS for the Scroll Creator (/scroll/create).
    All creator styles live here — never in globals.css (per-page CSS rule).
-   Mobile-first, 390px canvas, dark theme throughout.
+   Mobile-first, canvas sized dynamically to fit between toolbar and tab bar.
    --- WHAT THIS MADE WORK ---
    Canvas layout, toolbar, tab bar, element selection handles,
    opacity slider panel, background swatches, icon grid, music panel.
    --- CHANGE LOG ---
    [May 26 2026] CREATED: Phase 15B-1 Scroll Creator core styles.
+   [May 27 2026] FIXED: Canvas clipped by navbar/bottomnav — removed conflicting
+     max-height media queries, switched to min-height queries, canvas starts
+     small and grows on taller screens. creator-page hides site chrome.
    --- END CHANGE LOG --- */
 
 /* ── PAGE SHELL ── */
@@ -18,7 +21,6 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding-top: env(safe-area-inset-top);
 }
 
 /* ── TOOLBAR (top) ── */
@@ -85,7 +87,7 @@
   cursor: not-allowed;
 }
 
-/* ── CANVAS AREA (scrollable middle zone) ── */
+/* ── CANVAS AREA ── */
 .creator-canvas-area {
   flex: 1;
   display: flex;
@@ -97,29 +99,39 @@
   min-height: 0;
 }
 
-/* ── CANVAS (the actual design surface) ── */
+/* ── CANVAS — starts small, grows on taller screens ── */
 .creator-canvas {
   position: relative;
-  width: 280px;
-  height: 420px;
+  width: 220px;
+  height: 340px;
   flex-shrink: 0;
   overflow: hidden;
   border-radius: 16px;
   box-shadow: 0 0 0 1px rgba(255,255,255,0.08), 0 24px 48px rgba(0,0,0,0.6);
   touch-action: none;
 }
-
-/* Scales canvas down on smaller screens */
-@media (max-height: 780px) {
+@media (min-height: 650px) {
   .creator-canvas {
-    width: 320px;
-    height: 560px;
+    width: 250px;
+    height: 390px;
   }
 }
-@media (max-height: 660px) {
+@media (min-height: 720px) {
   .creator-canvas {
-    width: 270px;
-    height: 472px;
+    width: 280px;
+    height: 430px;
+  }
+}
+@media (min-height: 820px) {
+  .creator-canvas {
+    width: 310px;
+    height: 480px;
+  }
+}
+@media (min-height: 950px) {
+  .creator-canvas {
+    width: 340px;
+    height: 530px;
   }
 }
 
@@ -189,7 +201,7 @@
   z-index: 10;
 }
 
-/* ── OPACITY PANEL (floats above selected element) ── */
+/* ── OPACITY PANEL ── */
 .creator-opacity-panel {
   position: absolute;
   z-index: 20;
@@ -231,10 +243,10 @@
   align-items: center;
 }
 
-/* ── TAB BAR (bottom, above bottom nav) ── */
+/* ── TAB BAR ── */
 .creator-tabs {
   flex-shrink: 0;
-  background: rgba(0,0,0,0.85);
+  background: rgba(0,0,0,0.92);
   backdrop-filter: blur(10px);
   border-top: 1px solid rgba(255,255,255,0.08);
 }
@@ -263,10 +275,10 @@
   border-bottom-color: #1D6FA4;
 }
 .creator-tabs__content {
-  padding: 10px 12px 12px;
+  padding: 8px 12px 10px;
   overflow-x: auto;
-  overflow-y: hidden;
-  max-height: 160px;
+  overflow-y: auto;
+  max-height: 130px;
   scrollbar-width: none;
 }
 .creator-tabs__content::-webkit-scrollbar { display: none; }
@@ -282,8 +294,8 @@
   padding: 10px;
   resize: none;
   outline: none;
-  min-height: 56px;
-  max-height: 80px;
+  min-height: 52px;
+  max-height: 72px;
   font-family: inherit;
 }
 .creator-text-tab textarea::placeholder {
@@ -364,8 +376,8 @@
 }
 .creator-bg-swatches::-webkit-scrollbar { display: none; }
 .creator-bg-swatch {
-  width: 38px;
-  height: 38px;
+  width: 36px;
+  height: 36px;
   border-radius: 8px;
   flex-shrink: 0;
   cursor: pointer;
@@ -387,8 +399,8 @@
 }
 .creator-bg-gradients::-webkit-scrollbar { display: none; }
 .creator-bg-gradient {
-  width: 56px;
-  height: 38px;
+  width: 52px;
+  height: 36px;
   border-radius: 8px;
   flex-shrink: 0;
   cursor: pointer;
@@ -437,8 +449,8 @@
   flex-shrink: 0;
 }
 .creator-icon-item__preview {
-  width: 52px;
-  height: 52px;
+  width: 50px;
+  height: 50px;
   border-radius: 10px;
   background: rgba(255,255,255,0.06);
   border: 1px solid rgba(255,255,255,0.1);
@@ -455,7 +467,7 @@
   color: rgba(255,255,255,0.4);
   font-size: 9px;
   text-align: center;
-  max-width: 52px;
+  max-width: 50px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -463,7 +475,7 @@
 
 /* ── MUSIC TAB ── */
 .creator-music-tab {
-  min-height: 100px;
+  min-height: 80px;
 }
 .creator-music-no-key {
   display: flex;
