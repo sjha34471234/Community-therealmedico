@@ -10,7 +10,7 @@
 // without being clipped by site navbar or bottom nav.
 // --- PITFALLS ---
 // Must be 'use client' — all touch logic and refs are browser-only.
-// Navbar hide/show uses display:none on #page-scroll-container siblings.
+// Navbar hide/show uses display:none on nav + .bottom-nav selectors.
 // creator.css must be imported here — per-page CSS rule.
 // --- CHANGE LOG ---
 // [May 26 2026] CREATED: Phase 15B-1 — replaces placeholder from Phase 15A.
