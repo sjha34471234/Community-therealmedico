@@ -1,7 +1,7 @@
 // ============================================================
 // FILE: app/api/scrolls/route.js
 // PURPOSE: GET scroll feed + POST new scroll
-// LAST CHANGED: May 26, 2026
+// LAST CHANGED: May 27, 2026
 // WHY IT EXISTS: Phase 15 — Scroll is its own content type,
 //   separate from community_questions entirely.
 // DEPENDENCIES: lib/supabaseServer.js
@@ -11,6 +11,7 @@
 //   - Rate limit: 10 scrolls per user per hour.
 //   - Never return user emails or sensitive fields.
 //   - Array.from(new Set(...)) — never [...new Set(...)].
+//   - canvas_data must be parsed from string before insert (JSONB).
 // ============================================================
 
 export const dynamic = 'force-dynamic'
@@ -41,7 +42,7 @@ export async function GET(request) {
 
     const { data: scrolls, error } = await supabase
       .from('community_scrolls')
-      .select('id, content, upvotes, downvotes, comment_count, user_id, created_at')
+      .select('id, content, canvas_data, upvotes, downvotes, comment_count, user_id, created_at')
       .eq('is_hidden', false)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1)
@@ -91,10 +92,12 @@ export async function GET(request) {
     }
 
     // Attach profile + avatar to each scroll
+    // canvas_data comes back as parsed object from Supabase JSONB automatically
     const final = list.map(function attach(s) {
       const profile = profileMap[s.user_id] || null
       return {
         ...s,
+        canvas_data: s.canvas_data || null,
         community_username: profile ? (profile.community_username || 'Anonymous') : 'Anonymous',
         is_member: profile ? (profile.is_member === true) : false,
         avatar: avatarMap[s.user_id] || null,
@@ -119,13 +122,24 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
     }
 
-    const { content } = body
+    const { content, canvas_data } = body
 
     if (!content || typeof content !== 'string' || content.trim().length < 5) {
       return NextResponse.json({ error: 'Content must be at least 5 characters' }, { status: 400 })
     }
     if (content.trim().length > 300) {
       return NextResponse.json({ error: 'Content must be under 300 characters' }, { status: 400 })
+    }
+
+    // Parse canvas_data — sent as JSON string from creator, stored as JSONB
+    let parsedCanvas = null
+    if (canvas_data) {
+      try {
+        parsedCanvas = typeof canvas_data === 'string' ? JSON.parse(canvas_data) : canvas_data
+      } catch {
+        // canvas_data malformed — allow post without it, don't block
+        parsedCanvas = null
+      }
     }
 
     const authHeader = request.headers.get('Authorization') || ''
@@ -151,6 +165,7 @@ export async function POST(request) {
       .insert({
         user_id: user.id,
         content: content.trim(),
+        canvas_data: parsedCanvas,
         upvotes: 0,
         downvotes: 0,
         comment_count: 0,
@@ -178,4 +193,7 @@ export async function POST(request) {
 // [May 26, 2026] CREATED: Scrolls API — separate from questions entirely.
 //   GET: feed with profile + avatar attached.
 //   POST: create new scroll with auth + rate limit.
+// [May 27, 2026] UPDATED: Phase 15B-1 — added canvas_data JSONB to GET select
+//   and POST insert. canvas_data parsed from string before insert,
+//   returned as object in GET (Supabase JSONB auto-parses on read).
 // --- END CHANGE LOG ---
