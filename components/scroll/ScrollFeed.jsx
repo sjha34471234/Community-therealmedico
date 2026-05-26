@@ -2,12 +2,11 @@
 
 // ============================================================
 // FILE: components/scroll/ScrollFeed.jsx
-// PURPOSE: Snap-scroll container — fetches questions, renders ScrollCards
+// PURPOSE: Snap-scroll container — fetches scrolls, renders ScrollCards
 // LAST CHANGED: May 26, 2026
 // WHY IT EXISTS: Phase 15 Scroll — orchestrates the full-screen feed
 // DEPENDENCIES: components/scroll/ScrollCard.jsx, ScrollMusicPlayer.jsx
-// ⚠️ DO NOT: The scroll container is position:fixed — it covers navbar/bottomnav.
-//            This is intentional — Scroll is immersive full-screen.
+// ⚠️ Fetches from /api/scrolls — NOT /api/questions (separate table)
 // ============================================================
 
 import { useState, useEffect, useRef } from 'react';
@@ -16,7 +15,7 @@ import ScrollCard from '@/components/scroll/ScrollCard';
 import ScrollMusicPlayer from '@/components/scroll/ScrollMusicPlayer';
 
 export default function ScrollFeed() {
-  const [questions, setQuestions] = useState([]);
+  const [scrolls, setScrolls] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeIndex, setActiveIndex] = useState(0);
   const [musicPlaying, setMusicPlaying] = useState(false);
@@ -25,12 +24,12 @@ export default function ScrollFeed() {
   useEffect(function() {
     async function load() {
       try {
-        const res = await fetch('/api/questions?sort=hot&limit=30', {
+        const res = await fetch('/api/scrolls', {
           cache: 'no-store',
           credentials: 'include',
         });
         const data = await res.json();
-        setQuestions(data.questions || []);
+        setScrolls(data.scrolls || []);
       } catch (_) {}
       setLoading(false);
     }
@@ -46,7 +45,7 @@ export default function ScrollFeed() {
     }
     container.addEventListener('scroll', onScroll, { passive: true });
     return function() { container.removeEventListener('scroll', onScroll); };
-  }, [questions]);
+  }, [scrolls]);
 
   if (loading) return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 500, background: '#0a0a0a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -54,20 +53,20 @@ export default function ScrollFeed() {
     </div>
   );
 
-  if (questions.length === 0) return (
+  if (scrolls.length === 0) return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 500, background: '#0a0a0a', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '14px' }}>
-      <span style={{ fontSize: '42px' }}>🏥</span>
-      <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '14px', fontFamily: 'Inter, sans-serif' }}>No scrolls yet. Ask a question first!</span>
+      <span style={{ fontSize: '42px' }}>📜</span>
+      <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '14px', fontFamily: 'Inter, sans-serif' }}>No scrolls yet — be the first to create one!</span>
     </div>
   );
 
   return (
     <div ref={containerRef} className="scroll-container">
-      {questions.map(function(q, i) {
+      {scrolls.map(function(s, i) {
         return (
           <ScrollCard
-            key={q.id}
-            question={q}
+            key={s.id}
+            scroll={s}
             isActive={i === activeIndex}
           />
         );
@@ -81,6 +80,7 @@ export default function ScrollFeed() {
 }
 
 // --- CHANGE LOG ---
-// [May 26, 2026] CREATED: ScrollFeed — fetches questions, snap-scroll container,
-//   tracks active index, music player toggle.
+// [May 26, 2026] CREATED: ScrollFeed
+// [May 26, 2026] FIXED: Now fetches /api/scrolls (own table) not /api/questions.
+//   prop renamed question → scroll passed to ScrollCard.
 // --- END CHANGE LOG ---
