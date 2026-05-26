@@ -2,22 +2,21 @@
 
 // ============================================================
 // FILE: components/scroll/ScrollComments.jsx
-// PURPOSE: Inline comments + replies drawer for a scroll card
+// PURPOSE: Comments + replies drawer for a scroll card
 // LAST CHANGED: May 26, 2026
-// WHY IT EXISTS: Phase 15 Scroll — comments without leaving the scroll feed
-// ⚠️ PITFALLS:
-//   - Reuses /api/answers — answers ARE comments here
-//   - parent_id IS NULL for top-level answers (per brain dump rule)
-//   - accessToken in Authorization header — never in body
-//   - stopPropagation on drawer — prevents double-tap firing through overlay
+// WHY IT EXISTS: Phase 15 Scroll
+// ⚠️ Uses /api/scrolls/comments — NOT /api/answers
+// ⚠️ replies use size="xs", comments use size="sm" — hierarchical
+// ⚠️ accessToken in Authorization header — never in body
+// ⚠️ stopPropagation on drawer — prevents double-tap firing through
 // ============================================================
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Send } from 'lucide-react';
 import useAuthStore from '@/store/authStore';
 import Avatar from '@/components/Avatar';
 
-export default function ScrollComments({ question, onClose }) {
+export default function ScrollComments({ scroll, onClose }) {
   const { user, accessToken } = useAuthStore();
   const [comments, setComments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -30,31 +29,39 @@ export default function ScrollComments({ question, onClose }) {
   useEffect(function() {
     async function load() {
       try {
-        const res = await fetch('/api/answers?question_id=' + question.id, {
+        const res = await fetch('/api/scrolls/comments?scroll_id=' + scroll.id, {
           credentials: 'include',
           cache: 'no-store',
         });
         const data = await res.json();
-        setComments(data.answers || []);
+        setComments(data.comments || []);
       } catch (_) {}
       setLoading(false);
     }
     load();
-  }, [question.id]);
+  }, [scroll.id]);
 
   async function postComment() {
     if (!inputText.trim() || !user || !accessToken) return;
     setPosting(true);
     try {
-      const res = await fetch('/api/answers', {
+      const res = await fetch('/api/scrolls/comments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + accessToken },
         credentials: 'include',
-        body: JSON.stringify({ question_id: question.id, body: inputText.trim() }),
+        body: JSON.stringify({ scroll_id: scroll.id, body: inputText.trim() }),
       });
       const data = await res.json();
-      if (data.answer) {
-        setComments(function(c) { return [data.answer, ...c]; });
+      if (data.id) {
+        const newComment = {
+          id: data.id,
+          body: inputText.trim(),
+          community_username: user.community_username || 'You',
+          avatar: null,
+          reply_count: 0,
+          replies: [],
+        };
+        setComments(function(c) { return [newComment, ...c]; });
         setInputText('');
       }
     } catch (_) {}
@@ -65,18 +72,24 @@ export default function ScrollComments({ question, onClose }) {
     const text = replyTexts[commentId];
     if (!text || !text.trim() || !user || !accessToken) return;
     try {
-      const res = await fetch('/api/answers', {
+      const res = await fetch('/api/scrolls/comments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + accessToken },
         credentials: 'include',
-        body: JSON.stringify({ question_id: question.id, body: text.trim(), parent_id: commentId }),
+        body: JSON.stringify({ scroll_id: scroll.id, body: text.trim(), parent_id: commentId }),
       });
       const data = await res.json();
-      if (data.answer) {
+      if (data.id) {
+        const newReply = {
+          id: data.id,
+          body: text.trim(),
+          community_username: user.community_username || 'You',
+          avatar: null,
+        };
         setComments(function(prev) {
           return prev.map(function(c) {
             if (c.id !== commentId) return c;
-            return { ...c, replies: [data.answer, ...(c.replies || [])] };
+            return { ...c, replies: [newReply, ...(c.replies || [])] };
           });
         });
         setReplyTexts(function(r) { return { ...r, [commentId]: '' }; });
@@ -84,6 +97,28 @@ export default function ScrollComments({ question, onClose }) {
         setExpandedReplies(function(r) { return { ...r, [commentId]: true }; });
       }
     } catch (_) {}
+  }
+
+  async function loadReplies(commentId) {
+    try {
+      const res = await fetch('/api/scrolls/comments?scroll_id=' + scroll.id + '&parent_id=' + commentId, {
+        credentials: 'include',
+        cache: 'no-store',
+      });
+      const data = await res.json();
+      setComments(function(prev) {
+        return prev.map(function(c) {
+          if (c.id !== commentId) return c;
+          return { ...c, replies: data.comments || [] };
+        });
+      });
+    } catch (_) {}
+  }
+
+  function toggleReplies(commentId, replyCount) {
+    const nowOpen = !expandedReplies[commentId];
+    setExpandedReplies(function(r) { return { ...r, [commentId]: nowOpen }; });
+    if (nowOpen && replyCount > 0) loadReplies(commentId);
   }
 
   return (
@@ -107,6 +142,7 @@ export default function ScrollComments({ question, onClose }) {
           )}
           {comments.map(function(comment) {
             const replies = comment.replies || [];
+            const replyCount = comment.reply_count || replies.length;
             return (
               <div key={comment.id} className="scroll-comment-item">
                 <div className="scroll-comment-row">
@@ -121,14 +157,14 @@ export default function ScrollComments({ question, onClose }) {
                       >
                         Reply
                       </button>
-                      {replies.length > 0 && (
+                      {replyCount > 0 && (
                         <button
                           className="scroll-comment-action-btn"
-                          onClick={function() { setExpandedReplies(function(r) { return { ...r, [comment.id]: !r[comment.id] }; }); }}
+                          onClick={function() { toggleReplies(comment.id, replyCount); }}
                         >
                           {expandedReplies[comment.id]
                             ? '▲ Hide replies'
-                            : '▼ ' + replies.length + (replies.length === 1 ? ' reply' : ' replies')}
+                            : '▼ ' + replyCount + (replyCount === 1 ? ' reply' : ' replies')}
                         </button>
                       )}
                     </div>
@@ -155,7 +191,7 @@ export default function ScrollComments({ question, onClose }) {
                     {replies.map(function(reply) {
                       return (
                         <div key={reply.id} className="scroll-reply-item">
-  <Avatar avatarRow={reply.avatar} username={reply.community_username} size="xs" />
+                          <Avatar avatarRow={reply.avatar} username={reply.community_username} size="xs" />
                           <div className="scroll-comment-body">
                             <div className="scroll-comment-username">@{reply.community_username || 'anon'}</div>
                             <div className="scroll-comment-text">{reply.body}</div>
@@ -189,6 +225,9 @@ export default function ScrollComments({ question, onClose }) {
 }
 
 // --- CHANGE LOG ---
-// [May 26, 2026] CREATED: ScrollComments — bottom drawer, inline replies,
-//   post comment + reply, reuses /api/answers endpoint.
+// [May 26, 2026] CREATED: ScrollComments
+// [May 26, 2026] FIXED: Uses /api/scrolls/comments not /api/answers.
+//   prop renamed question → scroll.
+//   replies use size="xs", comments use size="sm" for hierarchy.
+//   loadReplies fetches from DB on expand.
 // --- END CHANGE LOG ---
