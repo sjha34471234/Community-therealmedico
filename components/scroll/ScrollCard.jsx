@@ -2,20 +2,12 @@
 
 // ============================================================
 // FILE: components/scroll/ScrollCard.jsx
-// PURPOSE: Single scroll card — full screen, snap-scroll aligned
+// PURPOSE: Single scroll card — full screen snap-scroll
 // LAST CHANGED: May 26, 2026
-// WHY IT EXISTS: Phase 15 Scroll — one card per question
-// FEATURES:
-//   - Title trimmed to max 25 words
-//   - User avatar + username bottom left
-//   - Right sidebar: upvote, downvote, comment count
-//   - Double-tap anywhere = upvote + heart burst animation
-//   - Comments drawer via ScrollComments
-// ⚠️ PITFALLS:
-//   - Double tap uses lastTapRef — two taps <300ms apart = double tap
-//   - avatarRow prop — NEVER avatar= (silent bug per brain dump)
-//   - useEffect MUST be before any conditional return (Rules of Hooks)
-//   - stopPropagation on sidebar buttons — prevents double-tap firing
+// WHY IT EXISTS: Phase 15 Scroll
+// ⚠️ prop is `scroll` not `question` — separate content type
+// ⚠️ avatarRow prop on Avatar — NEVER avatar=
+// ⚠️ useEffect before any conditional return — Rules of Hooks
 // ============================================================
 
 import { useState, useRef, useCallback } from 'react';
@@ -24,17 +16,10 @@ import useAuthStore from '@/store/authStore';
 import Avatar from '@/components/Avatar';
 import ScrollComments from '@/components/scroll/ScrollComments';
 
-function trimToWords(text, max) {
-  if (!text) return '';
-  const words = text.trim().split(/\s+/);
-  if (words.length <= max) return text.trim();
-  return words.slice(0, max).join(' ') + '…';
-}
-
-export default function ScrollCard({ question, isActive }) {
+export default function ScrollCard({ scroll, isActive }) {
   const { user, accessToken } = useAuthStore();
-  const [upvotes, setUpvotes] = useState(question.upvotes || 0);
-  const [downvotes, setDownvotes] = useState(question.downvotes || 0);
+  const [upvotes, setUpvotes] = useState(scroll.upvotes || 0);
+  const [downvotes, setDownvotes] = useState(scroll.downvotes || 0);
   const [myVote, setMyVote] = useState(null);
   const [showComments, setShowComments] = useState(false);
   const [heartVisible, setHeartVisible] = useState(false);
@@ -57,10 +42,10 @@ export default function ScrollCard({ question, isActive }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + accessToken },
         credentials: 'include',
-        body: JSON.stringify({ content_type: 'question', content_id: question.id, vote_type: newVote }),
+        body: JSON.stringify({ content_type: 'scroll', content_id: scroll.id, vote_type: newVote }),
       });
     } catch (_) {}
-  }, [user, accessToken, myVote, question.id]);
+  }, [user, accessToken, myVote, scroll.id]);
 
   function handleTap() {
     const now = Date.now();
@@ -71,10 +56,6 @@ export default function ScrollCard({ question, isActive }) {
     }
     lastTapRef.current = now;
   }
-
-  const tags = Array.isArray(question.tags) ? question.tags.slice(0, 3) : [];
-  const commentCount = question.answer_count || 0;
-  const displayText = trimToWords(question.title || question.body || '', 25);
 
   return (
     <div className="scroll-card" onClick={handleTap} onTouchEnd={handleTap}>
@@ -114,28 +95,21 @@ export default function ScrollCard({ question, isActive }) {
           <div className="scroll-action-icon">
             <MessageCircle size={20} color="#fff" strokeWidth={1.8} />
           </div>
-          <span className="scroll-action-label">{commentCount}</span>
+          <span className="scroll-action-label">{scroll.comment_count || 0}</span>
         </button>
       </div>
 
       <div className="scroll-card-bottom">
         <div className="scroll-card-user-row">
-          <Avatar avatarRow={question.avatar} username={question.community_username} size="sm" />
-          <span className="scroll-card-username">@{question.community_username || 'anon'}</span>
+          <Avatar avatarRow={scroll.avatar} username={scroll.community_username} size="sm" />
+          <span className="scroll-card-username">@{scroll.community_username || 'anon'}</span>
         </div>
-        <div className="scroll-card-content">{displayText}</div>
-        {tags.length > 0 && (
-          <div className="scroll-card-tags">
-            {tags.map(function(tag) {
-              return <span key={tag} className="scroll-card-tag">#{tag}</span>;
-            })}
-          </div>
-        )}
+        <div className="scroll-card-content">{scroll.content}</div>
       </div>
 
       {showComments && (
         <ScrollComments
-          question={question}
+          scroll={scroll}
           onClose={function() { setShowComments(false); }}
         />
       )}
@@ -144,6 +118,7 @@ export default function ScrollCard({ question, isActive }) {
 }
 
 // --- CHANGE LOG ---
-// [May 26, 2026] CREATED: ScrollCard — full screen snap card, double-tap upvote,
-//   right sidebar actions, bottom user+content+tags, comments drawer.
+// [May 26, 2026] CREATED: ScrollCard
+// [May 26, 2026] FIXED: prop renamed question → scroll, uses scroll.content,
+//   scroll.comment_count, scroll.avatar, scroll.community_username.
 // --- END CHANGE LOG ---
