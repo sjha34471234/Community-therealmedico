@@ -58,7 +58,7 @@ export default function ScrollCard({ scroll, isActive }) {
   }
 
   return (
-    <div className="scroll-card" onClick={handleTap} onTouchEnd={handleTap}>
+    <div className="scroll-card" onClick={handleTap}>
       <div className="scroll-card-bg" />
       <div className="scroll-card-gradient" />
 
