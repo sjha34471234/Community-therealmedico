@@ -42,7 +42,8 @@ export default function ScrollCreatorToolbar({ canvasRef, getCanvas }) {
     }
 
     // ── GET CANVAS STATE ──
-    const canvas = getCanvas ? getCanvas() : null;
+    if (canvasRef && canvasRef.current && canvasRef.current.stopMusic) canvasRef.current.stopMusic();
+const canvas = getCanvas ? getCanvas() : null;
     if (!canvas) {
       toast.error('Canvas not ready. Please try again.');
       return;
