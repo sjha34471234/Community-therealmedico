@@ -93,26 +93,13 @@
 /* ── CANVAS — grows on taller screens ── */
 .creator-canvas {
   position: relative;
-  width: 200px;
-  height: 310px;
   flex-shrink: 0;
   overflow: hidden;
   border-radius: 16px;
   box-shadow: 0 0 0 1px rgba(255,255,255,0.08), 0 24px 48px rgba(0,0,0,0.6);
   touch-action: none;
 }
-@media (min-height: 620px) {
-  .creator-canvas { width: 220px; height: 340px; }
-}
-@media (min-height: 700px) {
-  .creator-canvas { width: 250px; height: 390px; }
-}
-@media (min-height: 800px) {
-  .creator-canvas { width: 280px; height: 430px; }
-}
-@media (min-height: 900px) {
-  .creator-canvas { width: 310px; height: 480px; }
-}
+
 
 /* ── CANVAS LAYERS ── */
 .creator-canvas__bg {
