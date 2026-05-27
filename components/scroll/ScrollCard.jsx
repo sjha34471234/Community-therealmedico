@@ -3,11 +3,12 @@
 // ============================================================
 // FILE: components/scroll/ScrollCard.jsx
 // PURPOSE: Single scroll card — full screen snap-scroll
-// LAST CHANGED: May 26, 2026
+// LAST CHANGED: May 27, 2026
 // WHY IT EXISTS: Phase 15 Scroll
 // ⚠️ prop is `scroll` not `question` — separate content type
 // ⚠️ avatarRow prop on Avatar — NEVER avatar=
-// ⚠️ useEffect before any conditional return — Rules of Hooks
+// ⚠️ Votes use scroll_id param — NOT question_id or answer_id
+// ⚠️ onClick only — no onTouchEnd to prevent double-fire on mobile
 // ============================================================
 
 import { useState, useRef, useCallback } from 'react';
@@ -30,6 +31,7 @@ export default function ScrollCard({ scroll, isActive }) {
     const newVote = myVote === type ? null : type;
     const prevVote = myVote;
     setMyVote(newVote);
+
     if (type === 'up') {
       setUpvotes(function(v) { return newVote === 'up' ? v + 1 : v - 1; });
       if (prevVote === 'down') setDownvotes(function(v) { return v - 1; });
@@ -37,12 +39,22 @@ export default function ScrollCard({ scroll, isActive }) {
       setDownvotes(function(v) { return newVote === 'down' ? v + 1 : v - 1; });
       if (prevVote === 'up') setUpvotes(function(v) { return v - 1; });
     }
+
+    // Map to vote_type number — same as questions/answers
+    const voteTypeNum = newVote === 'up' ? 1 : newVote === 'down' ? -1 : 0;
+
     try {
       await fetch('/api/votes', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + accessToken },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer ' + accessToken,
+        },
         credentials: 'include',
-        body: JSON.stringify({ content_type: 'scroll', content_id: scroll.id, vote_type: newVote }),
+        body: JSON.stringify({
+          scroll_id: scroll.id,
+          vote_type: voteTypeNum,
+        }),
       });
     } catch (_) {}
   }, [user, accessToken, myVote, scroll.id]);
@@ -119,6 +131,7 @@ export default function ScrollCard({ scroll, isActive }) {
 
 // --- CHANGE LOG ---
 // [May 26, 2026] CREATED: ScrollCard
-// [May 26, 2026] FIXED: prop renamed question → scroll, uses scroll.content,
-//   scroll.comment_count, scroll.avatar, scroll.community_username.
+// [May 27, 2026] FIXED: Vote call now sends scroll_id + vote_type number.
+//   Previously sent content_type/content_id which votes API doesn't understand.
+//   Removed onTouchEnd double-fire. votes API updated to handle scroll_id.
 // --- END CHANGE LOG ---
