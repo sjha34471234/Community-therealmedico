@@ -1,45 +1,40 @@
 'use client';
 
 // --- WHY THIS CODE EXISTS ---
-// Main canvas component for the Scroll Creator.
-// Holds ALL canvas state — background, elements, music.
-// Exposes addElement, setBackground, setMusic, getCanvas via useImperativeHandle
-// so the parent page can call them from tab callbacks.
+// Main canvas for Scroll Creator. Holds all canvas state.
 // --- WHAT THIS MADE WORK ---
-// Background rendering (solid + gradient), element add/update/delete,
-// selection management, canvas scale compensation for smaller screens.
+// Background, elements, music state. Music plays on canvas
+// immediately after user selects a track (Instagram-style).
+// Music bar overlays bottom of canvas showing track name + pause.
+// Music stops when user posts or navigates away.
 // --- PITFALLS ---
-// Only ONE export — ScrollCreatorCanvasWithRef (forwardRef).
-// The original file had a duplicate default export + forwardRef export
-// which caused a React hooks crash that broke the entire /scroll route.
-// canvasRef passed to every ScrollCreatorElement so touch coords can be
-// converted using actual rendered size vs 390px logical size.
-// selectedId cleared when tapping blank canvas area.
+// Audio must start AFTER user gesture — never on mount.
+// Audio ref created fresh each time music changes.
+// useImperativeHandle exposes addElement/setBackground/setMusic/getCanvas.
+// Only ONE export — ScrollCreatorCanvasWithRef. No default export.
 // --- CHANGE LOG ---
 // [May 26 2026] CREATED: Phase 15B-1 main canvas.
-// [May 27 2026] FIXED: Removed duplicate default export — only forwardRef
-//   export remains. Duplicate was causing React hooks crash on /scroll route.
+// [May 27 2026] FIXED: Removed duplicate default export.
+// [May 27 2026] ADDED: Instagram-style music playback on canvas after selection.
 // --- END CHANGE LOG ---
 
-import { useState, useRef, useCallback, forwardRef, useImperativeHandle } from 'react';
+import { useState, useRef, useCallback, forwardRef, useImperativeHandle, useEffect } from 'react';
+import { Music, Pause, Play } from 'lucide-react';
 import ScrollCreatorElement from './ScrollCreatorElement';
 
-// ── BACKGROUND RENDERER ──
 function getBackgroundStyle(bg) {
   if (!bg) return { background: '#1a1a2e' };
   if (bg.type === 'solid') return { background: bg.value };
   if (bg.type === 'gradient') return { background: bg.value };
   if (bg.type === 'custom-gradient') {
-    const dir = bg.direction || 'to bottom';
-    if (dir === 'radial') {
+    if (bg.direction === 'radial') {
       return { background: 'radial-gradient(circle at center, ' + (bg.color1 || '#1a1a2e') + ', ' + (bg.color2 || '#16213e') + ')' };
     }
-    return { background: 'linear-gradient(' + dir + ', ' + (bg.color1 || '#1a1a2e') + ', ' + (bg.color2 || '#16213e') + ')' };
+    return { background: 'linear-gradient(' + (bg.direction || 'to bottom') + ', ' + (bg.color1 || '#1a1a2e') + ', ' + (bg.color2 || '#16213e') + ')' };
   }
   return { background: '#1a1a2e' };
 }
 
-// ── TEXT ELEMENT RENDERER ──
 function TextElementContent({ props }) {
   return (
     <div style={{
@@ -65,7 +60,6 @@ function TextElementContent({ props }) {
   );
 }
 
-// ── ICON ELEMENT RENDERER ──
 function IconElementContent({ props }) {
   return (
     <div
@@ -75,10 +69,10 @@ function IconElementContent({ props }) {
   );
 }
 
-// ── MAIN CANVAS — forwardRef so parent can call addElement / setBackground / setMusic ──
 export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanvasWithRef({ onChange }, ref) {
   const canvasRef = useRef(null);
   const uidCounter = useRef(0);
+  const audioRef = useRef(null);
 
   function makeId() {
     uidCounter.current += 1;
@@ -91,8 +85,61 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
     music: null,
   });
   const [selectedId, setSelectedId] = useState(null);
+  const [musicPlaying, setMusicPlaying] = useState(false);
 
-  const updateCanvas = useCallback(function updateCanvas(patch) {
+  // ── Start/stop music when canvas.music changes ──
+  useEffect(function() {
+    // Stop any existing audio
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+    setMusicPlaying(false);
+
+    if (!canvas.music || !canvas.music.trackUrl) return;
+
+    const audio = new Audio(canvas.music.trackUrl);
+    audio.loop = true;
+    audio.volume = 0.5;
+    audio.currentTime = canvas.music.startSec || 0;
+    audioRef.current = audio;
+
+    // Auto-play — will work since user just tapped "Use this track" (gesture)
+    audio.play().then(function() {
+      setMusicPlaying(true);
+    }).catch(function() {
+      setMusicPlaying(false);
+    });
+
+    return function() {
+      audio.pause();
+      audio.currentTime = 0;
+    };
+  }, [canvas.music]);
+
+  // Stop audio on unmount
+  useEffect(function() {
+    return function() {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, []);
+
+  const toggleMusicPlayback = useCallback(function() {
+    if (!audioRef.current) return;
+    if (musicPlaying) {
+      audioRef.current.pause();
+      setMusicPlaying(false);
+    } else {
+      audioRef.current.play().then(function() {
+        setMusicPlaying(true);
+      }).catch(function() {});
+    }
+  }, [musicPlaying]);
+
+  const updateCanvas = useCallback(function(patch) {
     setCanvas(function(prev) {
       const next = { ...prev, ...patch };
       if (onChange) onChange(next);
@@ -100,7 +147,7 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
     });
   }, [onChange]);
 
-  const addElement = useCallback(function addElement(el) {
+  const addElement = useCallback(function(el) {
     const id = makeId();
     const newEl = { id, x: 80, y: 200, w: 230, h: 80, opacity: 1, ...el };
     setCanvas(function(prev) {
@@ -111,7 +158,7 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
     setSelectedId(id);
   }, [onChange]);
 
-  const updateElement = useCallback(function updateElement(id, patch) {
+  const updateElement = useCallback(function(id, patch) {
     setCanvas(function(prev) {
       const next = {
         ...prev,
@@ -124,7 +171,7 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
     });
   }, [onChange]);
 
-  const deleteElement = useCallback(function deleteElement(id) {
+  const deleteElement = useCallback(function(id) {
     setCanvas(function(prev) {
       const next = { ...prev, elements: prev.elements.filter(function(el) { return el.id !== id; }) };
       if (onChange) onChange(next);
@@ -133,26 +180,30 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
     setSelectedId(null);
   }, [onChange]);
 
-  const setBackground = useCallback(function setBackground(bg) {
+  const setBackground = useCallback(function(bg) {
     updateCanvas({ background: bg });
   }, [updateCanvas]);
 
-  const setMusic = useCallback(function setMusic(music) {
+  const setMusic = useCallback(function(music) {
     updateCanvas({ music });
   }, [updateCanvas]);
 
-  // Expose imperative API to parent page
   useImperativeHandle(ref, function() {
     return {
       addElement,
       setBackground,
       setMusic,
       getCanvas: function() { return canvas; },
+      stopMusic: function() {
+        if (audioRef.current) {
+          audioRef.current.pause();
+          audioRef.current = null;
+        }
+      },
     };
   }, [addElement, setBackground, setMusic, canvas]);
 
-  // Deselect when tapping blank canvas area
-  const handleCanvasTap = useCallback(function handleCanvasTap(e) {
+  const handleCanvasTap = useCallback(function(e) {
     const cls = e.target.className || '';
     if (
       e.target === canvasRef.current ||
@@ -168,20 +219,17 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
     <div className="creator-canvas-area" onTouchEnd={handleCanvasTap} onClick={handleCanvasTap}>
       <div ref={canvasRef} className="creator-canvas">
 
-        {/* Background layer */}
+        {/* Background */}
         <div className="creator-canvas__bg" style={bgStyle} />
 
-        {/* Elements layer */}
+        {/* Elements */}
         <div className="creator-canvas__elements">
-          {canvas.elements.map(function renderEl(el) {
+          {canvas.elements.map(function(el) {
             return (
               <ScrollCreatorElement
                 key={el.id}
                 id={el.id}
-                x={el.x}
-                y={el.y}
-                w={el.w}
-                h={el.h}
+                x={el.x} y={el.y} w={el.w} h={el.h}
                 opacity={el.opacity}
                 selected={selectedId === el.id}
                 onSelect={setSelectedId}
@@ -196,7 +244,60 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
           })}
         </div>
 
-        {/* Preview overlay — shown while dragging */}
+        {/* Music bar — shows when music is selected */}
+        {canvas.music && (
+          <div style={{
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            zIndex: 5,
+            background: 'linear-gradient(to top, rgba(0,0,0,0.75), transparent)',
+            padding: '20px 12px 10px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            pointerEvents: 'all',
+          }}>
+            <button
+              onClick={function(e) { e.stopPropagation(); toggleMusicPlayback(); }}
+              style={{
+                background: 'rgba(255,255,255,0.15)',
+                border: 'none',
+                borderRadius: '50%',
+                width: 28,
+                height: 28,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#ffffff',
+                cursor: 'pointer',
+                flexShrink: 0,
+              }}
+              aria-label={musicPlaying ? 'Pause music' : 'Play music'}
+            >
+              {musicPlaying ? <Pause size={13} /> : <Play size={13} />}
+            </button>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{
+                color: '#ffffff',
+                fontSize: 11,
+                fontWeight: 500,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+              }}>
+                <Music size={10} />
+                {canvas.music.trackName}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Preview overlay */}
         <div className="creator-canvas__preview-overlay">
           <div className="creator-canvas__preview-meta">
             <span>↑ Upvote</span>
