@@ -99,19 +99,58 @@ export async function POST(request) {
     }
 
     const body = await request.json()
-    const { question_id, answer_id, vote_type } = body
+    const { question_id, answer_id, scroll_id, vote_type } = body
 
-    if (![1, -1, 0].includes(vote_type)) {
-      return NextResponse.json({ error: 'Invalid vote_type' }, { status: 400 })
-    }
+if (![1, -1, 0].includes(vote_type)) {
+  return NextResponse.json({ error: 'Invalid vote_type' }, { status: 400 })
+}
 
-    if ((!question_id && !answer_id) || (question_id && answer_id)) {
-      return NextResponse.json({ error: 'Provide either question_id or answer_id' }, { status: 400 })
-    }
+// scroll votes — handled separately, no karma/notification needed yet
+if (scroll_id) {
+  const db = supabaseServer()
 
-    const db = supabaseServer()
-    const targetField = question_id ? 'question_id' : 'answer_id'
-    const targetId = question_id ?? answer_id
+  const { data: existing } = await db
+    .from('community_votes')
+    .select('id, vote_type')
+    .eq('user_id', user.id)
+    .eq('scroll_id', scroll_id)
+    .maybeSingle()
+
+  if (vote_type === 0 || (existing && existing.vote_type === vote_type)) {
+    if (existing) await db.from('community_votes').delete().eq('id', existing.id)
+  } else if (existing) {
+    await db.from('community_votes').update({ vote_type }).eq('id', existing.id)
+  } else {
+    await db.from('community_votes').insert({ user_id: user.id, vote_type, scroll_id })
+  }
+
+  const { data: totals } = await db
+    .from('community_votes')
+    .select('vote_type')
+    .eq('scroll_id', scroll_id)
+
+  const upvotes = (totals || []).filter(function(v) { return v.vote_type === 1 }).length
+  const downvotes = (totals || []).filter(function(v) { return v.vote_type === -1 }).length
+
+  await db.from('community_scrolls').update({ upvotes, downvotes }).eq('id', scroll_id)
+
+  const { data: currentVote } = await db
+    .from('community_votes')
+    .select('vote_type')
+    .eq('user_id', user.id)
+    .eq('scroll_id', scroll_id)
+    .maybeSingle()
+
+  return NextResponse.json({ upvotes, downvotes, userVote: currentVote?.vote_type ?? 0 })
+}
+
+if ((!question_id && !answer_id) || (question_id && answer_id)) {
+  return NextResponse.json({ error: 'Provide either question_id or answer_id' }, { status: 400 })
+}
+
+const db = supabaseServer()
+const targetField = question_id ? 'question_id' : 'answer_id'
+const targetId = question_id ?? answer_id
 
     // Check for existing vote
     const { data: existing } = await db
