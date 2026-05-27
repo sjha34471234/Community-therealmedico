@@ -69,7 +69,7 @@ function IconElementContent({ props }) {
   );
 }
 
-export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanvasWithRef({ onChange }, ref) {
+export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanvasWithRef({ onChange, availableHeight }, ref) {
   const canvasRef = useRef(null);
   const uidCounter = useRef(0);
   const audioRef = useRef(null);
@@ -215,9 +215,23 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
 
   const bgStyle = getBackgroundStyle(canvas.background);
 
-  return (
-    <div className="creator-canvas-area" onTouchEnd={handleCanvasTap} onClick={handleCanvasTap}>
-      <div ref={canvasRef} className="creator-canvas">
+  // Calculate canvas size from available height — maintain ~390:680 portrait ratio
+const ratio = 390 / 680;
+const canvasH = availableHeight ? Math.floor(availableHeight - 16) : 340;
+const canvasW = Math.floor(canvasH * ratio);
+
+return (
+  <div
+    className="creator-canvas-area"
+    onTouchEnd={handleCanvasTap}
+    onClick={handleCanvasTap}
+    style={availableHeight ? { height: availableHeight } : {}}
+  >
+    <div
+      ref={canvasRef}
+      className="creator-canvas"
+      style={{ width: canvasW, height: canvasH }}
+    >
 
         {/* Background */}
         <div className="creator-canvas__bg" style={bgStyle} />
