@@ -14,7 +14,7 @@
 // ============================================================
 
 import { useEffect, useRef } from 'react';
-import { Music, MusicOff } from 'lucide-react';
+import { Music, VolumeX } from 'lucide-react';
 
 const MUSIC_URL = 'https://cdn.pixabay.com/download/audio/2022/03/15/audio_8cb06c8139.mp3';
 
@@ -46,7 +46,7 @@ export default function ScrollMusicPlayer({ playing, onToggle }) {
   return (
     <div className="scroll-music-bar">
       <button className="scroll-music-btn" onClick={onToggle} aria-label={playing ? 'Mute music' : 'Play music'}>
-        {playing ? <Music size={13} /> : <MusicOff size={13} />}
+        {playing ? <Music size={13} /> : <VolumeX size={13} />}
         <span>{playing ? 'Music on' : 'Music off'}</span>
       </button>
     </div>
