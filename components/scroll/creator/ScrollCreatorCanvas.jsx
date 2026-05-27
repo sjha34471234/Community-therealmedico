@@ -2,22 +2,26 @@
 
 // --- WHY THIS CODE EXISTS ---
 // Main canvas component for the Scroll Creator.
-// Holds ALL canvas state — background, elements, music, text settings.
-// Renders the 390x680 design surface with background layer + elements layer.
-// Passes state up to parent (page.js) via onChange callback for the Post button.
+// Holds ALL canvas state — background, elements, music.
+// Exposes addElement, setBackground, setMusic, getCanvas via useImperativeHandle
+// so the parent page can call them from tab callbacks.
 // --- WHAT THIS MADE WORK ---
 // Background rendering (solid + gradient), element add/update/delete,
-// selection management, drag overlay during drag/resize,
-// canvas scale compensation for smaller screens.
+// selection management, canvas scale compensation for smaller screens.
 // --- PITFALLS ---
-// canvasRef must be passed to every ScrollCreatorElement so touch coords
-// can be converted using the actual rendered canvas size vs 390px logical size.
-// selectedId must be cleared when tapping blank canvas area.
+// Only ONE export — ScrollCreatorCanvasWithRef (forwardRef).
+// The original file had a duplicate default export + forwardRef export
+// which caused a React hooks crash that broke the entire /scroll route.
+// canvasRef passed to every ScrollCreatorElement so touch coords can be
+// converted using actual rendered size vs 390px logical size.
+// selectedId cleared when tapping blank canvas area.
 // --- CHANGE LOG ---
 // [May 26 2026] CREATED: Phase 15B-1 main canvas.
+// [May 27 2026] FIXED: Removed duplicate default export — only forwardRef
+//   export remains. Duplicate was causing React hooks crash on /scroll route.
 // --- END CHANGE LOG ---
 
-import { useState, useRef, useCallback, useId } from 'react';
+import { useState, useRef, useCallback, forwardRef, useImperativeHandle } from 'react';
 import ScrollCreatorElement from './ScrollCreatorElement';
 
 // ── BACKGROUND RENDERER ──
@@ -27,7 +31,10 @@ function getBackgroundStyle(bg) {
   if (bg.type === 'gradient') return { background: bg.value };
   if (bg.type === 'custom-gradient') {
     const dir = bg.direction || 'to bottom';
-    return { background: `linear-gradient(${dir}, ${bg.color1 || '#1a1a2e'}, ${bg.color2 || '#16213e'})` };
+    if (dir === 'radial') {
+      return { background: 'radial-gradient(circle at center, ' + (bg.color1 || '#1a1a2e') + ', ' + (bg.color2 || '#16213e') + ')' };
+    }
+    return { background: 'linear-gradient(' + dir + ', ' + (bg.color1 || '#1a1a2e') + ', ' + (bg.color2 || '#16213e') + ')' };
   }
   return { background: '#1a1a2e' };
 }
@@ -68,14 +75,15 @@ function IconElementContent({ props }) {
   );
 }
 
-export default function ScrollCreatorCanvas({ onChange }) {
+// ── MAIN CANVAS — forwardRef so parent can call addElement / setBackground / setMusic ──
+export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanvasWithRef({ onChange }, ref) {
   const canvasRef = useRef(null);
   const uidCounter = useRef(0);
 
-  const makeId = () => {
+  function makeId() {
     uidCounter.current += 1;
-    return `el_${Date.now()}_${uidCounter.current}`;
-  };
+    return 'el_' + Date.now() + '_' + uidCounter.current;
+  }
 
   const [canvas, setCanvas] = useState({
     background: { type: 'solid', value: '#1a1a2e' },
@@ -83,22 +91,19 @@ export default function ScrollCreatorCanvas({ onChange }) {
     music: null,
   });
   const [selectedId, setSelectedId] = useState(null);
-  const [isDraggingAny, setIsDraggingAny] = useState(false);
 
-  // Notify parent whenever canvas changes
-  const updateCanvas = useCallback((patch) => {
-    setCanvas(prev => {
+  const updateCanvas = useCallback(function updateCanvas(patch) {
+    setCanvas(function(prev) {
       const next = { ...prev, ...patch };
       if (onChange) onChange(next);
       return next;
     });
   }, [onChange]);
 
-  // ── ELEMENT MANAGEMENT ──
-  const addElement = useCallback((el) => {
+  const addElement = useCallback(function addElement(el) {
     const id = makeId();
     const newEl = { id, x: 80, y: 200, w: 230, h: 80, opacity: 1, ...el };
-    setCanvas(prev => {
+    setCanvas(function(prev) {
       const next = { ...prev, elements: [...prev.elements, newEl] };
       if (onChange) onChange(next);
       return next;
@@ -106,37 +111,53 @@ export default function ScrollCreatorCanvas({ onChange }) {
     setSelectedId(id);
   }, [onChange]);
 
-  const updateElement = useCallback((id, patch) => {
-    setCanvas(prev => {
+  const updateElement = useCallback(function updateElement(id, patch) {
+    setCanvas(function(prev) {
       const next = {
         ...prev,
-        elements: prev.elements.map(el => el.id === id ? { ...el, ...patch } : el),
+        elements: prev.elements.map(function(el) {
+          return el.id === id ? { ...el, ...patch } : el;
+        }),
       };
       if (onChange) onChange(next);
       return next;
     });
   }, [onChange]);
 
-  const deleteElement = useCallback((id) => {
-    setCanvas(prev => {
-      const next = { ...prev, elements: prev.elements.filter(el => el.id !== id) };
+  const deleteElement = useCallback(function deleteElement(id) {
+    setCanvas(function(prev) {
+      const next = { ...prev, elements: prev.elements.filter(function(el) { return el.id !== id; }) };
       if (onChange) onChange(next);
       return next;
     });
     setSelectedId(null);
   }, [onChange]);
 
-  const setBackground = useCallback((bg) => {
+  const setBackground = useCallback(function setBackground(bg) {
     updateCanvas({ background: bg });
   }, [updateCanvas]);
 
-  const setMusic = useCallback((music) => {
+  const setMusic = useCallback(function setMusic(music) {
     updateCanvas({ music });
   }, [updateCanvas]);
 
-  // Deselect when tapping blank canvas
-  const handleCanvasTap = useCallback((e) => {
-    if (e.target === canvasRef.current || e.target.classList.contains('creator-canvas__bg') || e.target.classList.contains('creator-canvas__elements')) {
+  // Expose imperative API to parent page
+  useImperativeHandle(ref, function() {
+    return {
+      addElement,
+      setBackground,
+      setMusic,
+      getCanvas: function() { return canvas; },
+    };
+  }, [addElement, setBackground, setMusic, canvas]);
+
+  // Deselect when tapping blank canvas area
+  const handleCanvasTap = useCallback(function handleCanvasTap(e) {
+    const cls = e.target.className || '';
+    if (
+      e.target === canvasRef.current ||
+      (typeof cls === 'string' && (cls.includes('creator-canvas__bg') || cls.includes('creator-canvas__elements')))
+    ) {
       setSelectedId(null);
     }
   }, []);
@@ -152,155 +173,31 @@ export default function ScrollCreatorCanvas({ onChange }) {
 
         {/* Elements layer */}
         <div className="creator-canvas__elements">
-          {canvas.elements.map(el => (
-            <ScrollCreatorElement
-              key={el.id}
-              id={el.id}
-              x={el.x} y={el.y} w={el.w} h={el.h}
-              opacity={el.opacity}
-              selected={selectedId === el.id}
-              onSelect={setSelectedId}
-              onUpdate={updateElement}
-              onDelete={deleteElement}
-              canvasRef={canvasRef}
-            >
-              {el.type === 'text' && <TextElementContent props={el} />}
-              {el.type === 'icon' && <IconElementContent props={el} />}
-            </ScrollCreatorElement>
-          ))}
+          {canvas.elements.map(function renderEl(el) {
+            return (
+              <ScrollCreatorElement
+                key={el.id}
+                id={el.id}
+                x={el.x}
+                y={el.y}
+                w={el.w}
+                h={el.h}
+                opacity={el.opacity}
+                selected={selectedId === el.id}
+                onSelect={setSelectedId}
+                onUpdate={updateElement}
+                onDelete={deleteElement}
+                canvasRef={canvasRef}
+              >
+                {el.type === 'text' && <TextElementContent props={el} />}
+                {el.type === 'icon' && <IconElementContent props={el} />}
+              </ScrollCreatorElement>
+            );
+          })}
         </div>
 
         {/* Preview overlay — shown while dragging */}
-        <div className={`creator-canvas__preview-overlay${isDraggingAny ? ' creator-canvas__preview-overlay--visible' : ''}`}>
-          <div className="creator-canvas__preview-meta">
-            <span>↑ Upvote</span>
-            <span>💬 Comment</span>
-          </div>
-        </div>
-
-      </div>
-
-      {/* Expose methods to parent via ref-like pattern — we use a hidden div with data attrs
-          Parent uses the onChange callback instead, which is cleaner */}
-    </div>
-  );
-}
-
-// ── EXPORT HELPER HOOKS for parent to call addElement / setBackground / setMusic ──
-// Pattern: parent passes ref, canvas exposes imperative API via useImperativeHandle
-
-import { forwardRef, useImperativeHandle } from 'react';
-
-export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanvasWithRef({ onChange }, ref) {
-  const canvasRef = useRef(null);
-  const uidCounter = useRef(0);
-
-  const makeId = () => {
-    uidCounter.current += 1;
-    return `el_${Date.now()}_${uidCounter.current}`;
-  };
-
-  const [canvas, setCanvas] = useState({
-    background: { type: 'solid', value: '#1a1a2e' },
-    elements: [],
-    music: null,
-  });
-  const [selectedId, setSelectedId] = useState(null);
-  const [isDraggingAny, setIsDraggingAny] = useState(false);
-
-  const updateCanvas = useCallback((patch) => {
-    setCanvas(prev => {
-      const next = { ...prev, ...patch };
-      if (onChange) onChange(next);
-      return next;
-    });
-  }, [onChange]);
-
-  const addElement = useCallback((el) => {
-    const id = makeId();
-    const newEl = { id, x: 80, y: 200, w: 230, h: 80, opacity: 1, ...el };
-    setCanvas(prev => {
-      const next = { ...prev, elements: [...prev.elements, newEl] };
-      if (onChange) onChange(next);
-      return next;
-    });
-    setSelectedId(id);
-  }, [onChange]);
-
-  const updateElement = useCallback((id, patch) => {
-    setCanvas(prev => {
-      const next = {
-        ...prev,
-        elements: prev.elements.map(el => el.id === id ? { ...el, ...patch } : el),
-      };
-      if (onChange) onChange(next);
-      return next;
-    });
-  }, [onChange]);
-
-  const deleteElement = useCallback((id) => {
-    setCanvas(prev => {
-      const next = { ...prev, elements: prev.elements.filter(el => el.id !== id) };
-      if (onChange) onChange(next);
-      return next;
-    });
-    setSelectedId(null);
-  }, [onChange]);
-
-  const setBackground = useCallback((bg) => {
-    updateCanvas({ background: bg });
-  }, [updateCanvas]);
-
-  const setMusic = useCallback((music) => {
-    updateCanvas({ music });
-  }, [updateCanvas]);
-
-  // Expose imperative API to parent
-  useImperativeHandle(ref, () => ({
-    addElement,
-    setBackground,
-    setMusic,
-    getCanvas: () => canvas,
-  }), [addElement, setBackground, setMusic, canvas]);
-
-  const handleCanvasTap = useCallback((e) => {
-    if (
-      e.target === canvasRef.current ||
-      e.target.classList.contains('creator-canvas__bg') ||
-      e.target.classList.contains('creator-canvas__elements')
-    ) {
-      setSelectedId(null);
-    }
-  }, []);
-
-  const bgStyle = getBackgroundStyle(canvas.background);
-
-  return (
-    <div className="creator-canvas-area" onTouchEnd={handleCanvasTap} onClick={handleCanvasTap}>
-      <div ref={canvasRef} className="creator-canvas">
-
-        <div className="creator-canvas__bg" style={bgStyle} />
-
-        <div className="creator-canvas__elements">
-          {canvas.elements.map(el => (
-            <ScrollCreatorElement
-              key={el.id}
-              id={el.id}
-              x={el.x} y={el.y} w={el.w} h={el.h}
-              opacity={el.opacity}
-              selected={selectedId === el.id}
-              onSelect={setSelectedId}
-              onUpdate={updateElement}
-              onDelete={deleteElement}
-              canvasRef={canvasRef}
-            >
-              {el.type === 'text' && <TextElementContent props={el} />}
-              {el.type === 'icon' && <IconElementContent props={el} />}
-            </ScrollCreatorElement>
-          ))}
-        </div>
-
-        <div className={`creator-canvas__preview-overlay${isDraggingAny ? ' creator-canvas__preview-overlay--visible' : ''}`}>
+        <div className="creator-canvas__preview-overlay">
           <div className="creator-canvas__preview-meta">
             <span>↑ Upvote</span>
             <span>💬 Comment</span>
