@@ -42,7 +42,7 @@ export async function GET(request) {
 
     const { data: scrolls, error } = await supabase
       .from('community_scrolls')
-      .select('id, content, canvas_data, upvotes, downvotes, comment_count, user_id, created_at')
+      .select('id, content, upvotes, downvotes, comment_count, user_id, created_at')
       .eq('is_hidden', false)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1)
