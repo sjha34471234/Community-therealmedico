@@ -69,10 +69,81 @@ export default function ScrollCard({ scroll, isActive }) {
     lastTapRef.current = now;
   }
 
-  return (
-    <div className="scroll-card" onClick={handleTap}>
-      <div className="scroll-card-bg" />
-      <div className="scroll-card-gradient" />
+  // Build background style from canvas_data if available
+const canvasData = scroll.canvas_data || null;
+const bg = canvasData?.background;
+let bgStyle = {};
+if (bg) {
+  if (bg.type === 'solid') bgStyle = { background: bg.value };
+  else if (bg.type === 'gradient') bgStyle = { background: bg.value };
+  else if (bg.type === 'custom-gradient') {
+    const dir = bg.direction === 'radial'
+      ? 'radial-gradient(circle at center, ' + bg.color1 + ', ' + bg.color2 + ')'
+      : 'linear-gradient(' + bg.direction + ', ' + bg.color1 + ', ' + bg.color2 + ')';
+    bgStyle = { background: dir };
+  }
+}
+
+const elements = canvasData?.elements || [];
+
+return (
+  <div className="scroll-card" onClick={handleTap}>
+    <div className="scroll-card-bg" style={bgStyle} />
+    <div className="scroll-card-gradient" />
+
+    {/* Render canvas elements */}
+    {elements.length > 0 && (
+      <div style={{ position: 'absolute', inset: 0, zIndex: 1, pointerEvents: 'none' }}>
+        {elements.map(function(el) {
+          if (el.type === 'text') {
+            return (
+              <div
+                key={el.id}
+                style={{
+                  position: 'absolute',
+                  left: (el.x / 390) * 100 + '%',
+                  top: (el.y / 680) * 100 + '%',
+                  width: (el.w / 390) * 100 + '%',
+                  height: (el.h / 680) * 100 + '%',
+                  opacity: el.opacity || 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontFamily: el.font || 'Inter, sans-serif',
+                  fontSize: 'clamp(10px, ' + ((el.size || 24) / 390 * 100) + 'vw, ' + (el.size || 24) + 'px)',
+                  color: el.color || '#ffffff',
+                  fontWeight: el.bold ? 700 : 400,
+                  fontStyle: el.italic ? 'italic' : 'normal',
+                  textAlign: 'center',
+                  padding: '4px 8px',
+                  wordBreak: 'break-word',
+                  lineHeight: 1.3,
+                }}
+              >
+                {el.text}
+              </div>
+            );
+          }
+          if (el.type === 'icon') {
+            return (
+              <div
+                key={el.id}
+                style={{
+                  position: 'absolute',
+                  left: (el.x / 390) * 100 + '%',
+                  top: (el.y / 680) * 100 + '%',
+                  width: (el.w / 390) * 100 + '%',
+                  height: (el.h / 680) * 100 + '%',
+                  opacity: el.opacity || 1,
+                }}
+                dangerouslySetInnerHTML={{ __html: el.svg || '' }}
+              />
+            );
+          }
+          return null;
+        })}
+      </div>
+    )}
 
       {heartVisible && <span className="scroll-heart-burst">❤️</span>}
 
