@@ -1,7 +1,7 @@
 // ============================================================
 // FILE: app/api/scrolls/route.js
 // PURPOSE: GET scroll feed + POST new scroll
-// LAST CHANGED: May 27, 2026
+// LAST CHANGED: May 28, 2026
 // WHY IT EXISTS: Phase 15 — Scroll is its own content type,
 //   separate from community_questions entirely.
 // DEPENDENCIES: lib/supabaseServer.js
@@ -12,6 +12,8 @@
 //   - Never return user emails or sensitive fields.
 //   - Array.from(new Set(...)) — never [...new Set(...)].
 //   - canvas_data must be parsed from string before insert (JSONB).
+//   - Profiles from 'profiles' table, avatars from 'community_avatars'.
+//     Never join these via Supabase — fetch separately and attach manually.
 // ============================================================
 
 export const dynamic = 'force-dynamic'
@@ -30,13 +32,16 @@ async function checkScrollRateLimit(supabase, userId) {
   return (count || 0) >= 10
 }
 
-// ── GET — scroll feed ─────────────────────────────────────────
+// ── GET — scroll feed (batch loading) ────────────────────────
+// Phase 15C: switched from ?page=N (limit 20) to ?offset=N&limit=N
+// for continuous batch loading in ScrollFeed.
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url)
-    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10))
-    const limit = 20
-    const offset = (page - 1) * limit
+
+    // Batch size: default 7, capped at 20 to prevent abuse
+    const limit  = Math.min(20, Math.max(1, parseInt(searchParams.get('limit')  || '7',  10)))
+    const offset = Math.max(0,              parseInt(searchParams.get('offset') || '0',  10))
 
     const supabase = supabaseServer()
 
@@ -55,10 +60,13 @@ export async function GET(request) {
     const list = scrolls || []
 
     if (list.length === 0) {
-      return NextResponse.json({ scrolls: [], hasMore: false }, { status: 200, headers: { 'Cache-Control': 'no-store' } })
+      return NextResponse.json(
+        { scrolls: [], hasMore: false },
+        { status: 200, headers: { 'Cache-Control': 'no-store' } }
+      )
     }
 
-    // Fetch author profiles
+    // Fetch author profiles — from 'profiles' table (NOT community_profiles)
     const userIds = Array.from(new Set(list.map(function getId(s) { return s.user_id }).filter(Boolean)))
     let profileMap = {}
     if (userIds.length > 0) {
@@ -71,7 +79,7 @@ export async function GET(request) {
       }
     }
 
-    // Fetch avatars
+    // Fetch avatars — from 'community_avatars' table (separate from profiles)
     let avatarMap = {}
     if (userIds.length > 0) {
       const { data: avatars } = await supabase
@@ -81,10 +89,10 @@ export async function GET(request) {
       if (avatars) {
         avatars.forEach(function mapA(a) {
           avatarMap[a.user_id] = {
-            shape: a.shape,
-            color: a.color,
-            icon: a.icon,
-            border: a.border,
+            shape:   a.shape,
+            color:   a.color,
+            icon:    a.icon,
+            border:  a.border,
             pattern: a.pattern,
           }
         })
@@ -92,15 +100,15 @@ export async function GET(request) {
     }
 
     // Attach profile + avatar to each scroll
-    // canvas_data comes back as parsed object from Supabase JSONB automatically
+    // canvas_data comes back as parsed object from Supabase JSONB — never JSON.parse manually
     const final = list.map(function attach(s) {
       const profile = profileMap[s.user_id] || null
       return {
         ...s,
-        canvas_data: s.canvas_data || null,
+        canvas_data:        s.canvas_data || null,
         community_username: profile ? (profile.community_username || 'Anonymous') : 'Anonymous',
-        is_member: profile ? (profile.is_member === true) : false,
-        avatar: avatarMap[s.user_id] || null,
+        is_member:          profile ? (profile.is_member === true) : false,
+        avatar:             avatarMap[s.user_id] || null,
       }
     })
 
@@ -137,7 +145,6 @@ export async function POST(request) {
       try {
         parsedCanvas = typeof canvas_data === 'string' ? JSON.parse(canvas_data) : canvas_data
       } catch {
-        // canvas_data malformed — allow post without it, don't block
         parsedCanvas = null
       }
     }
@@ -163,15 +170,15 @@ export async function POST(request) {
     const { data: inserted, error: insertError } = await supabase
       .from('community_scrolls')
       .insert({
-        user_id: user.id,
-        content: content.trim(),
-        canvas_data: parsedCanvas,
-        upvotes: 0,
-        downvotes: 0,
+        user_id:       user.id,
+        content:       content.trim(),
+        canvas_data:   parsedCanvas,
+        upvotes:       0,
+        downvotes:     0,
         comment_count: 0,
-        is_hidden: false,
-        created_at: now,
-        updated_at: now,
+        is_hidden:     false,
+        created_at:    now,
+        updated_at:    now,
       })
       .select('id')
       .single()
@@ -196,4 +203,7 @@ export async function POST(request) {
 // [May 27, 2026] UPDATED: Phase 15B-1 — added canvas_data JSONB to GET select
 //   and POST insert. canvas_data parsed from string before insert,
 //   returned as object in GET (Supabase JSONB auto-parses on read).
+// [May 28, 2026] UPDATED: Phase 15C — switched GET pagination from ?page=N (limit 20)
+//   to ?offset=N&limit=N for batch loading. Default limit=7.
+//   Rate limit, content validation, profile/avatar fetch all preserved exactly.
 // --- END CHANGE LOG ---
