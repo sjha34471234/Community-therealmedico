@@ -4,15 +4,23 @@
    LAST CHANGED: May 28, 2026
    ============================================================ */
 
-/* Scroll container — full screen snap scroll */
+/* ── Scroll container — full screen snap scroll ─────────────
+   position:fixed covers navbar and bottomnav (z-index 500).
+   scrollbar-width:none + ::-webkit-scrollbar hides the browser
+   scrollbar on desktop and most mobile browsers.
+   On iOS Safari the system scroll indicator (thin gray bar) is
+   a native UI element — it cannot be hidden via CSS. It fades
+   automatically and does not affect layout.
+   ─────────────────────────────────────────────────────────── */
 .scroll-container {
   height: 100dvh;
   overflow-y: scroll;
   scroll-snap-type: y mandatory;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: none;
   background: #0a0a0a;
   scrollbar-width: none;
-  /* Must cover navbar and bottomnav — position fixed from top:0 */
+  -ms-overflow-style: none;
   position: fixed;
   top: 0;
   left: 0;
@@ -22,6 +30,8 @@
 }
 .scroll-container::-webkit-scrollbar {
   display: none;
+  width: 0;
+  height: 0;
 }
 
 /* Each card — exactly one viewport height */
@@ -51,10 +61,15 @@
   pointer-events: none;
 }
 
-/* Background layer — receives inline bgStyle from canvas_data */
+/* Background layer — receives inline bgStyle from canvas_data.
+   Dot pattern at 0.05 opacity shows only when bgStyle is empty
+   (plain text scrolls with no canvas_data background). */
 .scroll-card-bg {
   position: absolute;
   inset: 0;
+  opacity: 0.05;
+  background-image: radial-gradient(circle, #1D6FA4 1px, transparent 1px);
+  background-size: 28px 28px;
 }
 
 /* Bottom content area */
@@ -108,64 +123,96 @@
   font-family: 'Inter', sans-serif;
 }
 
-/* ── Action buttons — HORIZONTAL ROW at bottom-right ────────
-   Phase 15C: changed from vertical right-side column (TikTok-style)
-   to horizontal row sitting above the bottom info bar.
-   This removes the "side wheel" layout.
-   ──────────────────────────────────────────────────────────── */
+/* ── Action buttons — TikTok/Instagram vertical column ───────
+   Right side of screen, stacked vertically. Circle icons with
+   count labels below each one — exactly like TikTok/Instagram.
+   ─────────────────────────────────────────────────────────── */
 .scroll-card-actions {
   position: absolute;
   right: 14px;
-  bottom: 96px;
+  bottom: 110px;
   z-index: 3;
   display: flex;
-  flex-direction: row;   /* ← was column, now horizontal */
+  flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 22px;
 }
-
 .scroll-action-btn {
   display: flex;
-  flex-direction: row;   /* icon + label side by side */
+  flex-direction: column;
   align-items: center;
   gap: 5px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.scroll-action-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
   background: rgba(255,255,255,0.12);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
-  border: 1px solid rgba(255,255,255,0.15);
-  border-radius: 99px;
-  padding: 7px 12px;
-  cursor: pointer;
-  transition: background 0.15s ease;
-  -webkit-tap-highlight-color: transparent;
-}
-.scroll-action-btn:active {
-  background: rgba(255,255,255,0.22);
-}
-
-.scroll-action-icon {
-  width: 28px;
-  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
+  border: 1px solid rgba(255,255,255,0.15);
   transition: background 0.15s ease;
 }
+.scroll-action-icon:active {
+  background: rgba(255,255,255,0.25);
+}
 .scroll-action-icon.voted-up {
-  color: #7EC8F0;
+  background: rgba(29,111,164,0.45);
+  border-color: #1D6FA4;
 }
 .scroll-action-icon.voted-down {
-  color: #EF9A9A;
+  background: rgba(198,40,40,0.35);
+  border-color: #C62828;
 }
-
 .scroll-action-label {
   color: rgba(255,255,255,0.85);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   font-family: 'Inter', sans-serif;
 }
 
-/* Double-tap heart animation — preserved from Phase 15A */
+/* ── Mute / unmute visual feedback overlay ───────────────────
+   Appears on single tap when card has music.
+   Big circle in centre of screen, fades in then out.
+   ─────────────────────────────────────────────────────────── */
+.scroll-mute-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.scroll-mute-icon-circle {
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: scroll-mute-pulse 0.9s ease forwards;
+}
+@keyframes scroll-mute-pulse {
+  0%   { opacity: 0; transform: scale(0.65); }
+  18%  { opacity: 1; transform: scale(1.05); }
+  35%  { opacity: 1; transform: scale(1);    }
+  75%  { opacity: 1; }
+  100% { opacity: 0; transform: scale(0.95); }
+}
+
+/* Double-tap heart animation */
 .scroll-heart-burst {
   position: absolute;
   pointer-events: none;
@@ -184,7 +231,7 @@
   100% { transform: translateX(-50%) scale(1.4); opacity: 0; }
 }
 
-/* Comments drawer overlay */
+/* ── Comments drawer ─────────────────────────────────────── */
 .scroll-comments-overlay {
   position: fixed;
   inset: 0;
@@ -334,8 +381,6 @@
   opacity: 0.4;
   cursor: default;
 }
-
-/* Reply inline input row */
 .scroll-reply-input-row {
   padding-left: 40px;
   display: flex;
@@ -381,10 +426,14 @@
 /* --- CHANGE LOG ---
    [May 26, 2026] CREATED: Scroll CSS — full screen snap scroll cards, dark theme,
    right sidebar actions, comments drawer, double-tap heart, music bar.
-   Uses Inter + Merriweather matching globals.css fonts.
-   [May 28, 2026] UPDATED: Phase 15C — .scroll-card-actions changed from vertical
-   right-side column (flex-direction: column, gap: 22px, circular 48px icons)
-   to horizontal row (flex-direction: row, gap: 8px, pill-shaped buttons).
-   This removes the "side wheel" layout. scroll-card-bg dot pattern removed
-   (was overriding canvas_data backgrounds). All other styles preserved exactly.
+   [May 28, 2026] UPDATED Phase 15C:
+   - .scroll-card-actions: restored to TikTok/Instagram vertical column
+     (flex-direction: column, gap: 22px, right:14px bottom:110px, 48px circles).
+   - Added .scroll-mute-overlay + .scroll-mute-icon-circle + @keyframes scroll-mute-pulse:
+     centred circle that fades in/out on single-tap mute toggle.
+   - Added overscroll-behavior:none + -ms-overflow-style:none + width:0 height:0
+     on ::-webkit-scrollbar for maximum scrollbar suppression across browsers.
+   - scroll-card-bg dot pattern restored (bgStyle inline override removes it for
+     canvas scrolls; it shows only for plain text scrolls with no background).
+   - All comment drawer, heart, music bar styles preserved exactly.
    --- END CHANGE LOG --- */
