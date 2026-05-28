@@ -14,10 +14,11 @@
 // ⚠️ Music fields: musicData.trackUrl, musicData.startSec, musicData.trackName
 // ⚠️ scroll.avatar and scroll.community_username — flat fields from API, not nested
 // ⚠️ useAuthStore is a DEFAULT import — import useAuthStore from '@/store/authStore'
+// ⚠️ VolumeX and Music are the ONLY safe lucide icons for audio — never Volume2
 // ============================================================
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { ThumbsUp, ThumbsDown, MessageCircle, Music } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, MessageCircle, Music, VolumeX } from 'lucide-react';
 import useAuthStore from '@/store/authStore';
 import Avatar from '@/components/Avatar';
 import ScrollComments from '@/components/scroll/ScrollComments';
@@ -29,19 +30,22 @@ export default function ScrollCard({ scroll, isActive }) {
   const [myVote, setMyVote]             = useState(null);
   const [showComments, setShowComments] = useState(false);
   const [heartVisible, setHeartVisible] = useState(false);
-  const [musicPaused, setMusicPaused]   = useState(false); // user toggled off
-  const lastTapRef       = useRef(0);
-  const singleTapTimer   = useRef(null); // distinguishes single vs double tap
-  const audioRef         = useRef(null);
+  const [musicPaused, setMusicPaused]   = useState(false);
+  const [showMuteIcon, setShowMuteIcon] = useState(false);
 
-  const canvasData  = scroll.canvas_data || null;
-  const bg          = canvasData?.background;
-  const elements    = canvasData?.elements || [];
-  const musicData   = canvasData?.music;
+  const lastTapRef     = useRef(0);
+  const singleTapTimer = useRef(null); // tells single tap from double tap
+  const muteIconTimer  = useRef(null); // clears the mute overlay
+  const audioRef       = useRef(null);
+
+  const canvasData = scroll.canvas_data || null;
+  const bg         = canvasData?.background;
+  const elements   = canvasData?.elements || [];
+  const musicData  = canvasData?.music;
 
   // ── Background style ──────────────────────────────────────
   // bg.value for solid and preset gradients
-  // bg.type 'custom-gradient' uses bg.color1, bg.color2, bg.direction
+  // custom-gradient uses bg.color1, bg.color2, bg.direction
   let bgStyle = {};
   if (bg) {
     if (bg.type === 'solid') {
@@ -72,7 +76,7 @@ export default function ScrollCard({ scroll, isActive }) {
       audio.currentTime = 0;
       audioRef.current  = null;
     };
-  }, []); // Only on mount — trackUrl won't change for a given card instance
+  }, []); // Only on mount — trackUrl won't change for a given card
 
   // ── Audio: respond to isActive + musicPaused ──────────────
   useEffect(function() {
@@ -96,7 +100,7 @@ export default function ScrollCard({ scroll, isActive }) {
       if (prevVote === 'down') setDownvotes(function(v) { return v - 1; });
     } else {
       setDownvotes(function(v) { return newVote === 'down' ? v + 1 : v - 1; });
-      if (prevVote === 'up')   setUpvotes(function(v)   { return v - 1; });
+      if (prevVote === 'up')   setUpvotes(function(v) { return v - 1; });
     }
 
     const voteTypeNum = newVote === 'up' ? 1 : newVote === 'down' ? -1 : 0;
@@ -114,9 +118,18 @@ export default function ScrollCard({ scroll, isActive }) {
     } catch (_) {}
   }, [user, accessToken, myVote, scroll.id]);
 
+  // ── Show mute/unmute icon briefly ─────────────────────────
+  function flashMuteIcon() {
+    clearTimeout(muteIconTimer.current);
+    setShowMuteIcon(true);
+    muteIconTimer.current = setTimeout(function() {
+      setShowMuteIcon(false);
+    }, 900);
+  }
+
   // ── Tap handler ───────────────────────────────────────────
-  // Double tap (< 300ms): heart animation + upvote. Cancels single-tap timer.
-  // Single tap (confirmed after 300ms): toggle music on/off.
+  // Double tap (< 300ms): heart + upvote. Cancels pending single-tap.
+  // Single tap (confirmed after 300ms wait): toggle music + show icon.
   function handleTap() {
     const now = Date.now();
 
@@ -127,11 +140,14 @@ export default function ScrollCard({ scroll, isActive }) {
       setTimeout(function() { setHeartVisible(false); }, 750);
       if (myVote !== 'up') handleVote('up');
     } else {
-      // ── Potential single tap — wait 300ms to confirm not a double ──
+      // ── Potential single tap — wait 300ms to confirm ──
       clearTimeout(singleTapTimer.current);
       singleTapTimer.current = setTimeout(function() {
         if (musicData && musicData.trackUrl) {
-          setMusicPaused(function(p) { return !p; });
+          setMusicPaused(function(prev) {
+            flashMuteIcon();
+            return !prev;
+          });
         }
       }, 300);
     }
@@ -142,12 +158,24 @@ export default function ScrollCard({ scroll, isActive }) {
   return (
     <div className="scroll-card" onClick={handleTap}>
 
-      {/* Background — canvas_data driven */}
+      {/* Background — canvas_data driven via inline bgStyle */}
       <div className="scroll-card-bg" style={bgStyle} />
       <div className="scroll-card-gradient" />
 
       {/* Double-tap heart burst */}
       {heartVisible && <span className="scroll-heart-burst">❤️</span>}
+
+      {/* Mute / unmute visual feedback — appears on single tap, fades out */}
+      {showMuteIcon && musicData && (
+        <div className="scroll-mute-overlay">
+          <div className="scroll-mute-icon-circle">
+            {musicPaused
+              ? <VolumeX size={38} color="#fff" strokeWidth={1.6} />
+              : <Music    size={38} color="#fff" strokeWidth={1.6} />
+            }
+          </div>
+        </div>
+      )}
 
       {/* Canvas elements — text + icons, pixel-based positions */}
       {elements.length > 0 && (
@@ -158,24 +186,24 @@ export default function ScrollCard({ scroll, isActive }) {
                 <div
                   key={el.id}
                   style={{
-                    position:    'absolute',
-                    left:        (el.x / 390) * 100 + '%',
-                    top:         (el.y / 680) * 100 + '%',
-                    width:       (el.w / 390) * 100 + '%',
-                    height:      (el.h / 680) * 100 + '%',
-                    opacity:     el.opacity || 1,
-                    display:     'flex',
-                    alignItems:  'center',
+                    position:       'absolute',
+                    left:           (el.x / 390) * 100 + '%',
+                    top:            (el.y / 680) * 100 + '%',
+                    width:          (el.w / 390) * 100 + '%',
+                    height:         (el.h / 680) * 100 + '%',
+                    opacity:        el.opacity || 1,
+                    display:        'flex',
+                    alignItems:     'center',
                     justifyContent: 'center',
-                    fontFamily:  el.font || 'Inter, sans-serif',
-                    fontSize:    'clamp(10px, ' + ((el.size || 24) / 390 * 100) + 'vw, ' + (el.size || 24) + 'px)',
-                    color:       el.color || '#ffffff',
-                    fontWeight:  el.bold   ? 700 : 400,
-                    fontStyle:   el.italic ? 'italic' : 'normal',
-                    textAlign:   'center',
-                    padding:     '4px 8px',
-                    wordBreak:   'break-word',
-                    lineHeight:  1.3,
+                    fontFamily:     el.font || 'Inter, sans-serif',
+                    fontSize:       'clamp(10px, ' + ((el.size || 24) / 390 * 100) + 'vw, ' + (el.size || 24) + 'px)',
+                    color:          el.color || '#ffffff',
+                    fontWeight:     el.bold   ? 700 : 400,
+                    fontStyle:      el.italic ? 'italic' : 'normal',
+                    textAlign:      'center',
+                    padding:        '4px 8px',
+                    wordBreak:      'break-word',
+                    lineHeight:     1.3,
                   }}
                 >
                   {el.text}
@@ -203,7 +231,7 @@ export default function ScrollCard({ scroll, isActive }) {
         </div>
       )}
 
-      {/* Action buttons — horizontal row at bottom-right (not side column) */}
+      {/* Action buttons — TikTok/Instagram vertical column, right side */}
       <div className="scroll-card-actions">
         <button
           className="scroll-action-btn"
@@ -239,26 +267,29 @@ export default function ScrollCard({ scroll, isActive }) {
         </button>
       </div>
 
-      {/* Bottom info — username + music indicator + plain content fallback */}
+      {/* Bottom info — avatar + username + music indicator */}
       <div className="scroll-card-bottom">
         <div className="scroll-card-user-row">
           <Avatar avatarRow={scroll.avatar} username={scroll.community_username} size="sm" />
           <span className="scroll-card-username">@{scroll.community_username || 'anon'}</span>
 
-          {/* Music indicator — shows track name + paused state */}
+          {/* Music indicator — dims and shows 'paused' when muted */}
           {musicData && (
             <div style={{
               display:    'flex',
               alignItems: 'center',
               gap:        4,
-              color:      musicPaused ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.6)',
+              color:      musicPaused ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.6)',
               fontSize:   11,
               marginLeft: 6,
-              transition: 'color 0.2s ease',
+              transition: 'color 0.25s ease',
             }}>
-              <Music size={11} />
+              {musicPaused
+                ? <VolumeX size={11} />
+                : <Music    size={11} />
+              }
               <span style={{ maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {musicPaused ? '(paused)' : musicData.trackName}
+                {musicPaused ? 'muted' : musicData.trackName}
               </span>
             </div>
           )}
@@ -288,11 +319,13 @@ export default function ScrollCard({ scroll, isActive }) {
 //   Music plays when card is active (isActive=true), pauses when scrolled past.
 //   Music indicator shows track name bottom of card.
 //   Plain content text only shown when no canvas elements exist.
-// [May 28, 2026] ADDED: Phase 15C — single-tap music toggle.
-//   Single tap (confirmed after 300ms timeout) → toggles musicPaused state.
-//   Double tap (< 300ms) → heart animation + upvote, cancels music toggle timer.
-//   musicPaused state added — controls audio alongside isActive.
-//   Music indicator shows '(paused)' and dims when paused.
-//   All existing logic preserved: bg.value, el pixel positions, trackUrl/startSec,
-//   scroll.avatar, scroll.community_username, vote strings, double-tap heart.
+// [May 28, 2026] ADDED: Phase 15C — single tap mute/unmute with visual feedback.
+//   musicPaused state added. showMuteIcon state added.
+//   handleTap updated: 300ms timer distinguishes single vs double tap.
+//   Single tap confirmed → toggle musicPaused + flash mute icon overlay.
+//   Double tap → heart + upvote, single-tap timer cancelled (no music toggle).
+//   Mute icon: VolumeX when muted, Music when unmuted — both safe in lucide v0.303.
+//   Music indicator in bottom bar shows VolumeX + 'muted' when paused, dims.
+//   All existing logic preserved: bg.value, custom-gradient, pixel positions,
+//   el.font/size/svg, trackUrl/startSec, scroll.avatar, scroll.community_username.
 // --- END CHANGE LOG ---
