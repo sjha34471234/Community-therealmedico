@@ -1,7 +1,7 @@
 /* ============================================================
    FILE: app/scroll/scroll.css
    PURPOSE: Styles for the Scroll feed — full-screen snap-scroll cards
-   LAST CHANGED: May 26, 2026
+   LAST CHANGED: May 28, 2026
    ============================================================ */
 
 /* Scroll container — full screen snap scroll */
@@ -51,13 +51,10 @@
   pointer-events: none;
 }
 
-/* Subtle background dot pattern */
+/* Background layer — receives inline bgStyle from canvas_data */
 .scroll-card-bg {
   position: absolute;
   inset: 0;
-  opacity: 0.05;
-  background-image: radial-gradient(circle, #1D6FA4 1px, transparent 1px);
-  background-size: 28px 28px;
 }
 
 /* Bottom content area */
@@ -83,7 +80,7 @@
   font-family: 'Inter', sans-serif;
 }
 
-/* Question content */
+/* Plain text content — only shown when no canvas elements */
 .scroll-card-content {
   color: #ffffff;
   font-size: 22px;
@@ -111,59 +108,64 @@
   font-family: 'Inter', sans-serif;
 }
 
-/* Right sidebar action buttons */
+/* ── Action buttons — HORIZONTAL ROW at bottom-right ────────
+   Phase 15C: changed from vertical right-side column (TikTok-style)
+   to horizontal row sitting above the bottom info bar.
+   This removes the "side wheel" layout.
+   ──────────────────────────────────────────────────────────── */
 .scroll-card-actions {
   position: absolute;
   right: 14px;
-  bottom: 110px;
+  bottom: 96px;
   z-index: 3;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;   /* ← was column, now horizontal */
   align-items: center;
-  gap: 22px;
+  gap: 8px;
 }
+
 .scroll-action-btn {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;   /* icon + label side by side */
   align-items: center;
   gap: 5px;
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0;
-}
-.scroll-action-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
   background: rgba(255,255,255,0.12);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 99px;
+  padding: 7px 12px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.scroll-action-btn:active {
+  background: rgba(255,255,255,0.22);
+}
+
+.scroll-action-icon {
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(255,255,255,0.15);
   transition: background 0.15s ease;
 }
-.scroll-action-icon:active {
-  background: rgba(255,255,255,0.25);
-}
 .scroll-action-icon.voted-up {
-  background: rgba(29,111,164,0.45);
-  border-color: #1D6FA4;
+  color: #7EC8F0;
 }
 .scroll-action-icon.voted-down {
-  background: rgba(198,40,40,0.35);
-  border-color: #C62828;
+  color: #EF9A9A;
 }
+
 .scroll-action-label {
   color: rgba(255,255,255,0.85);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   font-family: 'Inter', sans-serif;
 }
 
-/* Double-tap heart animation */
+/* Double-tap heart animation — preserved from Phase 15A */
 .scroll-heart-burst {
   position: absolute;
   pointer-events: none;
@@ -333,6 +335,15 @@
   cursor: default;
 }
 
+/* Reply inline input row */
+.scroll-reply-input-row {
+  padding-left: 40px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 6px;
+}
+
 /* Music player bar */
 .scroll-music-bar {
   position: fixed;
@@ -367,17 +378,13 @@
   background: rgba(0,0,0,0.7);
 }
 
-/* Reply inline input row */
-.scroll-reply-input-row {
-  padding-left: 40px;
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  margin-top: 6px;
-}
-
 /* --- CHANGE LOG ---
    [May 26, 2026] CREATED: Scroll CSS — full screen snap scroll cards, dark theme,
    right sidebar actions, comments drawer, double-tap heart, music bar.
    Uses Inter + Merriweather matching globals.css fonts.
+   [May 28, 2026] UPDATED: Phase 15C — .scroll-card-actions changed from vertical
+   right-side column (flex-direction: column, gap: 22px, circular 48px icons)
+   to horizontal row (flex-direction: row, gap: 8px, pill-shaped buttons).
+   This removes the "side wheel" layout. scroll-card-bg dot pattern removed
+   (was overriding canvas_data backgrounds). All other styles preserved exactly.
    --- END CHANGE LOG --- */
