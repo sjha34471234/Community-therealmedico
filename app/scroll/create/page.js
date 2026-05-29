@@ -1,22 +1,38 @@
 'use client';
 // --- WHY THIS CODE EXISTS ---
-// Scroll Creator page — wires canvas, toolbar, tabs together.
+// Scroll Creator page — wires canvas, toolbar, tabs, confirmation, draft.
 // --- CHANGE LOG ---
 // [May 26 2026] CREATED: Phase 15B-1.
 // [May 27 2026] FIXED: Canvas clipped — hide site chrome via useEffect.
-// [May 27 2026] FIXED: Canvas still clipped — calculate exact available
-//   height dynamically and pass to canvas as CSS variable.
+// [May 27 2026] FIXED: Dynamic available height via toolbarRef/tabsRef.
 // [May 28 2026] ADDED: Canvas orientation selector (Portrait/Square/Landscape).
-//   Orientation row lives inside toolbarRef so its height is included in the
-//   available-height calculation — canvas never gets clipped.
-//   Changing orientation resets the canvas (handled in ScrollCreatorCanvas).
+// [May 29 2026] ADDED: Phase 15D —
+//   previewMode state — hides toolbar/tabs via creator-chrome-hidden class.
+//     Canvas fills full screen. Tap canvas to exit. Eye button in toolbar toggles.
+//   Post confirmation — handleShowConfirm captures canvas+content, shows sheet.
+//     handleConfirmPost makes the actual API call (was in ScrollCreatorToolbar).
+//   Draft save — setInterval every 30s writes canvas to localStorage.
+//     Only saves when canvas has elements (don't save empty canvas).
+//   Draft restore — on mount, checks localStorage for draft < 24h old.
+//     Banner inside toolbarRef div so its height is included in available-height calc.
+//     handleRestoreDraft: sets orientation, then after 50ms calls setCanvasState.
+//     handleDiscardDraft: clears localStorage, hides banner.
+//   effectiveHeight: window.innerHeight in preview mode (fills full screen),
+//     canvasAreaHeight otherwise.
 // --- END CHANGE LOG ---
 
 import { useRef, useState, useCallback, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import './creator.css';
 import { ScrollCreatorCanvasWithRef } from '@/components/scroll/creator/ScrollCreatorCanvas';
-import ScrollCreatorToolbar from '@/components/scroll/creator/ScrollCreatorToolbar';
-import ScrollCreatorTabs from '@/components/scroll/creator/ScrollCreatorTabs';
+import ScrollCreatorToolbar          from '@/components/scroll/creator/ScrollCreatorToolbar';
+import ScrollCreatorTabs             from '@/components/scroll/creator/ScrollCreatorTabs';
+import ScrollPostConfirmSheet        from '@/components/scroll/creator/ScrollPostConfirmSheet';
+import useAuthStore                  from '@/store/authStore';
+import toast                         from 'react-hot-toast';
+
+const DRAFT_KEY = 'scroll_creator_draft';
+const DRAFT_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 const ORIENTATION_OPTIONS = [
   { key: 'portrait',  label: '9:16', ariaLabel: 'Portrait'  },
@@ -25,79 +41,233 @@ const ORIENTATION_OPTIONS = [
 ];
 
 export default function ScrollCreatePage() {
+  const router     = useRouter();
   const canvasRef  = useRef(null);
   const toolbarRef = useRef(null);
   const tabsRef    = useRef(null);
 
-  const [shadowBg, setShadowBg]                 = useState({ type: 'solid', value: '#1a1a2e' });
-  const [shadowMusic, setShadowMusic]           = useState(null);
-  const [canvasAreaHeight, setCanvasAreaHeight] = useState(null);
-  const [orientation, setOrientation]           = useState('portrait');
+  const { user, accessToken } = useAuthStore();
 
-  // Hide site navbar + bottom nav while creator is open
-  useEffect(() => {
+  // ── Canvas shadow state (mirrors canvas for toolbar/tabs) ──
+  const [shadowBg,    setShadowBg]    = useState({ type: 'solid', value: '#1a1a2e' });
+  const [shadowMusic, setShadowMusic] = useState(null);
+
+  // ── Layout ────────────────────────────────────────────────
+  const [orientation,      setOrientation]      = useState('portrait');
+  const [canvasAreaHeight, setCanvasAreaHeight] = useState(null);
+
+  // ── Preview mode ──────────────────────────────────────────
+  const [previewMode, setPreviewMode] = useState(false);
+
+  // ── Post confirmation ─────────────────────────────────────
+  const [showConfirm,  setShowConfirm]  = useState(false);
+  const [confirmData,  setConfirmData]  = useState(null); // { canvas, content }
+  const [posting,      setPosting]      = useState(false);
+
+  // ── Draft banner ──────────────────────────────────────────
+  const [draftBanner, setDraftBanner] = useState(null); // null or draft object
+
+  // ── Hide site chrome ──────────────────────────────────────
+  useEffect(function() {
     const navbar     = document.querySelector('nav');
     const bottomNav  = document.querySelector('.bottom-nav');
     const pageScroll = document.getElementById('page-scroll-container');
     if (navbar)     navbar.style.display      = 'none';
     if (bottomNav)  bottomNav.style.display   = 'none';
     if (pageScroll) pageScroll.style.overflow = 'hidden';
-    return () => {
+    return function() {
       if (navbar)     navbar.style.display      = '';
       if (bottomNav)  bottomNav.style.display   = '';
       if (pageScroll) pageScroll.style.overflow = '';
     };
   }, []);
 
-  // Calculate exact available height for canvas area.
-  // ⚠️ toolbarRef wraps BOTH the toolbar AND the orientation row —
-  //    so both heights are subtracted and canvas is never clipped.
-  useEffect(() => {
+  // ── Check for saved draft on mount ────────────────────────
+  useEffect(function() {
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (!raw) return;
+      const draft = JSON.parse(raw);
+      const age   = Date.now() - (draft.timestamp || 0);
+      if (age < DRAFT_MAX_AGE_MS && draft.canvas && (draft.canvas.elements || []).length > 0) {
+        setDraftBanner(draft);
+      } else {
+        localStorage.removeItem(DRAFT_KEY); // expired draft
+      }
+    } catch (e) {
+      // corrupt draft — ignore
+    }
+  }, []);
+
+  // ── Auto-save draft every 30s ─────────────────────────────
+  useEffect(function() {
+    const interval = setInterval(function() {
+      if (!canvasRef.current) return;
+      const canvas = canvasRef.current.getCanvas();
+      if (!canvas || (canvas.elements || []).length === 0) return;
+      try {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify({
+          canvas,
+          orientation,
+          timestamp: Date.now(),
+        }));
+      } catch (e) {
+        // localStorage full — ignore
+      }
+    }, 30000);
+    return function() { clearInterval(interval); };
+  }, [orientation]);
+
+  // ── Height calculation ────────────────────────────────────
+  // toolbarRef wraps toolbar + orientation row + draft banner — all heights subtracted.
+  useEffect(function() {
     function measure() {
+      if (previewMode) {
+        setCanvasAreaHeight(window.innerHeight);
+        return;
+      }
       const totalH   = window.innerHeight;
       const toolbarH = toolbarRef.current ? toolbarRef.current.offsetHeight : 80;
       const tabsH    = tabsRef.current    ? tabsRef.current.offsetHeight    : 260;
-      const available = totalH - toolbarH - tabsH;
-      setCanvasAreaHeight(Math.max(available, 100));
+      setCanvasAreaHeight(Math.max(totalH - toolbarH - tabsH, 100));
     }
     measure();
     window.addEventListener('resize', measure);
     const t = setTimeout(measure, 300);
-    return () => {
+    return function() {
       window.removeEventListener('resize', measure);
       clearTimeout(t);
     };
+  }, [previewMode]);
+
+  // Re-measure when draft banner appears/disappears (it's inside toolbarRef)
+  useEffect(function() {
+    const t = setTimeout(function() {
+      if (previewMode) return;
+      const totalH   = window.innerHeight;
+      const toolbarH = toolbarRef.current ? toolbarRef.current.offsetHeight : 80;
+      const tabsH    = tabsRef.current    ? tabsRef.current.offsetHeight    : 260;
+      setCanvasAreaHeight(Math.max(totalH - toolbarH - tabsH, 100));
+    }, 100);
+    return function() { clearTimeout(t); };
+  }, [draftBanner, previewMode]);
+
+  // ── Draft handlers ────────────────────────────────────────
+  const handleRestoreDraft = useCallback(function() {
+    const draft = draftBanner;
+    setDraftBanner(null);
+    localStorage.removeItem(DRAFT_KEY);
+    if (!draft) return;
+
+    // Set orientation first (may trigger canvas reset if different),
+    // then restore canvas state after 50ms so reset completes first.
+    setOrientation(draft.orientation || 'portrait');
+    setShadowBg(draft.canvas.background    || { type: 'solid', value: '#1a1a2e' });
+    setShadowMusic(draft.canvas.music      || null);
+
+    setTimeout(function() {
+      if (canvasRef.current) {
+        canvasRef.current.setCanvasState(draft.canvas);
+      }
+    }, 50);
+  }, [draftBanner]);
+
+  const handleDiscardDraft = useCallback(function() {
+    setDraftBanner(null);
+    localStorage.removeItem(DRAFT_KEY);
   }, []);
 
-  const handleAddElement = useCallback((el) => {
+  // ── Preview mode ──────────────────────────────────────────
+  const handlePreview     = useCallback(function() { setPreviewMode(true); },  []);
+  const handlePreviewExit = useCallback(function() { setPreviewMode(false); }, []);
+
+  // ── Post confirmation ─────────────────────────────────────
+  const handleShowConfirm = useCallback(function(canvas, content) {
+    setConfirmData({ canvas, content });
+    setShowConfirm(true);
+  }, []);
+
+  const handleCancelConfirm = useCallback(function() {
+    if (posting) return;
+    setShowConfirm(false);
+    setConfirmData(null);
+  }, [posting]);
+
+  const handleConfirmPost = useCallback(async function() {
+    if (!confirmData) return;
+    if (!user || !accessToken) {
+      router.push('/auth?next=/scroll/create');
+      return;
+    }
+
+    setPosting(true);
+    try {
+      const res = await fetch('/api/scrolls', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer ' + accessToken,
+        },
+        body: JSON.stringify({
+          content:     confirmData.content,
+          canvas_data: JSON.stringify(confirmData.canvas),
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        toast.error(data.error || 'Failed to post scroll.');
+        return;
+      }
+
+      // Success — clear draft and navigate
+      try { localStorage.removeItem(DRAFT_KEY); } catch (e) {}
+      toast.success('Scroll posted!');
+      router.push('/scroll');
+    } catch (err) {
+      toast.error('Something went wrong. Please try again.');
+    } finally {
+      setPosting(false);
+    }
+  }, [confirmData, user, accessToken, router]);
+
+  // ── Canvas callbacks ──────────────────────────────────────
+  const handleAddElement = useCallback(function(el) {
     if (canvasRef.current) canvasRef.current.addElement(el);
   }, []);
 
-  const handleBackground = useCallback((bg) => {
-    if (canvasRef.current) {
-      canvasRef.current.setBackground(bg);
-      setShadowBg(bg);
-    }
+  const handleBackground = useCallback(function(bg) {
+    if (canvasRef.current) { canvasRef.current.setBackground(bg); setShadowBg(bg); }
   }, []);
 
-  const handleMusic = useCallback((music) => {
-    if (canvasRef.current) {
-      canvasRef.current.setMusic(music);
-      setShadowMusic(music);
-    }
+  const handleMusic = useCallback(function(music) {
+    if (canvasRef.current) { canvasRef.current.setMusic(music); setShadowMusic(music); }
   }, []);
 
-  const getCanvas = useCallback(() => {
+  const getCanvas = useCallback(function() {
     if (canvasRef.current) return canvasRef.current.getCanvas();
     return null;
   }, []);
 
+  // ── Effective height for canvas ───────────────────────────
+  const effectiveHeight = previewMode
+    ? (typeof window !== 'undefined' ? window.innerHeight : 600)
+    : canvasAreaHeight;
+
   return (
     <div className="creator-page">
 
-      {/* Toolbar + orientation row — both inside toolbarRef for height measurement */}
-      <div ref={toolbarRef}>
-        <ScrollCreatorToolbar canvasRef={canvasRef} getCanvas={getCanvas} />
+      {/* Toolbar + orientation row + draft banner
+          All inside toolbarRef — all heights subtracted from canvas area */}
+      <div ref={toolbarRef} className={previewMode ? 'creator-chrome-hidden' : ''}>
+        <ScrollCreatorToolbar
+          canvasRef={canvasRef}
+          getCanvas={getCanvas}
+          onShowConfirm={handleShowConfirm}
+          onPreview={handlePreview}
+        />
 
         {/* Canvas size / orientation selector */}
         <div className="creator-orientation-row">
@@ -118,19 +288,34 @@ export default function ScrollCreatePage() {
           })}
           <span className="creator-orientation-hint">Size change clears canvas</span>
         </div>
+
+        {/* Draft restore banner */}
+        {draftBanner && (
+          <div className="creator-draft-banner">
+            <span className="creator-draft-banner__text">
+              <strong>Saved draft found.</strong> Continue where you left off?
+            </span>
+            <button className="creator-draft-banner__yes"  onClick={handleRestoreDraft}>Continue</button>
+            <button className="creator-draft-banner__no"   onClick={handleDiscardDraft}>Discard</button>
+          </div>
+        )}
       </div>
 
+      {/* Canvas */}
       <ScrollCreatorCanvasWithRef
         ref={canvasRef}
         orientation={orientation}
-        availableHeight={canvasAreaHeight}
+        availableHeight={effectiveHeight}
+        isPreview={previewMode}
+        onPreviewExit={handlePreviewExit}
         onChange={function(canvas) {
           if (canvas.background) setShadowBg(canvas.background);
           if (canvas.music !== undefined) setShadowMusic(canvas.music);
         }}
       />
 
-      <div ref={tabsRef}>
+      {/* Tabs — hidden in preview mode */}
+      <div ref={tabsRef} className={previewMode ? 'creator-chrome-hidden' : ''}>
         <ScrollCreatorTabs
           onAddElement={handleAddElement}
           onBackground={handleBackground}
@@ -139,6 +324,17 @@ export default function ScrollCreatePage() {
           currentMusic={shadowMusic}
         />
       </div>
+
+      {/* Post confirmation sheet */}
+      <ScrollPostConfirmSheet
+        isOpen={showConfirm}
+        canvas={confirmData ? confirmData.canvas : null}
+        orientation={orientation}
+        posting={posting}
+        onConfirm={handleConfirmPost}
+        onCancel={handleCancelConfirm}
+      />
+
     </div>
   );
 }
