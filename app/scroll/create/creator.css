@@ -3,11 +3,13 @@
    Per-page CSS rule — never in globals.css.
    --- CHANGE LOG ---
    [May 26 2026] CREATED: Phase 15B-1 core styles.
-   [May 27 2026] FIXED: Canvas clipped by navbar — min-height media queries.
-   [May 27 2026] FIXED: Tab panel too cramped — redesigned as tall bottom drawer.
-                 Music unavailable — switched to incompetech CDN URLs.
-   [May 28 2026] ADDED: .creator-orientation-row — canvas size selector row
-                 (Portrait 9:16 / Square 1:1 / Landscape 16:9).
+   [May 27 2026] FIXED: Canvas clipped — min-height media queries.
+   [May 27 2026] FIXED: Tab panel cramped — tall bottom drawer.
+   [May 28 2026] ADDED: .creator-orientation-row — canvas size selector.
+   [May 29 2026] ADDED: Phase 15D — preview mode chrome-hidden class,
+                 draft banner, music waveform animation, post confirmation
+                 sheet, element lock overlay, controls strip, text alignment
+                 buttons, letter spacing row.
    --- END CHANGE LOG --- */
 
 /* ── PAGE SHELL ── */
@@ -19,6 +21,11 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+/* ── PREVIEW MODE — hide all editor chrome ── */
+.creator-chrome-hidden {
+  display: none !important;
 }
 
 /* ── TOOLBAR (top) ── */
@@ -36,6 +43,11 @@
   flex-shrink: 0;
 }
 .creator-toolbar__left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.creator-toolbar__right {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -58,8 +70,14 @@
   cursor: pointer;
   transition: background 0.15s;
   flex-shrink: 0;
+  font-size: 16px;
+  line-height: 1;
 }
 .creator-toolbar__btn:active { background: rgba(255,255,255,0.2); }
+.creator-toolbar__btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
 .creator-toolbar__post-btn {
   display: flex;
   align-items: center;
@@ -80,11 +98,7 @@
   cursor: not-allowed;
 }
 
-/* ── ORIENTATION / CANVAS SIZE SELECTOR ─────────────────────
-   Sits below the toolbar, above the canvas.
-   Three small buttons: Portrait (9:16) | Square (1:1) | Landscape (16:9).
-   The orientation icon is a tiny CSS rectangle that visually shows the ratio.
-   ─────────────────────────────────────────────────────────── */
+/* ── ORIENTATION / CANVAS SIZE SELECTOR ── */
 .creator-orientation-row {
   display: flex;
   align-items: center;
@@ -94,7 +108,6 @@
   border-bottom: 1px solid rgba(255,255,255,0.06);
   flex-shrink: 0;
 }
-
 .creator-orientation-btn {
   display: flex;
   align-items: center;
@@ -110,16 +123,12 @@
   transition: background 0.15s, border-color 0.15s, color 0.15s;
   -webkit-tap-highlight-color: transparent;
 }
-.creator-orientation-btn:active {
-  background: rgba(255,255,255,0.12);
-}
+.creator-orientation-btn:active { background: rgba(255,255,255,0.12); }
 .creator-orientation-btn--active {
   background: rgba(29,111,164,0.2);
   border-color: #1D6FA4;
   color: #1D6FA4;
 }
-
-/* Tiny rectangle icons showing the aspect ratio visually */
 .creator-orientation-icon {
   border: 1.5px solid currentColor;
   border-radius: 2px;
@@ -128,17 +137,54 @@
 .creator-orientation-icon--portrait  { width: 10px; height: 16px; }
 .creator-orientation-icon--square    { width: 13px; height: 13px; }
 .creator-orientation-icon--landscape { width: 18px; height: 11px; }
-
-.creator-orientation-label {
-  letter-spacing: 0.02em;
-}
-
+.creator-orientation-label { letter-spacing: 0.02em; }
 .creator-orientation-hint {
   margin-left: auto;
   color: rgba(255,255,255,0.2);
   font-size: 10px;
   font-style: italic;
   white-space: nowrap;
+}
+
+/* ── DRAFT BANNER ── */
+.creator-draft-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: rgba(29,111,164,0.15);
+  border-bottom: 1px solid rgba(29,111,164,0.25);
+  flex-shrink: 0;
+}
+.creator-draft-banner__text {
+  flex: 1;
+  color: rgba(255,255,255,0.7);
+  font-size: 12px;
+}
+.creator-draft-banner__text strong {
+  color: #ffffff;
+  font-weight: 600;
+}
+.creator-draft-banner__yes {
+  padding: 5px 12px;
+  border-radius: 16px;
+  border: none;
+  background: #1D6FA4;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.creator-draft-banner__no {
+  padding: 5px 10px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: transparent;
+  color: rgba(255,255,255,0.45);
+  font-size: 12px;
+  cursor: pointer;
+  flex-shrink: 0;
 }
 
 /* ── CANVAS AREA ── */
@@ -151,6 +197,10 @@
   position: relative;
   background: #111111;
   min-height: 0;
+}
+.creator-canvas-area--zoomed {
+  overflow: visible;
+  z-index: 5;
 }
 
 /* ── CANVAS ── */
@@ -197,6 +247,28 @@
   gap: 10px;
 }
 
+/* ── MUSIC WAVEFORM (inside canvas music bar) ── */
+.creator-music-waveform {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 14px;
+  flex-shrink: 0;
+}
+.creator-music-waveform span {
+  display: block;
+  width: 2.5px;
+  height: 14px;
+  background: rgba(255,255,255,0.85);
+  border-radius: 2px;
+  transform-origin: bottom center;
+  animation: creator-waveform 0.65s ease-in-out infinite;
+}
+@keyframes creator-waveform {
+  0%, 100% { transform: scaleY(0.2); }
+  50%       { transform: scaleY(1);   }
+}
+
 /* ── DRAGGABLE ELEMENT ── */
 .creator-element {
   position: absolute;
@@ -205,7 +277,8 @@
   user-select: none;
   -webkit-user-select: none;
 }
-.creator-element--selected { outline: 2px solid #1D6FA4; outline-offset: 2px; }
+.creator-element--selected  { outline: 2px solid #1D6FA4; outline-offset: 2px; }
+.creator-element--locked    { cursor: default; outline-color: rgba(255,255,255,0.3); }
 .creator-element__resize-handle {
   position: absolute;
   bottom: -6px;
@@ -219,42 +292,80 @@
   touch-action: none;
   z-index: 10;
 }
+.creator-element__lock-overlay {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255,255,255,0.7);
+  pointer-events: none;
+  z-index: 5;
+}
 
-/* ── OPACITY PANEL ── */
-.creator-opacity-panel {
+/* ── CONTROLS PANEL (above selected element) ── */
+.creator-controls-panel {
   position: absolute;
   z-index: 20;
   bottom: calc(100% + 8px);
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(20,20,20,0.95);
+  background: rgba(18,18,18,0.97);
   border: 1px solid rgba(255,255,255,0.12);
   border-radius: 10px;
-  padding: 8px 12px;
+  padding: 7px 10px;
   display: flex;
   align-items: center;
   gap: 8px;
   white-space: nowrap;
   pointer-events: all;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
 }
-.creator-opacity-panel label { color: rgba(255,255,255,0.6); font-size: 11px; }
-.creator-opacity-panel input[type=range] { width: 90px; accent-color: #1D6FA4; }
-.creator-opacity-panel span { color: #ffffff; font-size: 11px; min-width: 30px; text-align: right; }
-.creator-opacity-panel__delete {
-  margin-left: 4px;
-  background: none;
-  border: none;
-  color: #ef4444;
-  cursor: pointer;
-  padding: 2px;
+.creator-controls-panel label {
+  color: rgba(255,255,255,0.5);
+  font-size: 11px;
+}
+.creator-controls-panel input[type=range] {
+  width: 80px;
+  accent-color: #1D6FA4;
+}
+.creator-controls-panel__pct {
+  color: #ffffff;
+  font-size: 11px;
+  min-width: 28px;
+  text-align: right;
+}
+.creator-controls-panel__icon-btn {
   display: flex;
   align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 3px;
+  border-radius: 6px;
+  transition: background 0.12s;
+}
+.creator-controls-panel__icon-btn:active { background: rgba(255,255,255,0.1); }
+.creator-controls-panel__lock-btn {
+  color: rgba(255,255,255,0.4);
+}
+.creator-controls-panel__lock-btn--active {
+  color: #1D6FA4;
+}
+.creator-controls-panel__delete-btn {
+  color: #ef4444;
+  margin-left: 2px;
 }
 
 /* ════════════════════════════════════════════
    TAB BAR — tall bottom drawer
    ════════════════════════════════════════════ */
-
 .creator-tabs {
   flex-shrink: 0;
   background: #141414;
@@ -265,8 +376,6 @@
   min-height: 260px;
   max-height: 380px;
 }
-
-/* ── TAB NAV ROW ── */
 .creator-tabs__nav {
   display: flex;
   border-bottom: 1px solid rgba(255,255,255,0.08);
@@ -293,8 +402,6 @@
   color: #1D6FA4;
   border-bottom-color: #1D6FA4;
 }
-
-/* ── TAB CONTENT ── */
 .creator-tabs__content {
   flex: 1;
   overflow-y: auto;
@@ -348,6 +455,55 @@
   padding: 0;
   background: none;
 }
+
+/* Text alignment buttons */
+.creator-text-align-group {
+  display: flex;
+  gap: 3px;
+}
+.creator-text-align-btn {
+  width: 30px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.45);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 0;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+  -webkit-tap-highlight-color: transparent;
+}
+.creator-text-align-btn--active {
+  background: rgba(29,111,164,0.25);
+  border-color: #1D6FA4;
+  color: #1D6FA4;
+}
+
+/* Letter spacing row */
+.creator-text-spacing-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+.creator-text-spacing-row label { color: rgba(255,255,255,0.5); font-size: 12px; }
+.creator-text-spacing-row input[type=range] {
+  flex: 1;
+  accent-color: #1D6FA4;
+  height: 4px;
+}
+.creator-text-spacing-row span {
+  color: rgba(255,255,255,0.5);
+  font-size: 11px;
+  min-width: 28px;
+  text-align: right;
+}
+
 .creator-add-text-btn {
   display: flex;
   align-items: center;
@@ -460,7 +616,6 @@
 
 /* ── MUSIC TAB ── */
 .creator-music-tab { width: 100%; }
-
 .creator-music-genre-row {
   display: flex;
   gap: 7px;
@@ -470,7 +625,6 @@
   padding-bottom: 2px;
 }
 .creator-music-genre-row::-webkit-scrollbar { display: none; }
-
 .creator-music-genre-btn {
   flex-shrink: 0;
   padding: 6px 12px;
@@ -488,7 +642,6 @@
   background: #1D6FA4;
   color: #ffffff;
 }
-
 .creator-music-results {
   display: flex;
   flex-direction: column;
@@ -533,7 +686,6 @@
   align-items: center;
   flex-shrink: 0;
 }
-
 .creator-music-selected-bar {
   margin-top: 10px;
   padding: 12px 14px;
@@ -590,5 +742,86 @@
   background: transparent;
   color: rgba(255,255,255,0.45);
   font-size: 13px;
+  cursor: pointer;
+}
+
+/* ── POST CONFIRMATION SHEET ── */
+.creator-confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 700;
+  background: rgba(0,0,0,0.65);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+}
+.creator-confirm-sheet {
+  width: 100%;
+  max-width: 480px;
+  background: #141414;
+  border-radius: 20px 20px 0 0;
+  border-top: 1px solid rgba(255,255,255,0.1);
+  padding: 12px 20px 36px;
+}
+.creator-confirm-handle {
+  width: 36px;
+  height: 4px;
+  background: rgba(255,255,255,0.15);
+  border-radius: 2px;
+  margin: 0 auto 18px;
+}
+.creator-confirm-title {
+  color: #ffffff;
+  font-size: 17px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.creator-confirm-subtitle {
+  color: rgba(255,255,255,0.4);
+  font-size: 13px;
+  margin-bottom: 18px;
+}
+.creator-confirm-preview-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+.creator-confirm-preview {
+  border-radius: 12px;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.creator-confirm-meta {
+  text-align: center;
+  color: rgba(255,255,255,0.3);
+  font-size: 11px;
+  margin-bottom: 18px;
+}
+.creator-confirm-post-btn {
+  width: 100%;
+  padding: 14px 0;
+  border-radius: 14px;
+  border: none;
+  background: #1D6FA4;
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-bottom: 10px;
+  letter-spacing: 0.02em;
+}
+.creator-confirm-post-btn:active { background: #155A87; }
+.creator-confirm-post-btn:disabled { background: rgba(29,111,164,0.4); cursor: not-allowed; }
+.creator-confirm-cancel-btn {
+  width: 100%;
+  padding: 12px 0;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: transparent;
+  color: rgba(255,255,255,0.45);
+  font-size: 14px;
   cursor: pointer;
 }
