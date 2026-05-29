@@ -6,6 +6,8 @@
    [May 27 2026] FIXED: Canvas clipped by navbar — min-height media queries.
    [May 27 2026] FIXED: Tab panel too cramped — redesigned as tall bottom drawer.
                  Music unavailable — switched to incompetech CDN URLs.
+   [May 28 2026] ADDED: .creator-orientation-row — canvas size selector row
+                 (Portrait 9:16 / Square 1:1 / Landscape 16:9).
    --- END CHANGE LOG --- */
 
 /* ── PAGE SHELL ── */
@@ -78,6 +80,67 @@
   cursor: not-allowed;
 }
 
+/* ── ORIENTATION / CANVAS SIZE SELECTOR ─────────────────────
+   Sits below the toolbar, above the canvas.
+   Three small buttons: Portrait (9:16) | Square (1:1) | Landscape (16:9).
+   The orientation icon is a tiny CSS rectangle that visually shows the ratio.
+   ─────────────────────────────────────────────────────────── */
+.creator-orientation-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  background: rgba(0,0,0,0.6);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  flex-shrink: 0;
+}
+
+.creator-orientation-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 20px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.45);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.creator-orientation-btn:active {
+  background: rgba(255,255,255,0.12);
+}
+.creator-orientation-btn--active {
+  background: rgba(29,111,164,0.2);
+  border-color: #1D6FA4;
+  color: #1D6FA4;
+}
+
+/* Tiny rectangle icons showing the aspect ratio visually */
+.creator-orientation-icon {
+  border: 1.5px solid currentColor;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.creator-orientation-icon--portrait  { width: 10px; height: 16px; }
+.creator-orientation-icon--square    { width: 13px; height: 13px; }
+.creator-orientation-icon--landscape { width: 18px; height: 11px; }
+
+.creator-orientation-label {
+  letter-spacing: 0.02em;
+}
+
+.creator-orientation-hint {
+  margin-left: auto;
+  color: rgba(255,255,255,0.2);
+  font-size: 10px;
+  font-style: italic;
+  white-space: nowrap;
+}
+
 /* ── CANVAS AREA ── */
 .creator-canvas-area {
   flex: 1;
@@ -90,7 +153,7 @@
   min-height: 0;
 }
 
-/* ── CANVAS — grows on taller screens ── */
+/* ── CANVAS ── */
 .creator-canvas {
   position: relative;
   flex-shrink: 0;
@@ -99,7 +162,6 @@
   box-shadow: 0 0 0 1px rgba(255,255,255,0.08), 0 24px 48px rgba(0,0,0,0.6);
   touch-action: none;
 }
-
 
 /* ── CANVAS LAYERS ── */
 .creator-canvas__bg {
@@ -190,7 +252,7 @@
 }
 
 /* ════════════════════════════════════════════
-   TAB BAR — redesigned as tall bottom drawer
+   TAB BAR — tall bottom drawer
    ════════════════════════════════════════════ */
 
 .creator-tabs {
@@ -199,7 +261,6 @@
   border-top: 1px solid rgba(255,255,255,0.1);
   display: flex;
   flex-direction: column;
-  /* Tall enough to actually use — 42% of screen height */
   height: 42vh;
   min-height: 260px;
   max-height: 380px;
@@ -233,7 +294,7 @@
   border-bottom-color: #1D6FA4;
 }
 
-/* ── TAB CONTENT — scrollable, takes remaining height ── */
+/* ── TAB CONTENT ── */
 .creator-tabs__content {
   flex: 1;
   overflow-y: auto;
