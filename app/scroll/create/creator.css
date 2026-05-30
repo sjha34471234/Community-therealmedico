@@ -825,3 +825,135 @@
   font-size: 14px;
   cursor: pointer;
 }
+
+/* ── TEMPLATE PICKER OVERLAY (Phase 15E) ─────────────────────────────────────
+   Full-screen overlay shown when creator first opens (no draft found).
+   z-index 650 — above creator (600) but below confirm sheet (700).
+   Background is solid #0a0a0a (not semi-transparent) for a clean look.
+   Grid is 2-column scrollable. Thumbnails use aspect-ratio: 9/16 (portrait).
+   Preview indicator blocks are position: absolute inside thumbnail — percentage
+   positioning scales correctly with any thumbnail rendered size.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+.creator-tpl-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 650;
+  background: #0a0a0a;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.creator-tpl-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 20px 20px 14px;
+  flex-shrink: 0;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.creator-tpl-header__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.creator-tpl-title {
+  color: #ffffff;
+  font-size: 19px;
+  font-weight: 700;
+  margin: 0 0 4px;
+  line-height: 1.2;
+}
+
+.creator-tpl-subtitle {
+  color: rgba(255,255,255,0.38);
+  font-size: 12px;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.creator-tpl-blank-btn {
+  flex-shrink: 0;
+  padding: 8px 14px;
+  border-radius: 20px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.05);
+  color: rgba(255,255,255,0.55);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s, color 0.15s;
+}
+
+.creator-tpl-blank-btn:active {
+  background: rgba(255,255,255,0.12);
+  color: #ffffff;
+}
+
+/* Scrollable 2-column grid */
+.creator-tpl-grid {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 16px 16px max(24px, env(safe-area-inset-bottom, 24px));
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 12px;
+  align-content: start;
+  scrollbar-width: none;
+}
+
+.creator-tpl-grid::-webkit-scrollbar {
+  display: none;
+}
+
+/* Each template card — thumbnail + name below */
+.creator-tpl-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Thumbnail — portrait aspect ratio, background applied inline */
+.creator-tpl-thumb {
+  width: 100%;
+  aspect-ratio: 9 / 16;
+  border-radius: 12px;
+  overflow: hidden;
+  position: relative;
+  border: 2px solid rgba(255,255,255,0.08);
+  transition: transform 0.14s ease, border-color 0.14s ease;
+  flex-shrink: 0;
+}
+
+.creator-tpl-card:active .creator-tpl-thumb {
+  transform: scale(0.95);
+  border-color: #1D6FA4;
+}
+
+/* Layout indicator blocks inside each thumbnail.
+   Positioned absolutely with percentage top/left/width/height (applied inline).
+   background color also applied inline per template. */
+.creator-tpl-block {
+  position: absolute;
+  border-radius: 3px;
+}
+
+.creator-tpl-name {
+  color: rgba(255,255,255,0.6);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  line-height: 1.2;
+}
