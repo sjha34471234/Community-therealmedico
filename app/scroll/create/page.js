@@ -1,6 +1,6 @@
 'use client';
 // --- WHY THIS CODE EXISTS ---
-// Scroll Creator page — wires canvas, toolbar, tabs, confirmation, draft.
+// Scroll Creator page — wires canvas, toolbar, tabs, confirmation, draft, templates.
 // --- CHANGE LOG ---
 // [May 26 2026] CREATED: Phase 15B-1.
 // [May 27 2026] FIXED: Canvas clipped — hide site chrome via useEffect.
@@ -19,6 +19,15 @@
 //     handleDiscardDraft: clears localStorage, hides banner.
 //   effectiveHeight: window.innerHeight in preview mode (fills full screen),
 //     canvasAreaHeight otherwise.
+// [May 30 2026] ADDED: Phase 15E — Template picker.
+//   showTemplatePicker: starts true. Hidden when a valid draft is found (setShowTemplatePicker(false)).
+//   Stays visible until user picks a template or clicks "Start blank →".
+//   handleSelectTemplate: sets orientation, syncs shadow state, regenerates element IDs
+//     (to avoid ID conflicts if same template loaded twice), then after 50ms calls
+//     canvasRef.current.setCanvasState() — same 50ms pattern as handleRestoreDraft.
+//   handleStartBlank: just hides picker, canvas stays blank.
+//   Draft check useEffect modified: if valid draft found → setShowTemplatePicker(false)
+//     so picker is skipped and the draft banner is shown instead.
 // --- END CHANGE LOG ---
 
 import { useRef, useState, useCallback, useEffect } from 'react';
@@ -28,6 +37,7 @@ import { ScrollCreatorCanvasWithRef } from '@/components/scroll/creator/ScrollCr
 import ScrollCreatorToolbar          from '@/components/scroll/creator/ScrollCreatorToolbar';
 import ScrollCreatorTabs             from '@/components/scroll/creator/ScrollCreatorTabs';
 import ScrollPostConfirmSheet        from '@/components/scroll/creator/ScrollPostConfirmSheet';
+import ScrollCreatorTemplates        from '@/components/scroll/creator/ScrollCreatorTemplates';
 import useAuthStore                  from '@/store/authStore';
 import toast                         from 'react-hot-toast';
 
@@ -67,6 +77,12 @@ export default function ScrollCreatePage() {
   // ── Draft banner ──────────────────────────────────────────
   const [draftBanner, setDraftBanner] = useState(null); // null or draft object
 
+  // ── Template picker (Phase 15E) ───────────────────────────
+  // Starts true — shown immediately on creator open.
+  // Set to false when a valid draft is found (draft takes priority over template picker).
+  // Set to false when user picks a template or clicks "Start blank →".
+  const [showTemplatePicker, setShowTemplatePicker] = useState(true);
+
   // ── Hide site chrome ──────────────────────────────────────
   useEffect(function() {
     const navbar     = document.querySelector('nav');
@@ -82,20 +98,23 @@ export default function ScrollCreatePage() {
     };
   }, []);
 
-  // ── Check for saved draft on mount ────────────────────────
+  // ── Check for saved draft on mount (Phase 15E: also controls template picker) ──
+  // If a valid draft exists → show draft banner, hide template picker.
+  // If no draft (or expired) → template picker stays visible (default true).
   useEffect(function() {
     try {
       const raw = localStorage.getItem(DRAFT_KEY);
-      if (!raw) return;
+      if (!raw) return; // No draft — template picker stays shown
       const draft = JSON.parse(raw);
       const age   = Date.now() - (draft.timestamp || 0);
       if (age < DRAFT_MAX_AGE_MS && draft.canvas && (draft.canvas.elements || []).length > 0) {
         setDraftBanner(draft);
+        setShowTemplatePicker(false); // Draft takes priority — skip template picker
       } else {
-        localStorage.removeItem(DRAFT_KEY); // expired draft
+        localStorage.removeItem(DRAFT_KEY); // Expired draft — template picker stays shown
       }
     } catch (e) {
-      // corrupt draft — ignore
+      // Corrupt draft — template picker stays shown (default true is already set)
     }
   }, []);
 
@@ -175,6 +194,45 @@ export default function ScrollCreatePage() {
   const handleDiscardDraft = useCallback(function() {
     setDraftBanner(null);
     localStorage.removeItem(DRAFT_KEY);
+    // After discarding draft, show template picker so user isn't left with blank canvas
+    setShowTemplatePicker(true);
+  }, []);
+
+  // ── Template picker handlers (Phase 15E) ──────────────────
+  const handleSelectTemplate = useCallback(function(template) {
+    setShowTemplatePicker(false);
+
+    // Set orientation first (same 50ms pattern as draft restore).
+    // All Phase 15E templates are portrait, so this is typically a no-op.
+    setOrientation(template.orientation || 'portrait');
+
+    // Sync shadow state so tabs show correct background/music immediately.
+    setShadowBg(template.background);
+    setShadowMusic(null);
+
+    // Regenerate element IDs — template uses short static IDs ('e1','e2','e3').
+    // Fresh random IDs prevent any conflict if the same template is loaded twice.
+    const freshElements = template.elements.map(function(el) {
+      return Object.assign({}, el, { id: 'el_' + Math.random().toString(36).slice(2, 7) });
+    });
+
+    // 50ms lets the orientation state settle before canvas state is set.
+    // Without this timeout, a canvas orientation reset could overwrite the elements.
+    // (Same guard pattern as handleRestoreDraft.)
+    setTimeout(function() {
+      if (canvasRef.current) {
+        canvasRef.current.setCanvasState({
+          background: template.background,
+          elements:   freshElements,
+          music:      null,
+        });
+      }
+    }, 50);
+  }, []);
+
+  const handleStartBlank = useCallback(function() {
+    // Just close the picker — canvas stays at default blank state.
+    setShowTemplatePicker(false);
   }, []);
 
   // ── Preview mode ──────────────────────────────────────────
@@ -325,7 +383,7 @@ export default function ScrollCreatePage() {
         />
       </div>
 
-      {/* Post confirmation sheet */}
+      {/* Post confirmation sheet — z-index 700 */}
       <ScrollPostConfirmSheet
         isOpen={showConfirm}
         canvas={confirmData ? confirmData.canvas : null}
@@ -333,6 +391,15 @@ export default function ScrollCreatePage() {
         posting={posting}
         onConfirm={handleConfirmPost}
         onCancel={handleCancelConfirm}
+      />
+
+      {/* Template picker — z-index 650, shown on first open when no draft exists.
+          Mounts immediately (showTemplatePicker starts true).
+          Hidden by draft check useEffect if a valid draft is found. */}
+      <ScrollCreatorTemplates
+        isOpen={showTemplatePicker}
+        onSelectTemplate={handleSelectTemplate}
+        onStartBlank={handleStartBlank}
       />
 
     </div>
