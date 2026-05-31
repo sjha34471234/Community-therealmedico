@@ -957,3 +957,18 @@
   text-align: center;
   line-height: 1.2;
 }
+/* ── ICON ELEMENT SVG TOUCH FIX (May 31 2026) ───────────────────────────────
+   touch-action is NOT an inherited CSS property.
+   .creator-element has touch-action: none, but SVG child elements inside icon
+   elements default to touch-action: auto (browser default).
+   With touch-action: auto on the SVG, the browser fires touchcancel after the
+   first touchmove and takes over the gesture → icon only moves one block.
+   Fix: explicitly set touch-action: none on all SVG elements inside creator-element.
+   pointer-events: none lets touches pass through SVG to the parent HTML div,
+   which then bubbles normally to the element wrapper's drag handlers.
+   Safe for Lucide icons inside buttons — button still receives the touch. */
+.creator-element svg,
+.creator-element svg * {
+  touch-action: none;
+  pointer-events: none;
+}
