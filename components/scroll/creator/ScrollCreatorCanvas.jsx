@@ -28,6 +28,12 @@
 //   All three above exposed via useImperativeHandle.
 //   lastAddedIdRef cleared in deleteElement to prevent ghost undo.
 //   canvasW/canvasH/zoom/isPreview passed to each ScrollCreatorElement.
+// [May 31 2026] ADDED: type={el.type} and fontSize={el.size} passed to
+//   ScrollCreatorElement. Required for two features in ScrollCreatorElement:
+//   1. Pinch-to-resize also scales font size (type='text' + fontSize required).
+//   2. A− / A+ font size controls in controls panel (type='text' required).
+//   Without these props, both features silently degrade — element still renders,
+//   controls panel still shows, but font size controls are hidden.
 // --- END CHANGE LOG ---
 
 import { useState, useRef, useCallback, forwardRef, useImperativeHandle, useEffect } from 'react';
@@ -70,28 +76,28 @@ function getBackgroundStyle(bg) {
 
 // ── Text element renderer — supports align + letterSpacing ────
 function TextElementContent({ props }) {
-  const alignment = props.align || 'center';
-  const justifyContent = alignment === 'left' ? 'flex-start'
+  const alignment      = props.align || 'center';
+  const justifyContent = alignment === 'left'  ? 'flex-start'
                        : alignment === 'right' ? 'flex-end'
                        : 'center';
   return (
     <div style={{
-      width:         '100%',
-      height:        '100%',
-      display:       'flex',
-      alignItems:    'center',
+      width:            '100%',
+      height:           '100%',
+      display:          'flex',
+      alignItems:       'center',
       justifyContent,
-      fontFamily:    props.font  || 'Inter, sans-serif',
-      fontSize:      props.size  || 24,
-      color:         props.color || '#ffffff',
-      fontWeight:    props.bold   ? 700 : 400,
-      fontStyle:     props.italic ? 'italic' : 'normal',
-      textAlign:     alignment,
-      letterSpacing: props.letterSpacing ? props.letterSpacing + 'px' : 'normal',
-      padding:       '4px 8px',
-      wordBreak:     'break-word',
-      lineHeight:    1.3,
-      userSelect:    'none',
+      fontFamily:       props.font  || 'Inter, sans-serif',
+      fontSize:         props.size  || 24,
+      color:            props.color || '#ffffff',
+      fontWeight:       props.bold   ? 700 : 400,
+      fontStyle:        props.italic ? 'italic' : 'normal',
+      textAlign:        alignment,
+      letterSpacing:    props.letterSpacing ? props.letterSpacing + 'px' : 'normal',
+      padding:          '4px 8px',
+      wordBreak:        'break-word',
+      lineHeight:       1.3,
+      userSelect:       'none',
       WebkitUserSelect: 'none',
     }}>
       {props.text || ''}
@@ -108,7 +114,7 @@ function IconElementContent({ props }) {
   );
 }
 
-// ── Distance between two touch points ──────────────────────
+// ── Distance between two touch points ─────────────────────────
 function getTouchDist(touches) {
   const dx = touches[0].clientX - touches[1].clientX;
   const dy = touches[0].clientY - touches[1].clientY;
@@ -127,9 +133,9 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
   const prevOrientationRef = useRef(orientation || 'portrait');
   const lastAddedIdRef     = useRef(null); // for undo
 
-  // ── Pinch zoom refs ──────────────────────────────────────
+  // ── Pinch zoom refs ───────────────────────────────────────
   const isPinchingRef      = useRef(false);
-  const wasPinchRef        = useRef(false);   // prevents deselect after pinch
+  const wasPinchRef        = useRef(false);  // prevents deselect after pinch
   const pinchStartDistRef  = useRef(null);
   const pinchStartZoomRef  = useRef(1);
 
@@ -140,10 +146,10 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
     return 'el_' + Date.now() + '_' + uidCounter.current;
   }
 
-  const [canvas,        setCanvas]        = useState({ background: { type: 'solid', value: '#1a1a2e' }, elements: [], music: null });
-  const [selectedId,    setSelectedId]    = useState(null);
-  const [musicPlaying,  setMusicPlaying]  = useState(false);
-  const [zoom,          setZoom]          = useState(1);
+  const [canvas,       setCanvas]       = useState({ background: { type: 'solid', value: '#1a1a2e' }, elements: [], music: null });
+  const [selectedId,   setSelectedId]   = useState(null);
+  const [musicPlaying, setMusicPlaying] = useState(false);
+  const [zoom,         setZoom]         = useState(1);
 
   // ── Reset canvas when orientation changes (not on mount) ──
   useEffect(function() {
@@ -164,11 +170,11 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
     if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
     setMusicPlaying(false);
     if (!canvas.music || !canvas.music.trackUrl) return;
-    const audio        = new Audio(canvas.music.trackUrl);
-    audio.loop         = true;
-    audio.volume       = 0.5;
-    audio.currentTime  = canvas.music.startSec || 0;
-    audioRef.current   = audio;
+    const audio       = new Audio(canvas.music.trackUrl);
+    audio.loop        = true;
+    audio.volume      = 0.5;
+    audio.currentTime = canvas.music.startSec || 0;
+    audioRef.current  = audio;
     audio.play().then(function() { setMusicPlaying(true); }).catch(function() { setMusicPlaying(false); });
     return function() { audio.pause(); audio.currentTime = 0; };
   }, [canvas.music]);
@@ -206,7 +212,7 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
       locked:  false,
       ...el,
     };
-    lastAddedIdRef.current = id; // track for undo
+    lastAddedIdRef.current = id;
     setCanvas(function(prev) {
       const next = { ...prev, elements: [...prev.elements, newEl] };
       if (onChange) onChange(next);
@@ -224,7 +230,6 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
   }, [onChange]);
 
   const deleteElement = useCallback(function(id) {
-    // Clear undo ref if this element is deleted manually (prevent ghost undo)
     if (lastAddedIdRef.current === id) lastAddedIdRef.current = null;
     setCanvas(function(prev) {
       const next = { ...prev, elements: prev.elements.filter(function(el) { return el.id !== id; }) };
@@ -234,8 +239,8 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
     setSelectedId(null);
   }, [onChange]);
 
-  const setBackground = useCallback(function(bg) { updateCanvas({ background: bg }); }, [updateCanvas]);
-  const setMusic      = useCallback(function(music) { updateCanvas({ music }); },      [updateCanvas]);
+  const setBackground = useCallback(function(bg)    { updateCanvas({ background: bg }); }, [updateCanvas]);
+  const setMusic      = useCallback(function(music) { updateCanvas({ music }); },          [updateCanvas]);
 
   // ── Expose API to parent via ref ──────────────────────────
   useImperativeHandle(ref, function() {
@@ -255,7 +260,6 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
         if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
       },
 
-      // ── Undo: removes last added element (single-level) ──
       undo: function() {
         if (!lastAddedIdRef.current) return false;
         const id = lastAddedIdRef.current;
@@ -271,7 +275,6 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
 
       canUndo: function() { return lastAddedIdRef.current !== null; },
 
-      // ── Restore a saved canvas state (draft restore) ──────
       setCanvasState: function(state) {
         if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
         setMusicPlaying(false);
@@ -288,7 +291,7 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
     };
   }, [addElement, setBackground, setMusic, canvas, safeOrientation, onChange]);
 
-  // ── Canvas area touch handlers — pinch zoom ────────────────
+  // ── Canvas area touch handlers — pinch zoom ───────────────
   const handleAreaTouchStart = useCallback(function(e) {
     if (e.touches.length === 2) {
       isPinchingRef.current     = true;
@@ -314,10 +317,10 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
     }
   }, []);
 
-  // ── Canvas area tap — deselect / preview exit ──────────────
+  // ── Canvas area tap — deselect / preview exit ─────────────
   const handleCanvasTap = useCallback(function(e) {
     if (isPreview) { if (onPreviewExit) onPreviewExit(); return; }
-    if (wasPinchRef.current) return; // don't deselect after pinch
+    if (wasPinchRef.current) return;
     const cls = e.target.className || '';
     if (
       e.target === canvasRef.current ||
@@ -329,7 +332,7 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
 
   // ── Calculate display dimensions ──────────────────────────
   const { w: canvasW, h: canvasH } = calcDisplaySize(safeOrientation, availableHeight);
-  displayWRef.current = canvasW; // always store BASE size (no zoom) for getCanvas()
+  displayWRef.current = canvasW;
   displayHRef.current = canvasH;
 
   const bgStyle = getBackgroundStyle(canvas.background);
@@ -368,6 +371,8 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
                 locked={el.locked || false}
                 selected={!isPreview && selectedId === el.id}
                 isPreview={isPreview || false}
+                type={el.type}
+                fontSize={el.size}
                 onSelect={setSelectedId}
                 onUpdate={updateElement}
                 onDelete={deleteElement}
@@ -386,9 +391,7 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
         {canvas.music && (
           <div style={{
             position:   'absolute',
-            bottom:     0,
-            left:       0,
-            right:      0,
+            bottom:     0, left: 0, right: 0,
             zIndex:     5,
             background: 'linear-gradient(to top, rgba(0,0,0,0.75), transparent)',
             padding:    '20px 12px 10px',
@@ -397,7 +400,6 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
             gap:        8,
             pointerEvents: 'all',
           }}>
-            {/* Play/pause button */}
             <button
               onClick={function(e) { e.stopPropagation(); if (!isPreview) toggleMusicPlayback(); }}
               style={{
@@ -412,7 +414,6 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
               {musicPlaying ? <Pause size={13} /> : <Play size={13} />}
             </button>
 
-            {/* Waveform animation (only when playing) */}
             {musicPlaying && (
               <div className="creator-music-waveform">
                 <span />
@@ -422,7 +423,6 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
               </div>
             )}
 
-            {/* Track name */}
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{
                 color: '#ffffff', fontSize: 11, fontWeight: 500,
