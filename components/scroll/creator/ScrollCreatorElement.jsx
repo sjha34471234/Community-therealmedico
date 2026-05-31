@@ -5,7 +5,7 @@
 // Handles touch-first drag, resize, and pinch-to-resize — pure math, no libraries.
 // --- WHAT THIS MADE WORK ---
 // Touch drag, bottom-right resize handle, pinch resize, selection state,
-// controls panel (opacity + lock + delete) above selected element.
+// controls panel (lock + opacity + font size + delete) above selected element.
 // --- PITFALLS ---
 // Must use onTouchStart/Move/End — mouse events don't work on iPad.
 // touch-action: none in CSS is mandatory.
@@ -16,55 +16,36 @@
 // canvasW / canvasH props replace hardcoded 390/680 for correct bounds at
 // all orientations (portrait 390x680, square 390x390, landscape 640x360).
 // Pinch distance ratio is dimensionless — canvas zoom does NOT affect it.
-// The ratio (current dist / start dist) is scale-invariant.
+// Drag bounds use half-element overflow: element can go half off-canvas on any edge.
+// Font size controls only render when type='text' AND fontSize prop is provided.
 // --- CHANGE LOG ---
 // [May 26 2026] CREATED: Phase 15B-1 drag/resize element wrapper.
 // [May 29 2026] ADDED: Phase 15D —
-//   locked prop: disables drag/resize, shows lock overlay icon.
-//   isPreview prop: disables all interaction and hides controls.
-//   canvasW / canvasH props: correct bounds for all orientations.
-//   Pinch guard: touch handlers returned early if e.touches.length > 1.
-//   Lock toggle button in controls panel.
+//   locked prop, isPreview prop, canvasW/canvasH props.
+//   Pinch guard (touches > 1 = early return). Lock toggle in controls panel.
 //   Controls panel renamed creator-opacity-panel → creator-controls-panel.
-// [May 31 2026] FIXED: Two bugs —
-//
-//   BUG 1 — Element stops moving when any edge touches canvas edge.
-//   Root cause: drag bounds clamped to [0, baseW-w] and [0, baseH-h].
-//     Element's top-left corner couldn't go past 0, and bottom-right
-//     couldn't go past canvas edge — so it FROZE at the border.
-//   Fix: allow element to go up to half its size off-canvas on any edge.
-//     X: Math.max(-w/2, Math.min(baseW - w/2, ...))
-//     Y: Math.max(-h/2, Math.min(baseH - h/2, ...))
-//     Element must keep at least half itself inside canvas — so it stays
-//     selectable and deletable. Full off-canvas would make it unreachable.
-//   Also fixed resize: removed baseW/baseH max so element can grow past edge.
-//
-//   BUG 2 — Pinch gesture does nothing on text/icon elements.
-//   Root cause: old pinch guard `if (e.touches.length > 1) return` exited
-//     immediately for ALL two-finger touches — even on selected elements.
-//     The canvas's zoom handler then consumed the pinch for canvas zoom.
-//   Fix: when element IS selected and two fingers land on it:
-//     - stopPropagation (prevents canvas zoom from firing)
-//     - store pinchStart { distance, elW, elH, elFontSize }
-//     - on touchMove: compute ratio = newDist / startDist, scale w and h
-//     - if type='text' AND fontSize prop passed: also scales el.size (font size)
-//     - if type/fontSize not passed: only w/h scale (graceful fallback, still useful)
-//   When element is NOT selected: two-finger touch falls through to canvas zoom (correct).
-//
-//   CANVAS CHANGE NEEDED FOR FONT SIZE SCALING:
-//   In ScrollCreatorCanvas.jsx, wherever <ScrollCreatorElement> is rendered,
-//   add these two props to enable font-size scaling during pinch on text:
-//     type={el.type}
-//     fontSize={el.size}
-//   Without these, pinch still resizes the element box (w/h) — just no font scaling.
+// [May 31 2026] FIXED + ADDED:
+//   FIX 1 — Element stops at canvas edge during drag.
+//     Bounds changed from [0, baseW-w] → [-w/2, baseW-w/2].
+//     Element can go half off-canvas on any edge. Stays reachable.
+//   FIX 2 — Pinch gesture did nothing.
+//     Added pinchStart ref + getPinchDistance() helper.
+//     Two-finger on SELECTED element: intercepts pinch, scales w/h.
+//     If type='text' and fontSize provided: also scales el.size.
+//     Two-finger on UNSELECTED element: falls through to canvas zoom.
+//   ADD — A− / size / A+ font size controls in controls panel.
+//     Only rendered when type='text'. Uses fontSize prop for current value.
+//     A− decreases by 2 (min 8). A+ increases by 2 (max 96).
+//     Size display updates live as user taps (canvas re-renders with new el.size).
+//     Requires ScrollCreatorCanvas to pass type={el.type} fontSize={el.size}.
 // --- END CHANGE LOG ---
 
 import { useRef, useState, useCallback } from 'react';
 import { Trash2, Lock } from 'lucide-react';
 
-// ── PURE HELPER — defined outside component (stable, no re-creation) ─────────
-// Returns pixel distance between two touch points (screen coordinates).
-// Only the RATIO (current/start) is ever used — canvas zoom cancels out.
+// Pure helper — outside component to avoid re-creation on every render.
+// Returns screen-pixel distance between two touch points.
+// Only the RATIO (current / start) is used — so canvas zoom cancels out.
 function getPinchDistance(touches) {
   var dx = touches[1].clientX - touches[0].clientX;
   var dy = touches[1].clientY - touches[0].clientY;
@@ -77,10 +58,10 @@ export default function ScrollCreatorElement({
   locked,
   selected,
   isPreview,
-  type,      // optional — 'text' or 'icon'. Enables font-size scaling during pinch.
-             // Pass el.type from ScrollCreatorCanvas to activate.
-  fontSize,  // optional — current font size value (el.size). Required for text pinch-scale.
-             // Pass el.size from ScrollCreatorCanvas to activate.
+  type,      // 'text' or 'icon' — passed from canvas as el.type.
+             // Controls whether font size UI renders and pinch scales el.size.
+  fontSize,  // current font size (el.size) — passed from canvas as el.size.
+             // Required for A-/A+ display and pinch font-size scaling.
   onSelect,
   onUpdate,
   onDelete,
@@ -96,13 +77,10 @@ export default function ScrollCreatorElement({
   const resizeStart = useRef(null); // { touchX, touchY, elW, elH }
   const pinchStart  = useRef(null); // { distance, elW, elH, elFontSize }
 
-  const [isDragging,  setIsDragging]  = useState(false);
-  const [isResizing,  setIsResizing]  = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
 
   // ── SCALE HELPER ──────────────────────────────────────────
-  // canvas getBoundingClientRect().width includes CSS zoom.
-  // scale = rect.width / baseW = current zoom factor.
-  // Dividing touch delta by scale → canvas-pixel delta.
   const getScale = useCallback(function() {
     if (canvasRef && canvasRef.current) {
       const rect = canvasRef.current.getBoundingClientRect();
@@ -111,17 +89,14 @@ export default function ScrollCreatorElement({
     return 1;
   }, [canvasRef, baseW]);
 
-  // ── DRAG + PINCH TOUCH START ──────────────────────────────
+  // ── DRAG + PINCH — TOUCH START ────────────────────────────
   const handleDragTouchStart = useCallback(function(e) {
     if (isPreview) return;
 
     if (e.touches.length === 2) {
-      // Second finger landed — cancel any in-progress drag, start pinch if selected.
       dragStart.current = null;
       setIsDragging(false);
-
       if (selected && !locked) {
-        // Intercept: prevent canvas zoom from firing on this selected element.
         e.stopPropagation();
         pinchStart.current = {
           distance:   getPinchDistance(e.touches),
@@ -130,17 +105,12 @@ export default function ScrollCreatorElement({
           elFontSize: fontSize || null,
         };
       }
-      // If not selected: fall through — canvas zoom gets the event.
       return;
     }
 
-    if (e.touches.length > 2) return; // 3+ fingers — ignore
+    if (e.touches.length > 2) return;
 
-    // ── Single finger: start drag ──
-    if (locked) {
-      onSelect(id); // locked: select-only, no drag
-      return;
-    }
+    if (locked) { onSelect(id); return; }
     e.stopPropagation();
     onSelect(id);
     const touch = e.touches[0];
@@ -148,66 +118,45 @@ export default function ScrollCreatorElement({
     setIsDragging(true);
   }, [isPreview, locked, selected, id, x, y, w, h, fontSize, onSelect]);
 
-  // ── DRAG + PINCH TOUCH MOVE ───────────────────────────────
+  // ── DRAG + PINCH — TOUCH MOVE ─────────────────────────────
   const handleDragTouchMove = useCallback(function(e) {
 
-    // ── Pinch resize (two fingers) ─────────────────────────
     if (e.touches.length >= 2) {
-      if (!pinchStart.current) return; // pinch didn't start on this element
+      if (!pinchStart.current) return;
       e.preventDefault();
       e.stopPropagation();
-
       const dist  = getPinchDistance(e.touches);
       const ratio = dist / pinchStart.current.distance;
-
-      const newW = Math.max(60, pinchStart.current.elW * ratio);
-      const newH = Math.max(40, pinchStart.current.elH * ratio);
+      const newW  = Math.max(60, pinchStart.current.elW * ratio);
+      const newH  = Math.max(40, pinchStart.current.elH * ratio);
       const updates = { w: newW, h: newH };
-
-      // Font size scaling: only when type='text' AND fontSize was captured.
-      // Clamped to [8, 96] — 8px is readable minimum, 96px is very large.
       if (type === 'text' && pinchStart.current.elFontSize) {
-        updates.size = Math.max(8, Math.min(96,
-          Math.round(pinchStart.current.elFontSize * ratio)
-        ));
+        updates.size = Math.max(8, Math.min(96, Math.round(pinchStart.current.elFontSize * ratio)));
       }
-
       onUpdate(id, updates);
       return;
     }
 
-    // ── Single touch drag ──────────────────────────────────
     if (!dragStart.current) return;
     e.preventDefault();
     e.stopPropagation();
-
     const touch = e.touches[0];
     const dx    = touch.clientX - dragStart.current.touchX;
     const dy    = touch.clientY - dragStart.current.touchY;
     const scale = getScale();
-
-    // FIX: Was Math.max(0, Math.min(baseW - w, ...)) — hard-stopped at canvas edge.
-    // Now: element can go up to half off-canvas on any side.
-    // This prevents the "freezes at border" feel while keeping element reachable.
-    const newX = Math.max(-w / 2, Math.min(baseW - w / 2, dragStart.current.elX + dx / scale));
-    const newY = Math.max(-h / 2, Math.min(baseH - h / 2, dragStart.current.elY + dy / scale));
+    const newX  = Math.max(-w / 2, Math.min(baseW - w / 2, dragStart.current.elX + dx / scale));
+    const newY  = Math.max(-h / 2, Math.min(baseH - h / 2, dragStart.current.elY + dy / scale));
     onUpdate(id, { x: newX, y: newY });
 
   }, [id, w, h, baseW, baseH, type, onUpdate, getScale]);
 
-  // ── DRAG + PINCH TOUCH END ────────────────────────────────
+  // ── DRAG + PINCH — TOUCH END ──────────────────────────────
   const handleDragTouchEnd = useCallback(function(e) {
-    // e.touches = fingers STILL on screen after this touch ended.
-    if (e.touches.length < 2) {
-      pinchStart.current = null; // second finger lifted — end pinch
-    }
-    if (e.touches.length === 0) {
-      dragStart.current = null;  // all fingers lifted — end drag
-      setIsDragging(false);
-    }
+    if (e.touches.length < 2) pinchStart.current = null;
+    if (e.touches.length === 0) { dragStart.current = null; setIsDragging(false); }
   }, []);
 
-  // ── RESIZE HANDLE (bottom-right corner) ──────────────────
+  // ── RESIZE HANDLE ─────────────────────────────────────────
   const handleResizeTouchStart = useCallback(function(e) {
     if (isPreview || locked) return;
     if (e.touches.length > 1) return;
@@ -220,21 +169,15 @@ export default function ScrollCreatorElement({
 
   const handleResizeTouchMove = useCallback(function(e) {
     if (!resizeStart.current) return;
-    if (e.touches.length > 1) {
-      resizeStart.current = null;
-      setIsResizing(false);
-      return;
-    }
+    if (e.touches.length > 1) { resizeStart.current = null; setIsResizing(false); return; }
     e.preventDefault();
     e.stopPropagation();
-    const touch  = e.touches[0];
-    const dx     = touch.clientX - resizeStart.current.touchX;
-    const dy     = touch.clientY - resizeStart.current.touchY;
-    const scale  = getScale();
-    // FIX: Removed baseW/baseH max — element can grow beyond canvas edge.
-    // Was: Math.min(baseW - x, ...) — stopped growing when right edge hit canvas.
-    const newW = Math.max(60, resizeStart.current.elW + dx / scale);
-    const newH = Math.max(40, resizeStart.current.elH + dy / scale);
+    const touch = e.touches[0];
+    const dx    = touch.clientX - resizeStart.current.touchX;
+    const dy    = touch.clientY - resizeStart.current.touchY;
+    const scale = getScale();
+    const newW  = Math.max(60, resizeStart.current.elW + dx / scale);
+    const newH  = Math.max(40, resizeStart.current.elH + dy / scale);
     onUpdate(id, { w: newW, h: newH });
   }, [id, onUpdate, getScale]);
 
@@ -243,9 +186,21 @@ export default function ScrollCreatorElement({
     setIsResizing(false);
   }, []);
 
+  // ── FONT SIZE STEP HANDLERS ───────────────────────────────
+  const handleFontDecrease = useCallback(function(e) {
+    e.stopPropagation();
+    onUpdate(id, { size: Math.max(8, (fontSize || 24) - 2) });
+  }, [id, fontSize, onUpdate]);
+
+  const handleFontIncrease = useCallback(function(e) {
+    e.stopPropagation();
+    onUpdate(id, { size: Math.min(96, (fontSize || 24) + 2) });
+  }, [id, fontSize, onUpdate]);
+
   // ── RENDER ────────────────────────────────────────────────
   const opacityPct   = Math.round((opacity ?? 1) * 100);
   const showControls = selected && !isPreview;
+  const isText       = type === 'text';
 
   return (
     <div
@@ -266,16 +221,14 @@ export default function ScrollCreatorElement({
       onTouchMove={handleDragTouchMove}
       onTouchEnd={handleDragTouchEnd}
     >
-      {/* ── Controls panel — floats above element when selected ── */}
+
+      {/* ── Controls panel — floats above selected element ── */}
       {showControls && (
         <div className="creator-controls-panel">
 
           {/* Lock toggle */}
           <button
-            className={
-              'creator-controls-panel__icon-btn creator-controls-panel__lock-btn' +
-              (locked ? ' creator-controls-panel__lock-btn--active' : '')
-            }
+            className={'creator-controls-panel__icon-btn creator-controls-panel__lock-btn' + (locked ? ' creator-controls-panel__lock-btn--active' : '')}
             onTouchEnd={function(e) { e.stopPropagation(); onUpdate(id, { locked: !locked }); }}
             onClick={function(e)    { e.stopPropagation(); onUpdate(id, { locked: !locked }); }}
             aria-label={locked ? 'Unlock element' : 'Lock element'}
@@ -290,13 +243,47 @@ export default function ScrollCreatorElement({
           <label>Opacity</label>
           <input
             type="range"
-            min={10}
-            max={100}
-            step={5}
+            min={10} max={100} step={5}
             value={opacityPct}
             onChange={function(e) { onUpdate(id, { opacity: Number(e.target.value) / 100 }); }}
           />
           <span className="creator-controls-panel__pct">{opacityPct}%</span>
+
+          {/* Font size — text elements only.
+              Divider + A- button + size number + A+ button.
+              Size display updates live: canvas re-renders new el.size
+              which flows back in as the fontSize prop. */}
+          {isText && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+
+              <div style={{ width: 1, height: 16, background: 'rgba(255,255,255,0.1)', flexShrink: 0 }} />
+
+              <button
+                className="creator-controls-panel__icon-btn"
+                style={{ fontSize: 11, fontWeight: 800, padding: '2px 5px', minWidth: 24, border: '1px solid rgba(255,255,255,0.15)', borderRadius: 5, lineHeight: 1 }}
+                onTouchEnd={handleFontDecrease}
+                onClick={handleFontDecrease}
+                aria-label="Decrease font size"
+              >
+                A-
+              </button>
+
+              <span style={{ color: '#ffffff', fontSize: 11, fontWeight: 600, minWidth: 22, textAlign: 'center', flexShrink: 0 }}>
+                {fontSize || 24}
+              </span>
+
+              <button
+                className="creator-controls-panel__icon-btn"
+                style={{ fontSize: 11, fontWeight: 800, padding: '2px 5px', minWidth: 24, border: '1px solid rgba(255,255,255,0.15)', borderRadius: 5, lineHeight: 1 }}
+                onTouchEnd={handleFontIncrease}
+                onClick={handleFontIncrease}
+                aria-label="Increase font size"
+              >
+                A+
+              </button>
+
+            </div>
+          )}
 
           {/* Delete */}
           <button
@@ -323,7 +310,7 @@ export default function ScrollCreatorElement({
         </div>
       )}
 
-      {/* ── Resize handle — bottom right, hidden when locked or in preview ── */}
+      {/* ── Resize handle — bottom right corner ── */}
       {selected && !locked && !isPreview && (
         <div
           className="creator-element__resize-handle"
@@ -332,6 +319,7 @@ export default function ScrollCreatorElement({
           onTouchEnd={handleResizeTouchEnd}
         />
       )}
+
     </div>
   );
 }
