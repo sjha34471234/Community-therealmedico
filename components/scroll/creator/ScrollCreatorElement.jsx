@@ -349,8 +349,4 @@ export default function ScrollCreatorElement({
     </div>
   );
 }
-.creator-element svg,
-.creator-element svg * {
-  touch-action: none;
-  pointer-events: none;   ← DELETE THIS LINE ONLY
-}
+
