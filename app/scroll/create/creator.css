@@ -970,5 +970,4 @@
 .creator-element svg,
 .creator-element svg * {
   touch-action: none;
-  pointer-events: none;
 }
