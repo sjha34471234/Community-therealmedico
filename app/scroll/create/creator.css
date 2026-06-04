@@ -971,3 +971,51 @@
 .creator-element svg * {
   touch-action: none;
 }
+/* ── FULL-SCREEN EDIT MODE (Jun 03 2026) ─────────────────────────────────────
+   Full-screen edit button in orientation row.
+   Clicking hides all chrome, canvas fills screen, elements stay interactive.
+   Floating "Done" button at bottom center exits back to normal edit.
+   z-index 610 — above creator (600), below confirm sheet (700).
+   ──────────────────────────────────────────────────────────────────────────── */
+
+/* Fullscreen button — pushed to right end of orientation row */
+.creator-orientation-btn--fs {
+  margin-left: auto;
+}
+
+/* CSS-only fullscreen icon: simple bordered square */
+.creator-fullscreen-icon {
+  width:         11px;
+  height:        11px;
+  border:        1.5px solid currentColor;
+  border-radius: 2px;
+  flex-shrink:   0;
+}
+
+/* Floating "Done" button shown during fullscreen edit */
+.creator-fullscreen-done-btn {
+  position:           fixed;
+  bottom:             max(28px, env(safe-area-inset-bottom, 28px));
+  left:               50%;
+  transform:          translateX(-50%);
+  z-index:            610;
+  padding:            12px 40px;
+  border-radius:      28px;
+  border:             none;
+  background:         rgba(29, 111, 164, 0.92);
+  color:              #ffffff;
+  font-size:          15px;
+  font-weight:        700;
+  letter-spacing:     0.03em;
+  cursor:             pointer;
+  backdrop-filter:    blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow:         0 4px 20px rgba(0, 0, 0, 0.45);
+  -webkit-tap-highlight-color: transparent;
+  white-space:        nowrap;
+}
+
+.creator-fullscreen-done-btn:active {
+  background:  rgba(21, 90, 135, 0.96);
+  transform:   translateX(-50%) scale(0.96);
+}
