@@ -3,37 +3,49 @@
 // --- WHY THIS CODE EXISTS ---
 // Main canvas for Scroll Creator. Holds all canvas state.
 // --- WHAT THIS MADE WORK ---
-// Background, elements, music state. Music plays after user selects track.
-// Music bar overlays bottom of canvas. Music stops on post/navigate.
+// Background, elements, music state. Orientation change scales elements.
+// Elements stored in BASE coordinate space (CANVAS_BASES). Scaled to display for render.
 // --- PITFALLS ---
 // Audio must start AFTER user gesture — never on mount.
 // Only ONE export: ScrollCreatorCanvasWithRef (forwardRef). No default export.
-// displayWRef/displayHRef store BASE display size (without zoom) for getCanvas().
-// Orientation change resets canvas via prevOrientationRef guard (skips on mount).
-// CSS transform: scale(zoom) on canvas div — does NOT change coordinate space.
+// COORDINATE SYSTEM — critical:
+//   All element x/y/w/h are stored in BASE coordinates (CANVAS_BASES dimensions).
+//   Portrait base: 390×680. Square: 390×390. Landscape: 640×360.
+//   Canvas renders at display size (smaller on most devices, e.g. 220×384 on iPad portrait).
+//   Before passing coords to ScrollCreatorElement, multiply by scaleX/scaleY.
+//   ScrollCreatorElement returns updated coords in DISPLAY space via onUpdate.
+//   updateElement divides by scaleX/scaleY to store back in BASE space.
+//   getCanvas() returns size.w/h = BASE dimensions. Feed uses (el.x / size.w) * 100%.
+//   This ensures scrolls look identical on all screen sizes.
+// scaleXRef/scaleYRef/baseWRef/baseHRef are updated every render (before JSX return).
+// displayWRef/displayHRef kept for backward compat — no longer used for getCanvas/addElement.
+// Orientation change: elements scaled proportionally, background/music preserved.
+// CSS transform: scale(zoom) — does NOT change canvas coordinate space.
 //   getBoundingClientRect() returns visual size = canvasW * zoom.
-//   ScrollCreatorElement divides touch delta by this scale → correct coordinates.
+//   ScrollCreatorElement divides touch delta by this scale → correct display coords.
 // --- CHANGE LOG ---
 // [May 26 2026] CREATED: Phase 15B-1 main canvas.
 // [May 27 2026] FIXED: Removed duplicate default export.
 // [May 27 2026] ADDED: Instagram-style music playback on canvas.
-// [May 28 2026] ADDED: orientation prop (portrait/square/landscape). size in getCanvas().
-// [May 29 2026] ADDED: Phase 15D —
-//   zoom state — pinch-to-zoom on canvas area (1x to 2.5x).
-//   isPreview prop + onPreviewExit prop — hides editor chrome, tap to exit.
-//   undo() — removes last added element. canUndo() checks if undo available.
-//   setCanvasState(state) — restores a full canvas state (for draft restore).
-//   TextElementContent updated — el.align (textAlign) + el.letterSpacing.
-//   Music waveform animation — animated bars shown in music bar when playing.
-//   All three above exposed via useImperativeHandle.
-//   lastAddedIdRef cleared in deleteElement to prevent ghost undo.
-//   canvasW/canvasH/zoom/isPreview passed to each ScrollCreatorElement.
-// [May 31 2026] ADDED: type={el.type} and fontSize={el.size} passed to
-//   ScrollCreatorElement. Required for two features in ScrollCreatorElement:
-//   1. Pinch-to-resize also scales font size (type='text' + fontSize required).
-//   2. A− / A+ font size controls in controls panel (type='text' required).
-//   Without these props, both features silently degrade — element still renders,
-//   controls panel still shows, but font size controls are hidden.
+// [May 28 2026] ADDED: orientation prop. size in getCanvas().
+// [May 29 2026] ADDED: Phase 15D — zoom, isPreview, undo, setCanvasState,
+//   text align/letterSpacing, waveform, type/fontSize props to element.
+// [May 31 2026] ADDED: type={el.type} fontSize={el.size} to ScrollCreatorElement.
+// [Jun 03 2026] FIXED: Three bugs —
+//   BUG 1 — Elements appear bunched in top-right corner in feed.
+//     Root cause: addElement used displayWRef (device pixels, e.g. 220px iPad) for
+//     element coords. getCanvas() stored size.w = displayW (220). Template elements
+//     used base coords (390). Feed: (95/220)*100% = 43% instead of (95/390)*100% = 24%.
+//     Fix: All elements now use BASE coordinates (CANVAS_BASES). addElement uses
+//     baseWRef/baseHRef. getCanvas() stores size.w = base.w (390). Canvas scales
+//     elements base→display before passing to ScrollCreatorElement. updateElement
+//     converts display→base when storing patches.
+//   BUG 2 — Orientation change wiped all elements.
+//     Root cause: orientation change effect set elements: [].
+//     Fix: Elements scaled proportionally using old/new CANVAS_BASES ratio.
+//     Background and music also preserved (no longer reset on orientation change).
+//   ADD — Full-screen edit mode support: page.js passes larger availableHeight.
+//     Canvas handles it automatically via calcDisplaySize.
 // --- END CHANGE LOG ---
 
 import { useState, useRef, useCallback, forwardRef, useImperativeHandle, useEffect } from 'react';
@@ -41,6 +53,8 @@ import { Music, Pause, Play } from 'lucide-react';
 import ScrollCreatorElement from './ScrollCreatorElement';
 
 // ── Base coordinate dimensions per orientation ────────────────
+// ALL element x/y/w/h are stored in these coordinate spaces.
+// Device-independent — ensures consistent rendering on all screens.
 const CANVAS_BASES = {
   portrait:  { w: 390, h: 680 },
   square:    { w: 390, h: 390 },
@@ -74,7 +88,6 @@ function getBackgroundStyle(bg) {
   return { background: '#1a1a2e' };
 }
 
-// ── Text element renderer — supports align + letterSpacing ────
 function TextElementContent({ props }) {
   const alignment      = props.align || 'center';
   const justifyContent = alignment === 'left'  ? 'flex-start'
@@ -114,7 +127,6 @@ function IconElementContent({ props }) {
   );
 }
 
-// ── Distance between two touch points ─────────────────────────
 function getTouchDist(touches) {
   const dx = touches[0].clientX - touches[1].clientX;
   const dy = touches[0].clientY - touches[1].clientY;
@@ -128,14 +140,17 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
   const canvasRef          = useRef(null);
   const uidCounter         = useRef(0);
   const audioRef           = useRef(null);
-  const displayWRef        = useRef(390); // BASE display size (no zoom) — used in getCanvas()
-  const displayHRef        = useRef(680);
+  const displayWRef        = useRef(390); // kept for backward compat
+  const displayHRef        = useRef(680); // kept for backward compat
+  const baseWRef           = useRef(390); // BASE canvas width (CANVAS_BASES) — used in addElement
+  const baseHRef           = useRef(680); // BASE canvas height — used in addElement
+  const scaleXRef          = useRef(1);   // canvasW / base.w — display scale factor X
+  const scaleYRef          = useRef(1);   // canvasH / base.h — display scale factor Y
   const prevOrientationRef = useRef(orientation || 'portrait');
-  const lastAddedIdRef     = useRef(null); // for undo
+  const lastAddedIdRef     = useRef(null);
 
-  // ── Pinch zoom refs ───────────────────────────────────────
   const isPinchingRef      = useRef(false);
-  const wasPinchRef        = useRef(false);  // prevents deselect after pinch
+  const wasPinchRef        = useRef(false);
   const pinchStartDistRef  = useRef(null);
   const pinchStartZoomRef  = useRef(1);
 
@@ -151,21 +166,42 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
   const [musicPlaying, setMusicPlaying] = useState(false);
   const [zoom,         setZoom]         = useState(1);
 
-  // ── Reset canvas when orientation changes (not on mount) ──
+  // ── Orientation change: scale elements proportionally ─────
+  // OLD behaviour: wipe elements to []. Background/music also reset.
+  // NEW behaviour: scale x/y/w/h using old/new CANVAS_BASES ratio.
+  //   Background and music preserved — user keeps their work.
+  //   Elements in base coords, so scaling: newX = oldX * (newBase.w / oldBase.w).
   useEffect(function() {
     if (prevOrientationRef.current === safeOrientation) return;
+    const prevOrientation    = prevOrientationRef.current;
     prevOrientationRef.current = safeOrientation;
+
+    const oldBase = CANVAS_BASES[prevOrientation] || CANVAS_BASES.portrait;
+    const newBase = CANVAS_BASES[safeOrientation] || CANVAS_BASES.portrait;
+    const sX      = newBase.w / oldBase.w;
+    const sY      = newBase.h / oldBase.h;
+
     if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
     setMusicPlaying(false);
     setSelectedId(null);
     lastAddedIdRef.current = null;
     setZoom(1);
-    const next = { background: { type: 'solid', value: '#1a1a2e' }, elements: [], music: null };
-    setCanvas(next);
-    if (onChange) onChange(next);
+
+    setCanvas(function(prev) {
+      const scaledElements = prev.elements.map(function(el) {
+        return Object.assign({}, el, {
+          x: Math.round(el.x * sX),
+          y: Math.round(el.y * sY),
+          w: Math.max(60, Math.round(el.w * sX)),
+          h: Math.max(30, Math.round(el.h * sY)),
+        });
+      });
+      const next = { ...prev, elements: scaledElements }; // preserves background + music
+      if (onChange) onChange(next);
+      return next;
+    });
   }, [safeOrientation, onChange]);
 
-  // ── Start/stop music when canvas.music changes ────────────
   useEffect(function() {
     if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
     setMusicPlaying(false);
@@ -179,7 +215,6 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
     return function() { audio.pause(); audio.currentTime = 0; };
   }, [canvas.music]);
 
-  // ── Stop audio on unmount ─────────────────────────────────
   useEffect(function() {
     return function() { if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; } };
   }, []);
@@ -198,16 +233,20 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
     });
   }, [onChange]);
 
+  // ── addElement: positions in BASE coordinates ─────────────
+  // Uses baseWRef/baseHRef (updated every render) instead of displayWRef.
+  // Elements at 10%/28% of base canvas, 80%×12% of base canvas.
+  // Stored in base coords → device-independent → renders correctly everywhere.
   const addElement = useCallback(function(el) {
     const id  = makeId();
-    const dW  = displayWRef.current;
-    const dH  = displayHRef.current;
+    const bW  = baseWRef.current;
+    const bH  = baseHRef.current;
     const newEl = {
       id,
-      x:       Math.floor(dW * 0.10),
-      y:       Math.floor(dH * 0.28),
-      w:       Math.floor(dW * 0.80),
-      h:       Math.floor(dH * 0.12),
+      x:       Math.floor(bW * 0.10),
+      y:       Math.floor(bH * 0.28),
+      w:       Math.floor(bW * 0.80),
+      h:       Math.floor(bH * 0.12),
       opacity: 1,
       locked:  false,
       ...el,
@@ -221,9 +260,20 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
     setSelectedId(id);
   }, [onChange]);
 
+  // ── updateElement: convert display → base for x/y/w/h ─────
+  // ScrollCreatorElement returns coordinates in DISPLAY pixel space (it received
+  // scaled coords). We divide by scale factors to store back in BASE space.
+  // Non-positional fields (opacity, locked, size, font, color, etc.) pass through.
   const updateElement = useCallback(function(id, patch) {
+    const sX = scaleXRef.current;
+    const sY = scaleYRef.current;
+    const basePatch = Object.assign({}, patch);
+    if (basePatch.x !== undefined) basePatch.x = basePatch.x / sX;
+    if (basePatch.y !== undefined) basePatch.y = basePatch.y / sY;
+    if (basePatch.w !== undefined) basePatch.w = basePatch.w / sX;
+    if (basePatch.h !== undefined) basePatch.h = basePatch.h / sY;
     setCanvas(function(prev) {
-      const next = { ...prev, elements: prev.elements.map(function(el) { return el.id === id ? { ...el, ...patch } : el; }) };
+      const next = { ...prev, elements: prev.elements.map(function(el) { return el.id === id ? { ...el, ...basePatch } : el; }) };
       if (onChange) onChange(next);
       return next;
     });
@@ -242,17 +292,19 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
   const setBackground = useCallback(function(bg)    { updateCanvas({ background: bg }); }, [updateCanvas]);
   const setMusic      = useCallback(function(music) { updateCanvas({ music }); },          [updateCanvas]);
 
-  // ── Expose API to parent via ref ──────────────────────────
   useImperativeHandle(ref, function() {
     return {
       addElement,
       setBackground,
       setMusic,
 
+      // getCanvas: returns BASE dimensions in size — device-independent.
+      // Feed uses (el.x / size.w) * 100% for positioning.
+      // With size.w = base.w (390 portrait), this is correct on all screens.
       getCanvas: function() {
         return {
           ...canvas,
-          size: { w: displayWRef.current, h: displayHRef.current, orientation: safeOrientation },
+          size: { w: baseWRef.current, h: baseHRef.current, orientation: safeOrientation },
         };
       },
 
@@ -275,6 +327,10 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
 
       canUndo: function() { return lastAddedIdRef.current !== null; },
 
+      // setCanvasState: elements should be in BASE coordinates.
+      // Templates use base coords. New drafts use base coords (getCanvas returns base).
+      // Old drafts (pre Jun 3 2026) used display coords — elements may appear slightly
+      // offset after restore. Acceptable one-time migration side-effect.
       setCanvasState: function(state) {
         if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
         setMusicPlaying(false);
@@ -291,7 +347,6 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
     };
   }, [addElement, setBackground, setMusic, canvas, safeOrientation, onChange]);
 
-  // ── Canvas area touch handlers — pinch zoom ───────────────
   const handleAreaTouchStart = useCallback(function(e) {
     if (e.touches.length === 2) {
       isPinchingRef.current     = true;
@@ -317,7 +372,6 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
     }
   }, []);
 
-  // ── Canvas area tap — deselect / preview exit ─────────────
   const handleCanvasTap = useCallback(function(e) {
     if (isPreview) { if (onPreviewExit) onPreviewExit(); return; }
     if (wasPinchRef.current) return;
@@ -330,12 +384,23 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
     }
   }, [isPreview, onPreviewExit]);
 
-  // ── Calculate display dimensions ──────────────────────────
+  // ── Calculate display dimensions + update ALL refs ─────────
+  // Must happen before JSX return so refs are current when JSX evaluates.
+  const base                     = CANVAS_BASES[safeOrientation] || CANVAS_BASES.portrait;
   const { w: canvasW, h: canvasH } = calcDisplaySize(safeOrientation, availableHeight);
-  displayWRef.current = canvasW;
-  displayHRef.current = canvasH;
+
+  displayWRef.current = canvasW;          // kept for backward compat
+  displayHRef.current = canvasH;          // kept for backward compat
+  baseWRef.current    = base.w;           // used in addElement
+  baseHRef.current    = base.h;           // used in addElement
+  scaleXRef.current   = canvasW / base.w; // used in updateElement + JSX scaling
+  scaleYRef.current   = canvasH / base.h; // used in updateElement + JSX scaling
 
   const bgStyle = getBackgroundStyle(canvas.background);
+
+  // Pre-compute scale for JSX (avoid repeated ref access in .map())
+  const sX = scaleXRef.current;
+  const sY = scaleYRef.current;
 
   return (
     <div
@@ -356,17 +421,18 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
           transformOrigin: 'center center',
         }}
       >
-        {/* Background */}
         <div className="creator-canvas__bg" style={bgStyle} />
 
-        {/* Elements */}
         <div className="creator-canvas__elements">
           {canvas.elements.map(function(el) {
+            // Scale from BASE coordinates → display pixels for rendering.
+            // ScrollCreatorElement returns onUpdate patches in display pixels.
+            // updateElement converts them back to base coords for storage.
             return (
               <ScrollCreatorElement
                 key={el.id}
                 id={el.id}
-                x={el.x} y={el.y} w={el.w} h={el.h}
+                x={el.x * sX} y={el.y * sY} w={el.w * sX} h={el.h * sY}
                 opacity={el.opacity}
                 locked={el.locked || false}
                 selected={!isPreview && selectedId === el.id}
@@ -387,7 +453,6 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
           })}
         </div>
 
-        {/* Music bar */}
         {canvas.music && (
           <div style={{
             position:   'absolute',
@@ -436,7 +501,6 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
           </div>
         )}
 
-        {/* Preview overlay hint */}
         <div className={'creator-canvas__preview-overlay' + (isPreview ? ' creator-canvas__preview-overlay--visible' : '')}>
           <div className="creator-canvas__preview-meta">
             <span>↑ Upvote</span>
