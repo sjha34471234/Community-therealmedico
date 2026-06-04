@@ -88,7 +88,15 @@ function getBackgroundStyle(bg) {
   return { background: '#1a1a2e' };
 }
 
-function TextElementContent({ props }) {
+// scale prop = sX (canvasW / base.w) — passed from the element map.
+// Font size and letter spacing are stored in BASE coordinate units.
+// They must scale with the canvas display size so text fits its box.
+// Without scaling, a 34px font in a 330px base box clamps to a 171px
+// display box and clips. With scaling: 34 * 0.518 = 17.6px — fits correctly.
+// lineHeight (1.3) is unitless → scales automatically with fontSize. ✓
+// padding scaled too so it stays proportional to the text.
+function TextElementContent({ props, scale }) {
+  const s              = scale || 1;
   const alignment      = props.align || 'center';
   const justifyContent = alignment === 'left'  ? 'flex-start'
                        : alignment === 'right' ? 'flex-end'
@@ -101,13 +109,13 @@ function TextElementContent({ props }) {
       alignItems:       'center',
       justifyContent,
       fontFamily:       props.font  || 'Inter, sans-serif',
-      fontSize:         props.size  || 24,
+      fontSize:         (props.size || 24) * s,
       color:            props.color || '#ffffff',
       fontWeight:       props.bold   ? 700 : 400,
       fontStyle:        props.italic ? 'italic' : 'normal',
       textAlign:        alignment,
-      letterSpacing:    props.letterSpacing ? props.letterSpacing + 'px' : 'normal',
-      padding:          '4px 8px',
+      letterSpacing:    props.letterSpacing ? (props.letterSpacing * s) + 'px' : 'normal',
+      padding:          (4 * s) + 'px ' + (8 * s) + 'px',
       wordBreak:        'break-word',
       lineHeight:       1.3,
       userSelect:       'none',
@@ -446,7 +454,7 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
                 canvasW={canvasW}
                 canvasH={canvasH}
               >
-                {el.type === 'text' && <TextElementContent props={el} />}
+                {el.type === 'text' && <TextElementContent props={el} scale={sX} />}
                 {el.type === 'icon' && <IconElementContent props={el} />}
               </ScrollCreatorElement>
             );
