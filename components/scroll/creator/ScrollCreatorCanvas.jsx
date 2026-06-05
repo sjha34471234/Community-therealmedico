@@ -23,6 +23,12 @@
 // CSS transform: scale(zoom) — does NOT change canvas coordinate space.
 //   getBoundingClientRect() returns visual size = canvasW * zoom.
 //   ScrollCreatorElement divides touch delta by this scale → correct display coords.
+// onSelectElement fires whenever selectedId changes (tap element, tap canvas, delete,
+//   undo, setCanvasState). Sends full element object (or null) to page.js.
+//   page.js uses it to populate ScrollCreatorText for live editing.
+//   updateElementById exposed via ref — called by page.js handleUpdateElement.
+//   Safe for non-positional patches (text/font/color/size/bold/italic/align/letterSpacing)
+//   because updateElement only converts x/y/w/h which are absent in those patches.
 // --- CHANGE LOG ---
 // [May 26 2026] CREATED: Phase 15B-1 main canvas.
 // [May 27 2026] FIXED: Removed duplicate default export.
@@ -33,19 +39,17 @@
 // [May 31 2026] ADDED: type={el.type} fontSize={el.size} to ScrollCreatorElement.
 // [Jun 03 2026] FIXED: Three bugs —
 //   BUG 1 — Elements appear bunched in top-right corner in feed.
-//     Root cause: addElement used displayWRef (device pixels, e.g. 220px iPad) for
-//     element coords. getCanvas() stored size.w = displayW (220). Template elements
-//     used base coords (390). Feed: (95/220)*100% = 43% instead of (95/390)*100% = 24%.
-//     Fix: All elements now use BASE coordinates (CANVAS_BASES). addElement uses
-//     baseWRef/baseHRef. getCanvas() stores size.w = base.w (390). Canvas scales
-//     elements base→display before passing to ScrollCreatorElement. updateElement
-//     converts display→base when storing patches.
+//     Root cause: addElement used displayWRef (device pixels). Fix: BASE coords.
 //   BUG 2 — Orientation change wiped all elements.
-//     Root cause: orientation change effect set elements: [].
-//     Fix: Elements scaled proportionally using old/new CANVAS_BASES ratio.
-//     Background and music also preserved (no longer reset on orientation change).
+//     Fix: elements scaled proportionally using old/new CANVAS_BASES ratio.
 //   ADD — Full-screen edit mode support: page.js passes larger availableHeight.
-//     Canvas handles it automatically via calcDisplaySize.
+// [Jun 05 2026] ADDED: Text element edit-in-place support.
+//   onSelectElement prop: callback fired whenever selectedId changes.
+//     Sends the full element object from canvas.elements (or null on deselect).
+//     useEffect watches [selectedId, onSelectElement] — fires on selection change only,
+//     not on every element data update (avoids re-populating text tab mid-keystroke).
+//   updateElementById: exposed via useImperativeHandle. Calls updateElement(id, patch).
+//     updateElement only converts x/y/w/h — safe for non-positional text patches.
 // --- END CHANGE LOG ---
 
 import { useState, useRef, useCallback, forwardRef, useImperativeHandle, useEffect } from 'react';
@@ -53,8 +57,6 @@ import { Music, Pause, Play } from 'lucide-react';
 import ScrollCreatorElement from './ScrollCreatorElement';
 
 // ── Base coordinate dimensions per orientation ────────────────
-// ALL element x/y/w/h are stored in these coordinate spaces.
-// Device-independent — ensures consistent rendering on all screens.
 const CANVAS_BASES = {
   portrait:  { w: 390, h: 680 },
   square:    { w: 390, h: 390 },
@@ -62,17 +64,17 @@ const CANVAS_BASES = {
 };
 
 function calcDisplaySize(orientation, availableHeight) {
-  const base    = CANVAS_BASES[orientation] || CANVAS_BASES.portrait;
-  const ratio   = base.w / base.h;
-  const maxH    = Math.max((availableHeight || 300) - 16, 80);
-  const screenW = typeof window !== 'undefined' ? window.innerWidth : 390;
-  const maxW    = Math.max(screenW - 32, 120);
+  var base    = CANVAS_BASES[orientation] || CANVAS_BASES.portrait;
+  var ratio   = base.w / base.h;
+  var maxH    = Math.max((availableHeight || 300) - 16, 80);
+  var screenW = typeof window !== 'undefined' ? window.innerWidth : 390;
+  var maxW    = Math.max(screenW - 32, 120);
 
-  let h = maxH;
-  let w = Math.floor(h * ratio);
+  var h = maxH;
+  var w = Math.floor(h * ratio);
   if (w > maxW) { w = maxW; h = Math.floor(w / ratio); }
 
-  return { w, h };
+  return { w: w, h: h };
 }
 
 function getBackgroundStyle(bg) {
@@ -88,26 +90,19 @@ function getBackgroundStyle(bg) {
   return { background: '#1a1a2e' };
 }
 
-// scale prop = sX (canvasW / base.w) — passed from the element map.
-// Font size and letter spacing are stored in BASE coordinate units.
-// They must scale with the canvas display size so text fits its box.
-// Without scaling, a 34px font in a 330px base box clamps to a 171px
-// display box and clips. With scaling: 34 * 0.518 = 17.6px — fits correctly.
-// lineHeight (1.3) is unitless → scales automatically with fontSize. ✓
-// padding scaled too so it stays proportional to the text.
 function TextElementContent({ props, scale }) {
-  const s              = scale || 1;
-  const alignment      = props.align || 'center';
-  const justifyContent = alignment === 'left'  ? 'flex-start'
-                       : alignment === 'right' ? 'flex-end'
-                       : 'center';
+  var s              = scale || 1;
+  var alignment      = props.align || 'center';
+  var justifyContent = alignment === 'left'  ? 'flex-start'
+                     : alignment === 'right' ? 'flex-end'
+                     : 'center';
   return (
     <div style={{
       width:            '100%',
       height:           '100%',
       display:          'flex',
       alignItems:       'center',
-      justifyContent,
+      justifyContent:   justifyContent,
       fontFamily:       props.font  || 'Inter, sans-serif',
       fontSize:         (props.size || 24) * s,
       color:            props.color || '#ffffff',
@@ -136,33 +131,33 @@ function IconElementContent({ props }) {
 }
 
 function getTouchDist(touches) {
-  const dx = touches[0].clientX - touches[1].clientX;
-  const dy = touches[0].clientY - touches[1].clientY;
+  var dx = touches[0].clientX - touches[1].clientX;
+  var dy = touches[0].clientY - touches[1].clientY;
   return Math.sqrt(dx * dx + dy * dy);
 }
 
 export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanvasWithRef(
-  { onChange, availableHeight, orientation, isPreview, onPreviewExit },
+  { onChange, availableHeight, orientation, isPreview, onPreviewExit, onSelectElement },
   ref
 ) {
-  const canvasRef          = useRef(null);
-  const uidCounter         = useRef(0);
-  const audioRef           = useRef(null);
-  const displayWRef        = useRef(390); // kept for backward compat
-  const displayHRef        = useRef(680); // kept for backward compat
-  const baseWRef           = useRef(390); // BASE canvas width (CANVAS_BASES) — used in addElement
-  const baseHRef           = useRef(680); // BASE canvas height — used in addElement
-  const scaleXRef          = useRef(1);   // canvasW / base.w — display scale factor X
-  const scaleYRef          = useRef(1);   // canvasH / base.h — display scale factor Y
-  const prevOrientationRef = useRef(orientation || 'portrait');
-  const lastAddedIdRef     = useRef(null);
+  var canvasRef          = useRef(null);
+  var uidCounter         = useRef(0);
+  var audioRef           = useRef(null);
+  var displayWRef        = useRef(390);
+  var displayHRef        = useRef(680);
+  var baseWRef           = useRef(390);
+  var baseHRef           = useRef(680);
+  var scaleXRef          = useRef(1);
+  var scaleYRef          = useRef(1);
+  var prevOrientationRef = useRef(orientation || 'portrait');
+  var lastAddedIdRef     = useRef(null);
 
-  const isPinchingRef      = useRef(false);
-  const wasPinchRef        = useRef(false);
-  const pinchStartDistRef  = useRef(null);
-  const pinchStartZoomRef  = useRef(1);
+  var isPinchingRef      = useRef(false);
+  var wasPinchRef        = useRef(false);
+  var pinchStartDistRef  = useRef(null);
+  var pinchStartZoomRef  = useRef(1);
 
-  const safeOrientation = orientation || 'portrait';
+  var safeOrientation = orientation || 'portrait';
 
   function makeId() {
     uidCounter.current += 1;
@@ -175,19 +170,15 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
   const [zoom,         setZoom]         = useState(1);
 
   // ── Orientation change: scale elements proportionally ─────
-  // OLD behaviour: wipe elements to []. Background/music also reset.
-  // NEW behaviour: scale x/y/w/h using old/new CANVAS_BASES ratio.
-  //   Background and music preserved — user keeps their work.
-  //   Elements in base coords, so scaling: newX = oldX * (newBase.w / oldBase.w).
   useEffect(function() {
     if (prevOrientationRef.current === safeOrientation) return;
-    const prevOrientation    = prevOrientationRef.current;
+    var prevOrientation      = prevOrientationRef.current;
     prevOrientationRef.current = safeOrientation;
 
-    const oldBase = CANVAS_BASES[prevOrientation] || CANVAS_BASES.portrait;
-    const newBase = CANVAS_BASES[safeOrientation] || CANVAS_BASES.portrait;
-    const sX      = newBase.w / oldBase.w;
-    const sY      = newBase.h / oldBase.h;
+    var oldBase = CANVAS_BASES[prevOrientation] || CANVAS_BASES.portrait;
+    var newBase = CANVAS_BASES[safeOrientation] || CANVAS_BASES.portrait;
+    var sX      = newBase.w / oldBase.w;
+    var sY      = newBase.h / oldBase.h;
 
     if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
     setMusicPlaying(false);
@@ -196,7 +187,7 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
     setZoom(1);
 
     setCanvas(function(prev) {
-      const scaledElements = prev.elements.map(function(el) {
+      var scaledElements = prev.elements.map(function(el) {
         return Object.assign({}, el, {
           x: Math.round(el.x * sX),
           y: Math.round(el.y * sY),
@@ -204,7 +195,7 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
           h: Math.max(30, Math.round(el.h * sY)),
         });
       });
-      const next = { ...prev, elements: scaledElements }; // preserves background + music
+      var next = Object.assign({}, prev, { elements: scaledElements });
       if (onChange) onChange(next);
       return next;
     });
@@ -214,7 +205,7 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
     if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
     setMusicPlaying(false);
     if (!canvas.music || !canvas.music.trackUrl) return;
-    const audio       = new Audio(canvas.music.trackUrl);
+    var audio       = new Audio(canvas.music.trackUrl);
     audio.loop        = true;
     audio.volume      = 0.5;
     audio.currentTime = canvas.music.startSec || 0;
@@ -227,6 +218,20 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
     return function() { if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; } };
   }, []);
 
+  // ── Fire onSelectElement when selection changes ───────────
+  // Sends the full element object to page.js so ScrollCreatorText can populate.
+  // Keyed on [selectedId, onSelectElement] — fires on selection change only.
+  // canvas.elements intentionally omitted from deps: we want element data at the
+  // MOMENT of selection, not re-fire on every element update (which would send a
+  // new reference every keystroke and cause unnecessary re-renders in page.js).
+  // canvas is state → its value in the closure is current at effect run time. ✓
+  useEffect(function() {
+    if (!onSelectElement) return;
+    if (!selectedId) { onSelectElement(null); return; }
+    var el = canvas.elements.find(function(e) { return e.id === selectedId; }) || null;
+    onSelectElement(el);
+  }, [selectedId, onSelectElement]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const toggleMusicPlayback = useCallback(function() {
     if (!audioRef.current) return;
     if (musicPlaying) { audioRef.current.pause(); setMusicPlaying(false); }
@@ -235,33 +240,28 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
 
   const updateCanvas = useCallback(function(patch) {
     setCanvas(function(prev) {
-      const next = { ...prev, ...patch };
+      var next = Object.assign({}, prev, patch);
       if (onChange) onChange(next);
       return next;
     });
   }, [onChange]);
 
-  // ── addElement: positions in BASE coordinates ─────────────
-  // Uses baseWRef/baseHRef (updated every render) instead of displayWRef.
-  // Elements at 10%/28% of base canvas, 80%×12% of base canvas.
-  // Stored in base coords → device-independent → renders correctly everywhere.
   const addElement = useCallback(function(el) {
-    const id  = makeId();
-    const bW  = baseWRef.current;
-    const bH  = baseHRef.current;
-    const newEl = {
-      id,
+    var id  = makeId();
+    var bW  = baseWRef.current;
+    var bH  = baseHRef.current;
+    var newEl = Object.assign({
+      id:      id,
       x:       Math.floor(bW * 0.10),
       y:       Math.floor(bH * 0.28),
       w:       Math.floor(bW * 0.80),
       h:       Math.floor(bH * 0.12),
       opacity: 1,
       locked:  false,
-      ...el,
-    };
+    }, el);
     lastAddedIdRef.current = id;
     setCanvas(function(prev) {
-      const next = { ...prev, elements: [...prev.elements, newEl] };
+      var next = Object.assign({}, prev, { elements: prev.elements.concat([newEl]) });
       if (onChange) onChange(next);
       return next;
     });
@@ -269,19 +269,24 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
   }, [onChange]);
 
   // ── updateElement: convert display → base for x/y/w/h ─────
-  // ScrollCreatorElement returns coordinates in DISPLAY pixel space (it received
-  // scaled coords). We divide by scale factors to store back in BASE space.
-  // Non-positional fields (opacity, locked, size, font, color, etc.) pass through.
+  // Non-positional fields (text, font, color, size, bold, italic, align,
+  // letterSpacing) pass through unchanged — no conversion needed.
+  // Called both internally (ScrollCreatorElement drag/resize) and externally
+  // via updateElementById ref (ScrollCreatorText live edits).
   const updateElement = useCallback(function(id, patch) {
-    const sX = scaleXRef.current;
-    const sY = scaleYRef.current;
-    const basePatch = Object.assign({}, patch);
+    var sX = scaleXRef.current;
+    var sY = scaleYRef.current;
+    var basePatch = Object.assign({}, patch);
     if (basePatch.x !== undefined) basePatch.x = basePatch.x / sX;
     if (basePatch.y !== undefined) basePatch.y = basePatch.y / sY;
     if (basePatch.w !== undefined) basePatch.w = basePatch.w / sX;
     if (basePatch.h !== undefined) basePatch.h = basePatch.h / sY;
     setCanvas(function(prev) {
-      const next = { ...prev, elements: prev.elements.map(function(el) { return el.id === id ? { ...el, ...basePatch } : el; }) };
+      var next = Object.assign({}, prev, {
+        elements: prev.elements.map(function(el) {
+          return el.id === id ? Object.assign({}, el, basePatch) : el;
+        }),
+      });
       if (onChange) onChange(next);
       return next;
     });
@@ -290,7 +295,7 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
   const deleteElement = useCallback(function(id) {
     if (lastAddedIdRef.current === id) lastAddedIdRef.current = null;
     setCanvas(function(prev) {
-      const next = { ...prev, elements: prev.elements.filter(function(el) { return el.id !== id; }) };
+      var next = Object.assign({}, prev, { elements: prev.elements.filter(function(el) { return el.id !== id; }) });
       if (onChange) onChange(next);
       return next;
     });
@@ -298,7 +303,7 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
   }, [onChange]);
 
   const setBackground = useCallback(function(bg)    { updateCanvas({ background: bg }); }, [updateCanvas]);
-  const setMusic      = useCallback(function(music) { updateCanvas({ music }); },          [updateCanvas]);
+  const setMusic      = useCallback(function(music) { updateCanvas({ music: music }); },  [updateCanvas]);
 
   useImperativeHandle(ref, function() {
     return {
@@ -306,14 +311,10 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
       setBackground,
       setMusic,
 
-      // getCanvas: returns BASE dimensions in size — device-independent.
-      // Feed uses (el.x / size.w) * 100% for positioning.
-      // With size.w = base.w (390 portrait), this is correct on all screens.
       getCanvas: function() {
-        return {
-          ...canvas,
+        return Object.assign({}, canvas, {
           size: { w: baseWRef.current, h: baseHRef.current, orientation: safeOrientation },
-        };
+        });
       },
 
       stopMusic: function() {
@@ -322,10 +323,10 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
 
       undo: function() {
         if (!lastAddedIdRef.current) return false;
-        const id = lastAddedIdRef.current;
+        var id = lastAddedIdRef.current;
         lastAddedIdRef.current = null;
         setCanvas(function(prev) {
-          const next = { ...prev, elements: prev.elements.filter(function(el) { return el.id !== id; }) };
+          var next = Object.assign({}, prev, { elements: prev.elements.filter(function(el) { return el.id !== id; }) });
           if (onChange) onChange(next);
           return next;
         });
@@ -335,16 +336,12 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
 
       canUndo: function() { return lastAddedIdRef.current !== null; },
 
-      // setCanvasState: elements should be in BASE coordinates.
-      // Templates use base coords. New drafts use base coords (getCanvas returns base).
-      // Old drafts (pre Jun 3 2026) used display coords — elements may appear slightly
-      // offset after restore. Acceptable one-time migration side-effect.
       setCanvasState: function(state) {
         if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
         setMusicPlaying(false);
         setSelectedId(null);
         lastAddedIdRef.current = null;
-        const next = {
+        var next = {
           background: state.background || { type: 'solid', value: '#1a1a2e' },
           elements:   state.elements   || [],
           music:      state.music      || null,
@@ -352,8 +349,12 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
         setCanvas(next);
         if (onChange) onChange(next);
       },
+
+      // updateElementById: exposed so page.js can push text tab changes to canvas.
+      // Calls updateElement which handles non-positional patches correctly.
+      updateElementById: function(id, patch) { updateElement(id, patch); },
     };
-  }, [addElement, setBackground, setMusic, canvas, safeOrientation, onChange]);
+  }, [addElement, setBackground, setMusic, updateElement, canvas, safeOrientation, onChange]);
 
   const handleAreaTouchStart = useCallback(function(e) {
     if (e.touches.length === 2) {
@@ -365,8 +366,8 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
 
   const handleAreaTouchMove = useCallback(function(e) {
     if (e.touches.length === 2 && isPinchingRef.current && pinchStartDistRef.current) {
-      const dist    = getTouchDist(e.touches);
-      const newZoom = Math.max(1, Math.min(2.5, pinchStartZoomRef.current * (dist / pinchStartDistRef.current)));
+      var dist    = getTouchDist(e.touches);
+      var newZoom = Math.max(1, Math.min(2.5, pinchStartZoomRef.current * (dist / pinchStartDistRef.current)));
       setZoom(newZoom);
     }
   }, []);
@@ -383,7 +384,7 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
   const handleCanvasTap = useCallback(function(e) {
     if (isPreview) { if (onPreviewExit) onPreviewExit(); return; }
     if (wasPinchRef.current) return;
-    const cls = e.target.className || '';
+    var cls = e.target.className || '';
     if (
       e.target === canvasRef.current ||
       (typeof cls === 'string' && (cls.includes('creator-canvas__bg') || cls.includes('creator-canvas__elements')))
@@ -393,22 +394,21 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
   }, [isPreview, onPreviewExit]);
 
   // ── Calculate display dimensions + update ALL refs ─────────
-  // Must happen before JSX return so refs are current when JSX evaluates.
-  const base                     = CANVAS_BASES[safeOrientation] || CANVAS_BASES.portrait;
-  const { w: canvasW, h: canvasH } = calcDisplaySize(safeOrientation, availableHeight);
+  var base                       = CANVAS_BASES[safeOrientation] || CANVAS_BASES.portrait;
+  var displaySize                = calcDisplaySize(safeOrientation, availableHeight);
+  var canvasW                    = displaySize.w;
+  var canvasH                    = displaySize.h;
 
-  displayWRef.current = canvasW;          // kept for backward compat
-  displayHRef.current = canvasH;          // kept for backward compat
-  baseWRef.current    = base.w;           // used in addElement
-  baseHRef.current    = base.h;           // used in addElement
-  scaleXRef.current   = canvasW / base.w; // used in updateElement + JSX scaling
-  scaleYRef.current   = canvasH / base.h; // used in updateElement + JSX scaling
+  displayWRef.current = canvasW;
+  displayHRef.current = canvasH;
+  baseWRef.current    = base.w;
+  baseHRef.current    = base.h;
+  scaleXRef.current   = canvasW / base.w;
+  scaleYRef.current   = canvasH / base.h;
 
-  const bgStyle = getBackgroundStyle(canvas.background);
-
-  // Pre-compute scale for JSX (avoid repeated ref access in .map())
-  const sX = scaleXRef.current;
-  const sY = scaleYRef.current;
+  var bgStyle = getBackgroundStyle(canvas.background);
+  var sX      = scaleXRef.current;
+  var sY      = scaleYRef.current;
 
   return (
     <div
@@ -433,9 +433,6 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
 
         <div className="creator-canvas__elements">
           {canvas.elements.map(function(el) {
-            // Scale from BASE coordinates → display pixels for rendering.
-            // ScrollCreatorElement returns onUpdate patches in display pixels.
-            // updateElement converts them back to base coords for storage.
             return (
               <ScrollCreatorElement
                 key={el.id}
@@ -476,11 +473,17 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
             <button
               onClick={function(e) { e.stopPropagation(); if (!isPreview) toggleMusicPlayback(); }}
               style={{
-                background: 'rgba(255,255,255,0.15)',
-                border: 'none', borderRadius: '50%',
-                width: 28, height: 28,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: '#ffffff', cursor: 'pointer', flexShrink: 0,
+                background:   'rgba(255,255,255,0.15)',
+                border:       'none',
+                borderRadius: '50%',
+                width:        28,
+                height:       28,
+                display:      'flex',
+                alignItems:   'center',
+                justifyContent: 'center',
+                color:        '#ffffff',
+                cursor:       'pointer',
+                flexShrink:   0,
               }}
               aria-label={musicPlaying ? 'Pause music' : 'Play music'}
             >
@@ -498,9 +501,15 @@ export const ScrollCreatorCanvasWithRef = forwardRef(function ScrollCreatorCanva
 
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{
-                color: '#ffffff', fontSize: 11, fontWeight: 500,
-                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                display: 'flex', alignItems: 'center', gap: 4,
+                color:      '#ffffff',
+                fontSize:   11,
+                fontWeight: 500,
+                whiteSpace: 'nowrap',
+                overflow:   'hidden',
+                textOverflow: 'ellipsis',
+                display:    'flex',
+                alignItems: 'center',
+                gap:        4,
               }}>
                 <Music size={10} />
                 {canvas.music.trackName}
