@@ -18,6 +18,15 @@
 //     change now scales elements instead of clearing them (fixed in ScrollCreatorCanvas).
 //   FIX — effectiveHeight now covers previewMode OR fullscreenEdit.
 //   FIX — height calculation effects include fullscreenEdit in condition + deps.
+// [Jun 05 2026] ADDED: Text element edit-in-place wiring.
+//   selectedElement state — tracks the full element object for the selected canvas element.
+//   handleSelectElement — useCallback passed to canvas as onSelectElement prop.
+//     Canvas fires it whenever selectedId changes (tap element, tap canvas, delete, etc.).
+//   handleUpdateElement — useCallback passed to tabs as onUpdateElement prop.
+//     Calls canvasRef.current.updateElementById(id, patch). Safe for non-positional
+//     patches (text, font, color, size, bold, italic, align, letterSpacing) — canvas
+//     updateElement only converts x/y/w/h which are absent in text property patches.
+//   Both wired through ScrollCreatorTabs → ScrollCreatorText for live editing.
 // --- END CHANGE LOG ---
 
 import { useRef, useState, useCallback, useEffect } from 'react';
@@ -60,8 +69,6 @@ export default function ScrollCreatePage() {
   const [previewMode, setPreviewMode] = useState(false);
 
   // ── Full-screen edit mode (editor stays active, chrome hidden) ──
-  // Different from previewMode: elements remain fully interactive.
-  // Floating "Done" button exits. Toolbar + tabs hidden via creator-chrome-hidden.
   const [fullscreenEdit, setFullscreenEdit] = useState(false);
 
   // ── Post confirmation ─────────────────────────────────────
@@ -75,11 +82,16 @@ export default function ScrollCreatePage() {
   // ── Template picker ───────────────────────────────────────
   const [showTemplatePicker, setShowTemplatePicker] = useState(true);
 
+  // ── Selected element (for text edit-in-place) ────────────
+  // Full element object from canvas.elements, or null when nothing is selected.
+  // Populated by handleSelectElement which canvas fires on every selection change.
+  const [selectedElement, setSelectedElement] = useState(null);
+
   // ── Hide site chrome on mount ─────────────────────────────
   useEffect(function() {
-    const navbar     = document.querySelector('nav');
-    const bottomNav  = document.querySelector('.bottom-nav');
-    const pageScroll = document.getElementById('page-scroll-container');
+    var navbar     = document.querySelector('nav');
+    var bottomNav  = document.querySelector('.bottom-nav');
+    var pageScroll = document.getElementById('page-scroll-container');
     if (navbar)     navbar.style.display      = 'none';
     if (bottomNav)  bottomNav.style.display   = 'none';
     if (pageScroll) pageScroll.style.overflow = 'hidden';
@@ -93,10 +105,10 @@ export default function ScrollCreatePage() {
   // ── Draft check on mount ──────────────────────────────────
   useEffect(function() {
     try {
-      const raw = localStorage.getItem(DRAFT_KEY);
+      var raw = localStorage.getItem(DRAFT_KEY);
       if (!raw) return;
-      const draft = JSON.parse(raw);
-      const age   = Date.now() - (draft.timestamp || 0);
+      var draft = JSON.parse(raw);
+      var age   = Date.now() - (draft.timestamp || 0);
       if (age < DRAFT_MAX_AGE_MS && draft.canvas && (draft.canvas.elements || []).length > 0) {
         setDraftBanner(draft);
         setShowTemplatePicker(false);
@@ -108,9 +120,9 @@ export default function ScrollCreatePage() {
 
   // ── Auto-save draft every 30s ─────────────────────────────
   useEffect(function() {
-    const interval = setInterval(function() {
+    var interval = setInterval(function() {
       if (!canvasRef.current) return;
-      const canvas = canvasRef.current.getCanvas();
+      var canvas = canvasRef.current.getCanvas();
       if (!canvas || (canvas.elements || []).length === 0) return;
       try {
         localStorage.setItem(DRAFT_KEY, JSON.stringify({ canvas, orientation, timestamp: Date.now() }));
@@ -120,32 +132,29 @@ export default function ScrollCreatePage() {
   }, [orientation]);
 
   // ── Height calculation ────────────────────────────────────
-  // previewMode OR fullscreenEdit → canvas fills full window height.
-  // Normal mode → subtract toolbar + tabs heights.
   useEffect(function() {
     function measure() {
       if (previewMode || fullscreenEdit) {
         setCanvasAreaHeight(window.innerHeight);
         return;
       }
-      const totalH   = window.innerHeight;
-      const toolbarH = toolbarRef.current ? toolbarRef.current.offsetHeight : 80;
-      const tabsH    = tabsRef.current    ? tabsRef.current.offsetHeight    : 260;
+      var totalH   = window.innerHeight;
+      var toolbarH = toolbarRef.current ? toolbarRef.current.offsetHeight : 80;
+      var tabsH    = tabsRef.current    ? tabsRef.current.offsetHeight    : 260;
       setCanvasAreaHeight(Math.max(totalH - toolbarH - tabsH, 100));
     }
     measure();
     window.addEventListener('resize', measure);
-    const t = setTimeout(measure, 300);
+    var t = setTimeout(measure, 300);
     return function() { window.removeEventListener('resize', measure); clearTimeout(t); };
   }, [previewMode, fullscreenEdit]);
 
-  // Re-measure when draft banner height changes
   useEffect(function() {
-    const t = setTimeout(function() {
+    var t = setTimeout(function() {
       if (previewMode || fullscreenEdit) return;
-      const totalH   = window.innerHeight;
-      const toolbarH = toolbarRef.current ? toolbarRef.current.offsetHeight : 80;
-      const tabsH    = tabsRef.current    ? tabsRef.current.offsetHeight    : 260;
+      var totalH   = window.innerHeight;
+      var toolbarH = toolbarRef.current ? toolbarRef.current.offsetHeight : 80;
+      var tabsH    = tabsRef.current    ? tabsRef.current.offsetHeight    : 260;
       setCanvasAreaHeight(Math.max(totalH - toolbarH - tabsH, 100));
     }, 100);
     return function() { clearTimeout(t); };
@@ -153,7 +162,7 @@ export default function ScrollCreatePage() {
 
   // ── Draft handlers ────────────────────────────────────────
   const handleRestoreDraft = useCallback(function() {
-    const draft = draftBanner;
+    var draft = draftBanner;
     setDraftBanner(null);
     localStorage.removeItem(DRAFT_KEY);
     if (!draft) return;
@@ -177,7 +186,7 @@ export default function ScrollCreatePage() {
     setOrientation(template.orientation || 'portrait');
     setShadowBg(template.background);
     setShadowMusic(null);
-    const freshElements = template.elements.map(function(el) {
+    var freshElements = template.elements.map(function(el) {
       return Object.assign({}, el, { id: 'el_' + Math.random().toString(36).slice(2, 7) });
     });
     setTimeout(function() {
@@ -190,14 +199,28 @@ export default function ScrollCreatePage() {
   const handleStartBlank = useCallback(function() { setShowTemplatePicker(false); }, []);
 
   // ── Preview mode ──────────────────────────────────────────
-  const handlePreview     = useCallback(function() { setPreviewMode(true); },  []);
+  const handlePreview     = useCallback(function() { setPreviewMode(true);  }, []);
   const handlePreviewExit = useCallback(function() { setPreviewMode(false); }, []);
 
   // ── Full-screen edit mode ─────────────────────────────────
-  // Canvas stays interactive (isPreview=false). Only chrome is hidden.
-  // "Done" button at bottom center exits fullscreen edit.
-  const handleFullscreenEdit     = useCallback(function() { setFullscreenEdit(true); },  []);
+  const handleFullscreenEdit     = useCallback(function() { setFullscreenEdit(true);  }, []);
   const handleFullscreenEditExit = useCallback(function() { setFullscreenEdit(false); }, []);
+
+  // ── Selected element callbacks (Jun 05 — text edit-in-place) ─
+  // handleSelectElement: canvas fires this whenever selectedId changes.
+  //   Receives the full element object (or null). Stored in selectedElement state.
+  //   Flows down to ScrollCreatorTabs → ScrollCreatorText to populate the form.
+  const handleSelectElement = useCallback(function(el) {
+    setSelectedElement(el);
+  }, []);
+
+  // handleUpdateElement: ScrollCreatorText calls this on every change in edit mode.
+  //   Calls canvasRef.current.updateElementById(id, patch) — exposed via useImperativeHandle.
+  //   patch contains only non-positional fields (text, font, color, size, bold, italic,
+  //   align, letterSpacing) — canvas updateElement skips coordinate conversion for these.
+  const handleUpdateElement = useCallback(function(id, patch) {
+    if (canvasRef.current) canvasRef.current.updateElementById(id, patch);
+  }, []);
 
   // ── Post confirmation ─────────────────────────────────────
   const handleShowConfirm = useCallback(function(canvas, content) {
@@ -216,13 +239,13 @@ export default function ScrollCreatePage() {
     if (!user || !accessToken) { router.push('/auth?next=/scroll/create'); return; }
     setPosting(true);
     try {
-      const res = await fetch('/api/scrolls', {
-        method: 'POST',
+      var res = await fetch('/api/scrolls', {
+        method:      'POST',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + accessToken },
-        body: JSON.stringify({ content: confirmData.content, canvas_data: JSON.stringify(confirmData.canvas) }),
+        headers:     { 'Content-Type': 'application/json', Authorization: 'Bearer ' + accessToken },
+        body:        JSON.stringify({ content: confirmData.content, canvas_data: JSON.stringify(confirmData.canvas) }),
       });
-      const data = await res.json();
+      var data = await res.json();
       if (!res.ok) { toast.error(data.error || 'Failed to post scroll.'); return; }
       try { localStorage.removeItem(DRAFT_KEY); } catch (e) {}
       toast.success('Scroll posted!');
@@ -252,17 +275,16 @@ export default function ScrollCreatePage() {
   }, []);
 
   // ── Effective canvas height ───────────────────────────────
-  const effectiveHeight = (previewMode || fullscreenEdit)
+  var effectiveHeight = (previewMode || fullscreenEdit)
     ? (typeof window !== 'undefined' ? window.innerHeight : 600)
     : canvasAreaHeight;
 
-  // Chrome is hidden in preview mode OR fullscreen edit mode
-  const chromeHidden = previewMode || fullscreenEdit;
+  var chromeHidden = previewMode || fullscreenEdit;
 
   return (
     <div className="creator-page">
 
-      {/* Toolbar + orientation row + draft banner — all inside toolbarRef */}
+      {/* Toolbar + orientation row + draft banner */}
       <div ref={toolbarRef} className={chromeHidden ? 'creator-chrome-hidden' : ''}>
         <ScrollCreatorToolbar
           canvasRef={canvasRef}
@@ -274,7 +296,7 @@ export default function ScrollCreatePage() {
         {/* Orientation selector + fullscreen button */}
         <div className="creator-orientation-row">
           {ORIENTATION_OPTIONS.map(function(opt) {
-            const isActive = orientation === opt.key;
+            var isActive = orientation === opt.key;
             return (
               <button
                 key={opt.key}
@@ -289,10 +311,6 @@ export default function ScrollCreatePage() {
             );
           })}
 
-          {/* Full-screen edit button — pushed to right end of row.
-              Hides all chrome, canvas fills screen, elements remain editable.
-              "Done" button at bottom exits. Different from preview mode (which is
-              view-only and exits on canvas tap). */}
           <button
             className="creator-orientation-btn creator-orientation-btn--fs"
             onClick={handleFullscreenEdit}
@@ -315,13 +333,14 @@ export default function ScrollCreatePage() {
         )}
       </div>
 
-      {/* Canvas — always rendered, height changes with mode */}
+      {/* Canvas */}
       <ScrollCreatorCanvasWithRef
         ref={canvasRef}
         orientation={orientation}
         availableHeight={effectiveHeight}
         isPreview={previewMode}
         onPreviewExit={handlePreviewExit}
+        onSelectElement={handleSelectElement}
         onChange={function(canvas) {
           if (canvas.background) setShadowBg(canvas.background);
           if (canvas.music !== undefined) setShadowMusic(canvas.music);
@@ -336,12 +355,12 @@ export default function ScrollCreatePage() {
           onMusic={handleMusic}
           currentBackground={shadowBg}
           currentMusic={shadowMusic}
+          selectedElement={selectedElement}
+          onUpdateElement={handleUpdateElement}
         />
       </div>
 
-      {/* Full-screen edit: floating "Done" button.
-          position: fixed, z-index 610 — above creator (600), below confirm (700).
-          Only shown when fullscreenEdit is true. Exits to normal edit view. */}
+      {/* Full-screen edit: floating Done button */}
       {fullscreenEdit && (
         <button
           className="creator-fullscreen-done-btn"
