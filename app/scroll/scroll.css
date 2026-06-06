@@ -15,6 +15,12 @@
        This ensures each card fills exactly the visible area between navbar and bottom nav,
        matching what the user designed in the creator (portrait base 390×680).
        Fallback: 100dvh (works if JS hasn't run yet).
+   [Jun 05, 2026] FIXED: Creator background not showing in feed.
+     Root cause: .scroll-card-bg had opacity:0.05 and a hardcoded background-image
+     dot pattern. The inline bgStyle from ScrollCard.jsx was being applied correctly
+     but was 95% transparent. opacity:0.05 and background-image/background-size
+     removed. .scroll-card-bg is now a clean transparent layer — inline style
+     from ScrollCard.jsx (bg.value) renders at full opacity as intended.
    --- END CHANGE LOG --- */
 
 /* ── Scroll container — snap scroll between navbar and bottom nav ──
@@ -70,21 +76,22 @@
     transparent 70%
   );
   pointer-events: none;
+  z-index: 2;
 }
 
-/* Background layer */
+/* Background layer — receives inline bgStyle from ScrollCard.jsx.
+   opacity and background-image removed (Jun 05 fix) — those were
+   a placeholder dot pattern that made the real background 95% invisible. */
 .scroll-card-bg {
   position: absolute;
   inset: 0;
-  opacity: 0.05;
-  background-image: radial-gradient(circle, #1D6FA4 1px, transparent 1px);
-  background-size: 28px 28px;
+  z-index: 1;
 }
 
 /* Bottom content area */
 .scroll-card-bottom {
   position: relative;
-  z-index: 2;
+  z-index: 3;
   padding: 0 16px 88px 16px;
   display: flex;
   flex-direction: column;
@@ -133,7 +140,7 @@
   position: absolute;
   right: 14px;
   bottom: 110px;
-  z-index: 3;
+  z-index: 4;
   display: flex;
   flex-direction: column;
   align-items: center;
