@@ -1,7 +1,7 @@
 // ============================================================
 // FILE: app/api/scrolls/route.js
 // PURPOSE: GET scroll feed + POST new scroll
-// LAST CHANGED: May 28, 2026
+// LAST CHANGED: Jun 06, 2026
 // WHY IT EXISTS: Phase 15 — Scroll is its own content type,
 //   separate from community_questions entirely.
 // DEPENDENCIES: lib/supabaseServer.js
@@ -14,12 +14,64 @@
 //   - canvas_data must be parsed from string before insert (JSONB).
 //   - Profiles from 'profiles' table, avatars from 'community_avatars'.
 //     Never join these via Supabase — fetch separately and attach manually.
+//   - GET auth is OPTIONAL — guests get community-ranked feed, no 401.
 // ============================================================
 
-export const dynamic = 'force-dynamic'
+// --- WHY THIS CODE EXISTS ---
+// Phase 15: Scroll feed API — separate from questions entirely.
+// Phase 16: GET now calls get_scroll_feed() Postgres RPC instead of a direct
+//   table query. RPC handles all scoring: engagement, freshness, creator score,
+//   follow/affinity boosts, seen penalty. Profile + avatar fetch is unchanged.
+
+// --- WHAT THIS MADE WORK ---
+// Logged-in users: algorithmic feed personalised by follows, affinity, creator
+//   quality, freshness, and seen history.
+// Guests: community-ranked feed using engagement + freshness + creator score
+//   + trending bonus. No personalisation signals needed.
+
+// --- WHAT THIS BROKE (if anything) ---
+// Nothing broken. Response shape is identical to before + an extra `score`
+// field per scroll (clients ignore unknown fields).
+
+// --- FINAL SOLUTION ---
+// GET extracts an optional Bearer token. If valid → passes user_id to RPC.
+// If missing or invalid → passes null (guest mode).
+// All profile + avatar logic unchanged — RPC returns user_ids which we resolve
+// exactly as before.
+
+// --- PITFALLS ---
+// 1. get_scroll_feed() must exist in Supabase before deploying this file.
+//    If the function doesn't exist, the RPC call returns an error and the
+//    feed falls back to a 500. Run the SQL first.
+// 2. supabase.rpc() returns data as an array (RETURNS TABLE function).
+//    Treat list = data || [] exactly like the old .from().select() result.
+// 3. p_user_id: null is valid — Postgres accepts NULL UUID and returns the
+//    guest-mode feed. Never skip the rpc call for guests.
+// 4. Auth errors in GET are silently swallowed (userId stays null) —
+//    a bad token means guest feed, not a 401. This is intentional.
+// 5. canvas_data from the RPC is still JSONB — Supabase auto-parses it.
+//    Never JSON.parse manually.
+// 6. supabaseServer() must be called inside handlers, never at module level.
+
+// --- CHANGE LOG ---
+// [May 26, 2026] CREATED: Scrolls API — separate from questions entirely.
+//   GET: feed with profile + avatar attached.
+//   POST: create new scroll with auth + rate limit.
+// [May 27, 2026] UPDATED: Phase 15B-1 — added canvas_data JSONB to GET select
+//   and POST insert. canvas_data parsed from string before insert,
+//   returned as object in GET (Supabase JSONB auto-parses on read).
+// [May 28, 2026] UPDATED: Phase 15C — switched GET pagination from ?page=N (limit 20)
+//   to ?offset=N&limit=N for batch loading. Default limit=7.
+//   Rate limit, content validation, profile/avatar fetch all preserved exactly.
+// [Jun 06, 2026] UPDATED: Phase 16 — GET now uses get_scroll_feed() Postgres RPC.
+//   Optional Bearer token: logged-in → personalised, guest → community-ranked.
+//   Profile + avatar fetch logic unchanged. POST unchanged.
+// --- END CHANGE LOG ---
+
+export const dynamic    = 'force-dynamic'
 export const fetchCache = 'force-no-store'
 
-import { NextResponse } from 'next/server'
+import { NextResponse }   from 'next/server'
 import { supabaseServer } from '@/lib/supabaseServer'
 
 async function checkScrollRateLimit(supabase, userId) {
@@ -32,28 +84,39 @@ async function checkScrollRateLimit(supabase, userId) {
   return (count || 0) >= 10
 }
 
-// ── GET — scroll feed (batch loading) ────────────────────────
-// Phase 15C: switched from ?page=N (limit 20) to ?offset=N&limit=N
-// for continuous batch loading in ScrollFeed.
+// ── GET — algorithmic scroll feed ────────────────────────────
+// Phase 16: calls get_scroll_feed() Postgres RPC.
+//   - Logged-in: personalised by follows, affinity, creator score, seen history.
+//   - Guest:     community-ranked by engagement + freshness + creator score + trending.
+// Pagination: ?offset=N&limit=N (same as Phase 15C — no change on client side).
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url)
 
-    // Batch size: default 7, capped at 20 to prevent abuse
-    const limit  = Math.min(20, Math.max(1, parseInt(searchParams.get('limit')  || '7',  10)))
-    const offset = Math.max(0,              parseInt(searchParams.get('offset') || '0',  10))
+    const limit  = Math.min(20, Math.max(1, parseInt(searchParams.get('limit')  || '7', 10)))
+    const offset = Math.max(0,              parseInt(searchParams.get('offset') || '0', 10))
 
     const supabase = supabaseServer()
 
+    // Optional auth — bad/missing token → guest feed, never a 401
+    let userId = null
+    const authHeader = request.headers.get('Authorization') || ''
+    const token      = authHeader.replace('Bearer ', '').trim()
+    if (token) {
+      const { data: { user } } = await supabase.auth.getUser(token)
+      userId = user?.id || null
+    }
+
+    // Phase 16: RPC handles all scoring. p_user_id=null → guest mode.
     const { data: scrolls, error } = await supabase
-      .from('community_scrolls')
-      .select('id, content, canvas_data, upvotes, downvotes, comment_count, user_id, created_at')
-      .eq('is_hidden', false)
-      .order('created_at', { ascending: false })
-      .range(offset, offset + limit - 1)
+      .rpc('get_scroll_feed', {
+        p_user_id: userId,
+        p_offset:  offset,
+        p_limit:   limit,
+      })
 
     if (error) {
-      console.error('GET /api/scrolls error:', error)
+      console.error('GET /api/scrolls RPC error:', error)
       return NextResponse.json({ error: 'Failed to load scrolls' }, { status: 500 })
     }
 
@@ -67,6 +130,7 @@ export async function GET(request) {
     }
 
     // Fetch author profiles — from 'profiles' table (NOT community_profiles)
+    // Never join via Supabase — fetch separately and attach manually (⚠️ rule).
     const userIds = Array.from(new Set(list.map(function getId(s) { return s.user_id }).filter(Boolean)))
     let profileMap = {}
     if (userIds.length > 0) {
@@ -79,7 +143,7 @@ export async function GET(request) {
       }
     }
 
-    // Fetch avatars — from 'community_avatars' table (separate from profiles)
+    // Fetch avatars — from 'community_avatars' (separate from profiles)
     let avatarMap = {}
     if (userIds.length > 0) {
       const { data: avatars } = await supabase
@@ -99,8 +163,8 @@ export async function GET(request) {
       }
     }
 
-    // Attach profile + avatar to each scroll
-    // canvas_data comes back as parsed object from Supabase JSONB — never JSON.parse manually
+    // Attach profile + avatar to each scroll.
+    // canvas_data: Supabase auto-parses JSONB on RPC return — never JSON.parse.
     const final = list.map(function attach(s) {
       const profile = profileMap[s.user_id] || null
       return {
@@ -123,6 +187,7 @@ export async function GET(request) {
 }
 
 // ── POST — create new scroll ──────────────────────────────────
+// Unchanged from Phase 15C.
 export async function POST(request) {
   try {
     let body
@@ -139,7 +204,6 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Content must be under 300 characters' }, { status: 400 })
     }
 
-    // Parse canvas_data — sent as JSON string from creator, stored as JSONB
     let parsedCanvas = null
     if (canvas_data) {
       try {
@@ -150,7 +214,7 @@ export async function POST(request) {
     }
 
     const authHeader = request.headers.get('Authorization') || ''
-    const token = authHeader.replace('Bearer ', '').trim()
+    const token      = authHeader.replace('Bearer ', '').trim()
     if (!token) {
       return NextResponse.json({ error: 'You must be signed in' }, { status: 401 })
     }
@@ -195,15 +259,3 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Unexpected server error' }, { status: 500 })
   }
 }
-
-// --- CHANGE LOG ---
-// [May 26, 2026] CREATED: Scrolls API — separate from questions entirely.
-//   GET: feed with profile + avatar attached.
-//   POST: create new scroll with auth + rate limit.
-// [May 27, 2026] UPDATED: Phase 15B-1 — added canvas_data JSONB to GET select
-//   and POST insert. canvas_data parsed from string before insert,
-//   returned as object in GET (Supabase JSONB auto-parses on read).
-// [May 28, 2026] UPDATED: Phase 15C — switched GET pagination from ?page=N (limit 20)
-//   to ?offset=N&limit=N for batch loading. Default limit=7.
-//   Rate limit, content validation, profile/avatar fetch all preserved exactly.
-// --- END CHANGE LOG ---
