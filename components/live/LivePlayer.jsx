@@ -1,29 +1,41 @@
 // --- WHY THIS CODE EXISTS ---
 // Viewer-side Phase 18A component. Full signaling flow:
-// 1. Fetches broadcast info on load (checks if still live)
-// 2. Viewer clicks "Watch Live" — this user gesture unlocks iOS autoplay
+// 1. Fetches broadcast info on load
+// 2. Viewer clicks Watch Live — user gesture unlocks iOS autoplay
 // 3. POST /api/live/join → get peerId
 // 4. Create RTCPeerConnection
-// 5. Subscribe to Realtime channel, send 'viewer-join' event on SUBSCRIBED
-// 6. Handle 'offer' from creator → setRemoteDescription → createAnswer → send answer
-// 7. Handle 'ice-candidate' from creator → addIceCandidate (with buffering)
-// 8. ontrack → set video srcObject → play
-// 9. Handle 'stream-ended' event → show ended screen
+// 5. Subscribe to Realtime channel, send 'viewer-join' on SUBSCRIBED
+// 6. Handle 'offer' → setRemoteDescription → createAnswer → send answer
+// 7. Handle 'ice-candidate' → addIceCandidate (with buffering)
+// 8. ontrack → set srcObject → play
+// 9. Handle 'stream-ended' event OR poll detects ended → show ended screen
 
 // --- WHAT THIS MADE WORK ---
 // Phase 18A: viewer watches a live broadcast
 
 // --- PITFALLS ---
+// ⚠️ WARNING: iOS Safari autoplay policy — video with audio tracks blocked unless play() is
+//             called synchronously inside a user gesture. By the time ontrack fires (seconds
+//             later after ICE), the gesture context has expired. Fix: prime video with an empty
+//             MediaStream and call play() synchronously in handleWatch, BEFORE any await calls.
+//             When ontrack fires and we replace srcObject, iOS accepts the continuation.
 // ⚠️ WARNING: playsInline required — without it iOS Safari makes video fullscreen on tap
-// ⚠️ WARNING: video.play() called inside ontrack — the Watch Live button is the prior user gesture
-// ⚠️ WARNING: ICE candidates from creator may arrive before offer is processed — buffered in icePendingRef
 // ⚠️ WARNING: 'viewer-join' must only be sent AFTER channel status === 'SUBSCRIBED'
-//             Sending before SUBSCRIBED means creator sends offer before viewer can receive it
-// ⚠️ WARNING: cleanup() sends 'viewer-leave' before closing PC and unsubscribing channel
+// ⚠️ WARNING: ICE candidates from creator may arrive before offer — buffered in icePendingRef
+// ⚠️ WARNING: Polling detects stream end when creator navigates away without tapping End Stream
+//             Poll interval 15s — viewer sees ended screen within 15s of creator leaving
 // ⚠️ WARNING: video element always rendered (display toggled) so ref is never null when ontrack fires
+// ⚠️ WARNING: cleanup() sends 'viewer-leave' before closing PC and unsubscribing channel
 
 // --- CHANGE LOG ---
 // [Jun 08, 2026] CREATED: Phase 18A — LiveMesh viewer component
+// [Jun 08, 2026] FIXED: iOS black video — prime video.play() in handleWatch user gesture context
+//                REASON: iOS Safari blocks audio-track autoplay when gesture context expires.
+//                Fix: create empty MediaStream, set as srcObject, call play() synchronously
+//                in handleWatch. When ontrack fires later, iOS accepts srcObject replacement.
+// [Jun 08, 2026] ADDED: Broadcast status polling every 15s while joining/watching
+//                REASON: Realtime stream-ended event unreliable when creator tab closes.
+//                Polling catches stream end within 15s regardless of how creator left.
 // --- END CHANGE LOG ---
 
 'use client';
@@ -36,15 +48,16 @@ import { ICE_SERVERS, signalChannelName } from '@/lib/liveConfig';
 export default function LivePlayer({ broadcastId }) {
   const { accessToken } = useAuthStore();
 
-  const [phase, setPhase]           = useState('loading');  // 'loading' | 'waiting' | 'joining' | 'watching' | 'ended' | 'error'
+  const [phase, setPhase]           = useState('loading');
   const [errorMsg, setErrorMsg]     = useState(null);
   const [broadcastInfo, setBroadcastInfo] = useState(null);
 
-  const videoRef    = useRef(null);
-  const pcRef       = useRef(null);
-  const channelRef  = useRef(null);
-  const peerIdRef   = useRef(null);
+  const videoRef      = useRef(null);
+  const pcRef         = useRef(null);
+  const channelRef    = useRef(null);
+  const peerIdRef     = useRef(null);
   const icePendingRef = useRef([]);
+  const pollRef       = useRef(null);
 
   // Fetch broadcast info on load
   useEffect(function() {
@@ -55,16 +68,9 @@ export default function LivePlayer({ broadcastId }) {
           credentials: 'include',
           cache: 'no-store',
         });
-        if (!res.ok) {
-          setPhase('error');
-          setErrorMsg('Stream not found.');
-          return;
-        }
+        if (!res.ok) { setPhase('error'); setErrorMsg('Stream not found.'); return; }
         const data = await res.json();
-        if (data.broadcast.status === 'ended') {
-          setPhase('ended');
-          return;
-        }
+        if (data.broadcast.status === 'ended') { setPhase('ended'); return; }
         setBroadcastInfo(data.broadcast);
         setPhase('waiting');
       } catch(e) {
@@ -75,9 +81,39 @@ export default function LivePlayer({ broadcastId }) {
     loadBroadcast();
   }, [broadcastId]);
 
-  // Cleanup on unmount
+  // Poll broadcast status every 15s while joining or watching
+  // Catches stream end when creator navigates away without tapping End Stream
   useEffect(function() {
-    return function() { cleanup(true); };
+    if (phase !== 'joining' && phase !== 'watching') return;
+
+    pollRef.current = setInterval(async function() {
+      try {
+        const res = await fetch('/api/live?id=' + broadcastId, {
+          credentials: 'include',
+          cache: 'no-store',
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.broadcast && data.broadcast.status === 'ended') {
+          clearInterval(pollRef.current);
+          pollRef.current = null;
+          setPhase('ended');
+          cleanup(false);
+        }
+      } catch(e) {}
+    }, 15000);
+
+    return function() {
+      if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+    };
+  }, [phase, broadcastId]);
+
+  // Unmount cleanup
+  useEffect(function() {
+    return function() {
+      if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+      cleanup(true);
+    };
   }, []);
 
   function cleanup(sendLeave) {
@@ -90,26 +126,35 @@ export default function LivePlayer({ broadcastId }) {
         });
       } catch(e) {}
     }
-    if (pcRef.current) {
-      try { pcRef.current.close(); } catch(e) {}
-      pcRef.current = null;
-    }
+    if (pcRef.current) { try { pcRef.current.close(); } catch(e) {} pcRef.current = null; }
     if (channelRef.current) {
       try { supabase.removeChannel(channelRef.current); } catch(e) {}
       channelRef.current = null;
     }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
+    if (videoRef.current) { videoRef.current.srcObject = null; }
     icePendingRef.current = [];
   }
 
-  // Watch Live — user gesture unlocks iOS autoplay
+  // ── Watch Live — this button tap is the iOS user gesture ──
   async function handleWatch() {
     setPhase('joining');
     setErrorMsg(null);
 
-    // 1. Join broadcast → get peer ID
+    // ── iOS autoplay fix ──
+    // Call video.play() NOW, synchronously, while still inside the user gesture handler.
+    // iOS Safari records this gesture and allows audio playback later when srcObject is set.
+    // We use an empty MediaStream so play() has something to work with.
+    // Without this, video.play() in ontrack (seconds later) is outside the gesture context
+    // and iOS blocks it silently, resulting in black video with no error.
+    if (videoRef.current) {
+      try {
+        videoRef.current.srcObject = new MediaStream();
+        videoRef.current.play().catch(function() {});
+      } catch(e) {}
+    }
+
+    // Join broadcast — get peer ID
+    let peerId;
     try {
       const joinRes = await fetch('/api/live/join', {
         method: 'POST',
@@ -127,18 +172,20 @@ export default function LivePlayer({ broadcastId }) {
         setErrorMsg(joinData.error || 'Failed to join stream.');
         return;
       }
-      peerIdRef.current = joinData.peer.id;
+      peerId = joinData.peer.id;
+      peerIdRef.current = peerId;
     } catch(e) {
       setPhase('error');
       setErrorMsg('Network error. Please try again.');
       return;
     }
 
-    // 2. Create RTCPeerConnection
+    // Create RTCPeerConnection
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
     pcRef.current = pc;
 
-    // When creator's video/audio tracks arrive → play them
+    // When creator's tracks arrive — replace srcObject and play
+    // iOS accepts this because play() was already called in the user gesture above
     pc.ontrack = function(event) {
       if (videoRef.current && event.streams && event.streams[0]) {
         videoRef.current.srcObject = event.streams[0];
@@ -147,7 +194,6 @@ export default function LivePlayer({ broadcastId }) {
       }
     };
 
-    // Send our ICE candidates to creator
     pc.onicecandidate = function(event) {
       if (!event.candidate || !channelRef.current) return;
       channelRef.current.send({
@@ -164,7 +210,7 @@ export default function LivePlayer({ broadcastId }) {
       }
     };
 
-    // 3. Subscribe to signaling channel, then announce presence
+    // Subscribe to signaling channel, send viewer-join only after SUBSCRIBED
     const channelName = signalChannelName(broadcastId);
     const channel = supabase.channel(channelName, {
       config: { broadcast: { self: false } },
@@ -180,12 +226,11 @@ export default function LivePlayer({ broadcastId }) {
         await handleCreatorIce(msg.payload.candidate);
       })
       .on('broadcast', { event: 'stream-ended' }, function() {
+        if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
         setPhase('ended');
         cleanup(false);
       })
       .subscribe(function(status) {
-        // Only send viewer-join AFTER subscription is confirmed
-        // Creator will only receive it when we are actually ready to receive the offer back
         if (status === 'SUBSCRIBED') {
           channel.send({
             type: 'broadcast',
@@ -203,12 +248,10 @@ export default function LivePlayer({ broadcastId }) {
     if (!pc) return;
     try {
       await pc.setRemoteDescription(new RTCSessionDescription(sdp));
-      // Flush ICE candidates that arrived before the offer
       for (const candidate of icePendingRef.current) {
         try { await pc.addIceCandidate(new RTCIceCandidate(candidate)); } catch(e) {}
       }
       icePendingRef.current = [];
-      // Create and send answer
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       if (channelRef.current) {
@@ -283,16 +326,21 @@ export default function LivePlayer({ broadcastId }) {
       )}
 
       <div className="live-stage">
-        {/* Video always rendered so ref is valid when ontrack fires */}
+        {/* Video always in DOM so ref is valid when ontrack fires */}
         <video
           ref={videoRef}
           autoPlay
           playsInline
-          style={{ width: '100%', height: '100%', objectFit: 'cover', display: phase === 'watching' ? 'block' : 'none' }}
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            display: phase === 'watching' ? 'block' : 'none',
+          }}
         />
 
         {(phase === 'waiting' || phase === 'joining') && (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, color: '#555' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
             {phase === 'joining' ? (
               <>
                 <div>
@@ -300,10 +348,10 @@ export default function LivePlayer({ broadcastId }) {
                   <span className="live-connecting-dot" />
                   <span className="live-connecting-dot" />
                 </div>
-                <div style={{ fontSize: 13 }}>Connecting to stream...</div>
+                <div style={{ fontSize: 13, color: '#555' }}>Connecting to stream...</div>
               </>
             ) : (
-              <div style={{ fontSize: 13 }}>Stream is live</div>
+              <div style={{ fontSize: 13, color: '#555' }}>Stream is live</div>
             )}
           </div>
         )}
@@ -318,9 +366,13 @@ export default function LivePlayer({ broadcastId }) {
       )}
 
       {phase === 'joining' && (
-        <button className="live-btn-watch" disabled>
-          Connecting...
-        </button>
+        <button className="live-btn-watch" disabled>Connecting...</button>
+      )}
+
+      {phase === 'watching' && (
+        <div style={{ marginTop: 12, fontSize: 13, color: '#444', textAlign: 'center' }}>
+          Connected — watching live
+        </div>
       )}
     </div>
   );
