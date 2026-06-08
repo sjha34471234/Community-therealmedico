@@ -1,0 +1,272 @@
+/* --- WHY THIS EXISTS ---
+   Styles for all LiveMesh pages: /live/create and /live/[streamId].
+   Dark theme — video content needs dark surroundings.
+   Not fixed-position — these are normal scrollable pages under the navbar.
+*/
+
+/* --- CHANGE LOG ---
+   [Jun 08, 2026] CREATED: Phase 18A — LiveMesh page styles
+*/
+
+/* ── Page wrapper ── */
+.live-page {
+  min-height: 100dvh;
+  background: #0a0a0a;
+  color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px;
+  padding-bottom: 90px;
+}
+
+/* ── Setup screen (before going live) ── */
+.live-setup {
+  width: 100%;
+  max-width: 480px;
+  margin: 40px auto 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.live-setup-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #ffffff;
+  text-align: center;
+  margin-bottom: 4px;
+}
+
+.live-setup-input {
+  width: 100%;
+  padding: 14px 16px;
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 12px;
+  color: #ffffff;
+  font-size: 16px;
+  outline: none;
+  -webkit-appearance: none;
+  box-sizing: border-box;
+}
+
+.live-setup-input::placeholder { color: #555; }
+.live-setup-input:focus { border-color: #1D6FA4; }
+
+/* ── Go Live button ── */
+.live-btn-start {
+  width: 100%;
+  padding: 16px;
+  background: #e53935;
+  color: #ffffff;
+  font-size: 17px;
+  font-weight: 700;
+  border: none;
+  border-radius: 14px;
+  cursor: pointer;
+  letter-spacing: 0.3px;
+  -webkit-tap-highlight-color: transparent;
+}
+.live-btn-start:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Video stage ── */
+.live-stage {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  aspect-ratio: 9/16;
+  background: #111;
+  border-radius: 16px;
+  overflow: hidden;
+  margin: 16px auto 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.live-stage video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* ── LIVE badge ── */
+.live-badge {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  background: #e53935;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  z-index: 10;
+}
+
+/* ── Viewer count ── */
+.live-viewer-count {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  background: rgba(0,0,0,0.55);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 20px;
+  z-index: 10;
+}
+
+/* ── Controls bar (below stage) ── */
+.live-controls-bar {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+}
+
+.live-btn-end {
+  padding: 14px 40px;
+  background: transparent;
+  color: #ff5252;
+  font-size: 15px;
+  font-weight: 700;
+  border: 1px solid #ff5252;
+  border-radius: 12px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.live-btn-end:active { background: #1a0000; }
+.live-btn-end:disabled { opacity: 0.5; }
+
+/* ── Share link row ── */
+.live-share-row {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.live-share-link {
+  flex: 1;
+  padding: 11px 13px;
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  border-radius: 10px;
+  color: #777;
+  font-size: 12px;
+  word-break: break-all;
+  user-select: all;
+  -webkit-user-select: all;
+}
+
+.live-btn-copy {
+  padding: 11px 16px;
+  background: #1D6FA4;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ── Connecting dots animation ── */
+.live-connecting-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background: #e53935;
+  border-radius: 50%;
+  margin: 0 3px;
+  animation: live-pulse 1.2s infinite;
+}
+.live-connecting-dot:nth-child(2) { animation-delay: 0.2s; }
+.live-connecting-dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes live-pulse {
+  0%, 80%, 100% { transform: scale(0.7); opacity: 0.3; }
+  40% { transform: scale(1.1); opacity: 1; }
+}
+
+/* ── Stream ended screen ── */
+.live-ended-screen {
+  width: 100%;
+  max-width: 420px;
+  aspect-ratio: 9/16;
+  background: #111;
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: #555;
+  font-size: 15px;
+  margin-top: 16px;
+}
+
+/* ── Stream title / creator info (viewer page) ── */
+.live-stream-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #ffffff;
+  text-align: center;
+  margin-top: 16px;
+}
+
+.live-creator-name {
+  font-size: 13px;
+  color: #666;
+  text-align: center;
+  margin-top: 4px;
+}
+
+/* ── Watch Live button ── */
+.live-btn-watch {
+  width: 100%;
+  max-width: 420px;
+  padding: 16px;
+  background: #e53935;
+  color: #ffffff;
+  font-size: 17px;
+  font-weight: 700;
+  border: none;
+  border-radius: 14px;
+  cursor: pointer;
+  margin-top: 16px;
+  -webkit-tap-highlight-color: transparent;
+}
+.live-btn-watch:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── iOS warning banner ── */
+.live-ios-warning {
+  width: 100%;
+  background: #1a1200;
+  border: 1px solid #4a3500;
+  border-radius: 10px;
+  padding: 11px 14px;
+  font-size: 13px;
+  color: #cc9900;
+  text-align: center;
+  line-height: 1.5;
+}
+
+/* ── Preview label ── */
+.live-preview-label {
+  width: 100%;
+  max-width: 420px;
+  font-size: 11px;
+  color: #444;
+  text-align: center;
+  margin-top: 8px;
+}
