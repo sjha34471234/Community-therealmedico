@@ -14,18 +14,27 @@
 // Phase 18A: creator goes live, viewers can connect and receive video
 
 // --- PITFALLS ---
-// ⚠️ WARNING: getUserMedia requires HTTPS — works on Vercel (always HTTPS), not localhost
+// ⚠️ WARNING: getUserMedia requires HTTPS — works on Vercel, not localhost
 // ⚠️ WARNING: iOS Safari — getUserMedia pauses when user switches apps — warning shown always
 // ⚠️ WARNING: preview video MUST be muted — prevents echo on creator's own audio
-// ⚠️ WARNING: playsInline required on ALL video elements — without it iOS Safari goes fullscreen
-// ⚠️ WARNING: peerConnsRef is a Map (viewerPeerId → RTCPeerConnection) — ready for Phase 18B multi-viewer
-// ⚠️ WARNING: ICE candidates from a viewer may arrive before the answer is set — buffered in icePendingRef
-// ⚠️ WARNING: cleanup() must stop all tracks, close all PCs, unsubscribe channel — called on unmount and on End Stream
-// ⚠️ WARNING: Realtime channel config { broadcast: { self: false } } — creator must not receive its own events
-// ⚠️ WARNING: window.location.origin only accessed in browser — safe in 'use client' component
+// ⚠️ WARNING: playsInline required on ALL video elements — iOS Safari goes fullscreen without it
+// ⚠️ WARNING: previewVideoRef is NULL when handleGoLive runs — video element is in 'live' phase render
+//             NEVER set srcObject inside handleGoLive. Use useEffect keyed on phase instead.
+// ⚠️ WARNING: peerConnsRef is a Map (viewerPeerId → RTCPeerConnection) — ready for Phase 18B
+// ⚠️ WARNING: ICE candidates from a viewer may arrive before answer is set — buffered in icePendingRef
+// ⚠️ WARNING: cleanup() stops all tracks, closes all PCs, unsubscribes channel
+// ⚠️ WARNING: pagehide sendBeacon fires when creator navigates away — ends broadcast in DB
+//             sendBeacon uses stream_key as secret (no auth header support)
+// ⚠️ WARNING: Realtime channel config { broadcast: { self: false } } — creator must not receive own events
 
 // --- CHANGE LOG ---
 // [Jun 08, 2026] CREATED: Phase 18A — LiveMesh creator component
+// [Jun 08, 2026] FIXED: Black preview — moved srcObject assignment out of handleGoLive into
+//                useEffect keyed on phase. previewVideoRef.current was null inside handleGoLive
+//                because the video element only renders in 'live' phase (not yet mounted).
+// [Jun 08, 2026] FIXED: Stream not ending for viewers — added pagehide sendBeacon to
+//                /api/live/beacon. Realtime channel closes before stream-ended event sends
+//                when creator navigates away without tapping End Stream.
 // --- END CHANGE LOG ---
 
 'use client';
@@ -38,23 +47,51 @@ import { ICE_SERVERS, signalChannelName } from '@/lib/liveConfig';
 export default function LiveCreator() {
   const { user, accessToken } = useAuthStore();
 
-  const [phase, setPhase]           = useState('setup');  // 'setup' | 'live' | 'ended'
-  const [title, setTitle]           = useState('');
-  const [loading, setLoading]       = useState(false);
-  const [error, setError]           = useState(null);
+  const [phase, setPhase]             = useState('setup');
+  const [title, setTitle]             = useState('');
+  const [loading, setLoading]         = useState(false);
+  const [error, setError]             = useState(null);
   const [viewerCount, setViewerCount] = useState(0);
-  const [copied, setCopied]         = useState(false);
+  const [copied, setCopied]           = useState(false);
 
   const previewVideoRef = useRef(null);
   const localStreamRef  = useRef(null);
   const broadcastRef    = useRef(null);
   const channelRef      = useRef(null);
-  const peerConnsRef    = useRef(new Map());  // viewerPeerId → RTCPeerConnection
-  const icePendingRef   = useRef(new Map());  // viewerPeerId → RTCIceCandidate[]
+  const peerConnsRef    = useRef(new Map());
+  const icePendingRef   = useRef(new Map());
 
-  // Cleanup on unmount
+  // ── Unmount cleanup ──
   useEffect(function() {
     return function() { cleanup(); };
+  }, []);
+
+  // ── Fix: set preview srcObject AFTER phase='live' renders the video element ──
+  // previewVideoRef.current is null inside handleGoLive (video not yet in DOM).
+  // This effect runs after React renders the live phase, when the ref is valid.
+  useEffect(function() {
+    if (phase === 'live' && localStreamRef.current && previewVideoRef.current) {
+      previewVideoRef.current.srcObject = localStreamRef.current;
+      previewVideoRef.current.play().catch(function() {});
+    }
+  }, [phase]);
+
+  // ── pagehide beacon — fires when creator navigates away or closes tab ──
+  // sendBeacon is the only reliable send during page unload.
+  // Registered once on mount — broadcastRef is a ref so always has latest value.
+  useEffect(function() {
+    function onPageHide() {
+      if (broadcastRef.current) {
+        try {
+          navigator.sendBeacon('/api/live/beacon', JSON.stringify({
+            broadcast_id: broadcastRef.current.id,
+            stream_key:   broadcastRef.current.stream_key,
+          }));
+        } catch(e) {}
+      }
+    }
+    window.addEventListener('pagehide', onPageHide);
+    return function() { window.removeEventListener('pagehide', onPageHide); };
   }, []);
 
   function cleanup() {
@@ -88,23 +125,21 @@ export default function LiveCreator() {
     setLoading(true);
     setError(null);
 
-    // 1. Camera + mic — must be first (user gesture unlocks getUserMedia on iOS)
+    // Camera + mic must be first — user gesture unlocks getUserMedia on iOS
     let stream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-    } catch (mediaErr) {
+    } catch(mediaErr) {
       setError('Camera access denied. Please allow camera and microphone in your browser settings.');
       setLoading(false);
       return;
     }
 
     localStreamRef.current = stream;
-    if (previewVideoRef.current) {
-      previewVideoRef.current.srcObject = stream;
-      previewVideoRef.current.play().catch(function() {});
-    }
+    // DO NOT set previewVideoRef.current.srcObject here — the video element is in the
+    // 'live' phase render which has not happened yet. The useEffect above handles this.
 
-    // 2. Create broadcast in DB
+    // Create broadcast in DB
     let broadcast;
     try {
       const res = await fetch('/api/live', {
@@ -132,10 +167,9 @@ export default function LiveCreator() {
     }
 
     broadcastRef.current = broadcast;
-
-    // 3. Subscribe to Realtime signaling channel
     subscribeToSignaling(broadcast.id);
 
+    // setPhase triggers the useEffect above which sets srcObject on the now-mounted video
     setPhase('live');
     setLoading(false);
   }
@@ -168,11 +202,9 @@ export default function LiveCreator() {
     channelRef.current = channel;
   }
 
-  // ── New viewer joined → create offer ──
   async function handleViewerJoin(viewerPeerId) {
     if (!localStreamRef.current || !channelRef.current) return;
 
-    // Close any stale connection for this viewer (reconnect case)
     if (peerConnsRef.current.has(viewerPeerId)) {
       try { peerConnsRef.current.get(viewerPeerId).close(); } catch(e) {}
       peerConnsRef.current.delete(viewerPeerId);
@@ -181,12 +213,10 @@ export default function LiveCreator() {
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
     peerConnsRef.current.set(viewerPeerId, pc);
 
-    // Add all local tracks to this peer connection
     localStreamRef.current.getTracks().forEach(function(track) {
       pc.addTrack(track, localStreamRef.current);
     });
 
-    // Relay ICE candidates to this viewer
     pc.onicecandidate = function(event) {
       if (!event.candidate || !channelRef.current) return;
       channelRef.current.send({
@@ -203,7 +233,6 @@ export default function LiveCreator() {
       }
     };
 
-    // Create and send offer
     try {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
@@ -217,13 +246,11 @@ export default function LiveCreator() {
     }
   }
 
-  // ── Received answer from a viewer ──
   async function handleAnswer(viewerPeerId, sdp) {
     const pc = peerConnsRef.current.get(viewerPeerId);
     if (!pc) return;
     try {
       await pc.setRemoteDescription(new RTCSessionDescription(sdp));
-      // Flush any ICE candidates that arrived before the answer
       const pending = icePendingRef.current.get(viewerPeerId) || [];
       for (const candidate of pending) {
         try { await pc.addIceCandidate(new RTCIceCandidate(candidate)); } catch(e) {}
@@ -234,11 +261,9 @@ export default function LiveCreator() {
     }
   }
 
-  // ── Received ICE candidate from a viewer ──
   async function handleViewerIce(viewerPeerId, candidate) {
     const pc = peerConnsRef.current.get(viewerPeerId);
     if (!pc) return;
-    // Buffer if remote description not yet set
     if (!pc.remoteDescription) {
       const pending = icePendingRef.current.get(viewerPeerId) || [];
       pending.push(candidate);
@@ -248,7 +273,6 @@ export default function LiveCreator() {
     try { await pc.addIceCandidate(new RTCIceCandidate(candidate)); } catch(e) {}
   }
 
-  // ── Viewer left ──
   function handleViewerLeave(viewerPeerId) {
     const pc = peerConnsRef.current.get(viewerPeerId);
     if (pc) {
@@ -258,12 +282,10 @@ export default function LiveCreator() {
     }
   }
 
-  // ── End stream ──
   async function handleEndStream() {
     if (!broadcastRef.current || !accessToken) return;
     setLoading(true);
 
-    // Notify all viewers the stream is over
     if (channelRef.current) {
       try {
         channelRef.current.send({
@@ -274,7 +296,6 @@ export default function LiveCreator() {
       } catch(e) {}
     }
 
-    // Mark broadcast ended in DB
     await fetch('/api/live', {
       method: 'PATCH',
       credentials: 'include',
@@ -348,7 +369,13 @@ export default function LiveCreator() {
   return (
     <div className="live-page">
       <div className="live-stage">
-        <video ref={previewVideoRef} autoPlay muted playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        <video
+          ref={previewVideoRef}
+          autoPlay
+          muted
+          playsInline
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+        />
         <div className="live-badge">LIVE</div>
         <div className="live-viewer-count">👁 {viewerCount}</div>
       </div>
