@@ -9,11 +9,15 @@
 // --- PITFALLS ---
 // ⚠️ WARNING: 'use client' required — camera and WebRTC are browser APIs
 // ⚠️ WARNING: useEffect must be before conditional returns (Rules of Hooks)
-// ⚠️ WARNING: user === undefined means auth still loading — show loading, do not redirect yet
-// ⚠️ WARNING: user === null means logged out — redirect to /auth
+// ⚠️ WARNING: loading === true means auth still initialising — NEVER redirect during loading
+//             user is null during loading AND when logged out — must check loading first
+// ⚠️ WARNING: only redirect when loading === false AND user === null (confirmed logged out)
 
 // --- CHANGE LOG ---
 // [Jun 08, 2026] CREATED: Phase 18A — LiveMesh creator page
+// [Jun 08, 2026] FIXED: auth guard now waits for loading:false before redirecting
+//                REASON: user is null while auth is initialising — premature redirect
+//                sent logged-in users back to homepage via /auth
 // --- END CHANGE LOG ---
 
 'use client';
@@ -25,17 +29,17 @@ import LiveCreator from '@/components/live/LiveCreator';
 import '@/app/live/live.css';
 
 export default function LiveCreatePage() {
-  const { user } = useAuthStore();
+  const { user, loading } = useAuthStore();
   const router = useRouter();
 
   useEffect(function() {
-    if (user === null) {
+    if (!loading && user === null) {
       router.replace('/auth?next=/live/create');
     }
-  }, [user, router]);
+  }, [user, loading, router]);
 
-  // user === undefined → auth still loading
-  if (!user) {
+  // Auth still initialising — show blank dark screen, never redirect
+  if (loading) {
     return (
       <div style={{
         minHeight: '100dvh',
@@ -46,6 +50,16 @@ export default function LiveCreatePage() {
       }}>
         <div style={{ color: '#444', fontSize: 14 }}>Loading...</div>
       </div>
+    );
+  }
+
+  // Confirmed logged out — redirect is already firing via useEffect
+  if (!user) {
+    return (
+      <div style={{
+        minHeight: '100dvh',
+        background: '#0a0a0a',
+      }} />
     );
   }
 
