@@ -18,8 +18,9 @@
 // ⚠️ WARNING: iOS Safari — getUserMedia pauses when user switches apps — warning shown always
 // ⚠️ WARNING: preview video MUST be muted — prevents echo on creator's own audio
 // ⚠️ WARNING: playsInline required on ALL video elements — iOS Safari goes fullscreen without it
-// ⚠️ WARNING: previewVideoRef is NULL when handleGoLive runs — video element is in 'live' phase render
-//             NEVER set srcObject inside handleGoLive. Use useEffect keyed on phase instead.
+// ⚠️ WARNING: DO NOT use useEffect([phase]) to set srcObject — unreliable on Android Chrome
+//             Use a callback ref on the video element instead — sets srcObject synchronously
+//             the instant React creates the DOM node, no timing dependency
 // ⚠️ WARNING: peerConnsRef is a Map (viewerPeerId → RTCPeerConnection) — ready for Phase 18B
 // ⚠️ WARNING: ICE candidates from a viewer may arrive before answer is set — buffered in icePendingRef
 // ⚠️ WARNING: cleanup() stops all tracks, closes all PCs, unsubscribes channel
@@ -29,12 +30,15 @@
 
 // --- CHANGE LOG ---
 // [Jun 08, 2026] CREATED: Phase 18A — LiveMesh creator component
-// [Jun 08, 2026] FIXED: Black preview — moved srcObject assignment out of handleGoLive into
-//                useEffect keyed on phase. previewVideoRef.current was null inside handleGoLive
-//                because the video element only renders in 'live' phase (not yet mounted).
+// [Jun 08, 2026] FIXED: Black preview — original approach used useEffect([phase]) which ran
+//                after React paint but before Android Chrome reliably accepted srcObject.
+//                Replaced with callback ref that sets srcObject synchronously on DOM creation.
 // [Jun 08, 2026] FIXED: Stream not ending for viewers — added pagehide sendBeacon to
 //                /api/live/beacon. Realtime channel closes before stream-ended event sends
 //                when creator navigates away without tapping End Stream.
+// [Jun 09, 2026] FIXED: Creator preview still black on Android Chrome — removed useEffect([phase])
+//                entirely. Callback ref on video element sets srcObject the instant React
+//                creates the DOM node. More reliable than any useEffect timing approach.
 // --- END CHANGE LOG ---
 
 'use client';
@@ -65,16 +69,6 @@ export default function LiveCreator() {
   useEffect(function() {
     return function() { cleanup(); };
   }, []);
-
-  // ── Fix: set preview srcObject AFTER phase='live' renders the video element ──
-  // previewVideoRef.current is null inside handleGoLive (video not yet in DOM).
-  // This effect runs after React renders the live phase, when the ref is valid.
-  useEffect(function() {
-    if (phase === 'live' && localStreamRef.current && previewVideoRef.current) {
-      previewVideoRef.current.srcObject = localStreamRef.current;
-      previewVideoRef.current.play().catch(function() {});
-    }
-  }, [phase]);
 
   // ── pagehide beacon — fires when creator navigates away or closes tab ──
   // sendBeacon is the only reliable send during page unload.
@@ -136,8 +130,9 @@ export default function LiveCreator() {
     }
 
     localStreamRef.current = stream;
-    // DO NOT set previewVideoRef.current.srcObject here — the video element is in the
-    // 'live' phase render which has not happened yet. The useEffect above handles this.
+    // DO NOT set previewVideoRef.current.srcObject here.
+    // The video element is in the 'live' phase render — not yet in the DOM.
+    // The callback ref on the video element handles this synchronously when it mounts.
 
     // Create broadcast in DB
     let broadcast;
@@ -169,7 +164,8 @@ export default function LiveCreator() {
     broadcastRef.current = broadcast;
     subscribeToSignaling(broadcast.id);
 
-    // setPhase triggers the useEffect above which sets srcObject on the now-mounted video
+    // setPhase triggers React to mount the live-phase video element.
+    // The callback ref on that element sets srcObject synchronously on mount.
     setPhase('live');
     setLoading(false);
   }
@@ -205,6 +201,7 @@ export default function LiveCreator() {
   async function handleViewerJoin(viewerPeerId) {
     if (!localStreamRef.current || !channelRef.current) return;
 
+    // Close stale connection for this viewer (reconnect case)
     if (peerConnsRef.current.has(viewerPeerId)) {
       try { peerConnsRef.current.get(viewerPeerId).close(); } catch(e) {}
       peerConnsRef.current.delete(viewerPeerId);
@@ -213,10 +210,12 @@ export default function LiveCreator() {
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
     peerConnsRef.current.set(viewerPeerId, pc);
 
+    // Add all local tracks to this peer connection
     localStreamRef.current.getTracks().forEach(function(track) {
       pc.addTrack(track, localStreamRef.current);
     });
 
+    // Relay our ICE candidates to this viewer
     pc.onicecandidate = function(event) {
       if (!event.candidate || !channelRef.current) return;
       channelRef.current.send({
@@ -233,6 +232,7 @@ export default function LiveCreator() {
       }
     };
 
+    // Create and send offer
     try {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
@@ -251,6 +251,7 @@ export default function LiveCreator() {
     if (!pc) return;
     try {
       await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+      // Flush ICE candidates that arrived before the answer
       const pending = icePendingRef.current.get(viewerPeerId) || [];
       for (const candidate of pending) {
         try { await pc.addIceCandidate(new RTCIceCandidate(candidate)); } catch(e) {}
@@ -264,6 +265,7 @@ export default function LiveCreator() {
   async function handleViewerIce(viewerPeerId, candidate) {
     const pc = peerConnsRef.current.get(viewerPeerId);
     if (!pc) return;
+    // Buffer if remote description not yet set
     if (!pc.remoteDescription) {
       const pending = icePendingRef.current.get(viewerPeerId) || [];
       pending.push(candidate);
@@ -286,6 +288,7 @@ export default function LiveCreator() {
     if (!broadcastRef.current || !accessToken) return;
     setLoading(true);
 
+    // Notify all viewers stream is over via Realtime
     if (channelRef.current) {
       try {
         channelRef.current.send({
@@ -296,6 +299,7 @@ export default function LiveCreator() {
       } catch(e) {}
     }
 
+    // Mark broadcast ended in DB
     await fetch('/api/live', {
       method: 'PATCH',
       credentials: 'include',
@@ -370,7 +374,17 @@ export default function LiveCreator() {
     <div className="live-page">
       <div className="live-stage">
         <video
-          ref={previewVideoRef}
+          ref={function(el) {
+            // Callback ref — sets srcObject the instant React creates this DOM element.
+            // More reliable than useEffect([phase]) on Android Chrome where the timing
+            // between newly-mounted elements and useEffect execution is not guaranteed.
+            // This fires synchronously during React's commit phase, before paint.
+            previewVideoRef.current = el;
+            if (el && localStreamRef.current) {
+              el.srcObject = localStreamRef.current;
+              el.play().catch(function() {});
+            }
+          }}
           autoPlay
           muted
           playsInline
