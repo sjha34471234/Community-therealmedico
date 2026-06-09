@@ -1,79 +1,84 @@
 // --- WHY THIS CODE EXISTS ---
-// Relay engine for Phase 18B. Every viewer is potentially a relay node.
-// When a peer receives video from its parent (or creator), it forwards
-// that stream to its children via their own RTCPeerConnections.
-//
+// Relay engine for Phase 18B+. Every viewer is potentially a relay node.
 // Creator → Tier1 → Tier2 → Tier3 → ...
 // Each tier relays to the next. Creator's upload stays fixed regardless of viewer count.
 
 // --- WHAT THIS MADE WORK ---
-// Phase 18B: Factor-4 relay tree. Tier 1 viewers relay creator's stream to Tier 2.
-//            Tier N viewers relay to Tier N+1. Up to LIVE_FACTOR (4) children per peer.
+// Phase 18B: Factor-4 relay tree. Tier N viewers relay creator's stream to Tier N+1.
+// Phase 18C: handleActivationRequest() — backup parent connects video to a child
+//            whose primary parent failed and sent a 'parent-activate' signal.
 
 // --- PITFALLS ---
 // ⚠️ WARNING: This is a plain JS class — NOT a React component. No hooks, no JSX.
 // ⚠️ WARNING: setChannel() must be called before any child can join.
-//             Channel is needed to send offers and ICE to children.
 // ⚠️ WARNING: setRelayStream() must be called when upstream track arrives.
-//             handleChildJoin() called before setRelayStream() queues the peer in
-//             pendingJoins and processes it when setRelayStream() fires.
-// ⚠️ WARNING: Max LIVE_FACTOR (4) children — additional joins are ignored.
-//             Those viewers will reconnect and be assigned a different parent.
-// ⚠️ WARNING: cleanup() closes all child connections — call on viewer leave or page hide.
-// ⚠️ WARNING: LivePlayer delegates all channel events to this engine — this class
-//             does NOT bind its own channel listeners. LivePlayer calls the public
-//             handle* methods directly. This avoids Supabase Realtime binding timing issues.
+//             handleChildJoin() before setRelayStream() queues in pendingJoins.
+// ⚠️ WARNING: Max LIVE_FACTOR (4) children via handleChildJoin.
+//             handleActivationRequest() BYPASSES this cap — a failing child needs
+//             backup regardless of current child count.
+// ⚠️ WARNING: _connectChild() and _connectChildAsBackup() are identical except
+//             _connectChildAsBackup sends offer_type:'backup' so LivePlayer knows
+//             to route the offer to handleBackupOffer not handleParentOffer.
+// ⚠️ WARNING: cleanup() closes all child connections — call on viewer leave.
 
 // --- CHANGE LOG ---
 // [Jun 09, 2026] CREATED: Phase 18B — LiveMesh relay engine
+// [Jun 10, 2026] UPDATED: Phase 18C — handleActivationRequest() for backup activation
 // --- END CHANGE LOG ---
 
 import { ICE_SERVERS, LIVE_FACTOR } from '@/lib/liveConfig';
 
 export default class LiveMeshEngine {
   constructor(myPeerId) {
-    this.myPeerId   = myPeerId;
-    this.channel    = null;         // set via setChannel()
-    this.relayStream = null;        // set via setRelayStream()
+    this.myPeerId    = myPeerId;
+    this.channel     = null;
+    this.relayStream = null;
     this.childConns  = new Map();   // childPeerId → RTCPeerConnection
-    this.icePending  = new Map();   // childPeerId → RTCIceCandidate[] (buffered before answer)
-    this.pendingJoins = [];         // childPeerIds queued before relayStream was ready
+    this.icePending  = new Map();   // childPeerId → RTCIceCandidate[]
+    this.pendingJoins = [];         // queued before relayStream was ready
   }
 
-  // ── Called by LivePlayer after subscription is confirmed ──
   setChannel(channel) {
     this.channel = channel;
   }
 
-  // ── Called by LivePlayer when the upstream video track is received ──
-  // stream = the MediaStream received from creator or parent peer
   setRelayStream(stream) {
     this.relayStream = stream;
-    // Process any viewer-joins that arrived before the stream was ready
     var pending = this.pendingJoins.splice(0);
     for (var i = 0; i < pending.length; i++) {
       this.handleChildJoin(pending[i]);
     }
   }
 
-  // ── Called by LivePlayer when a viewer-join event arrives for this peer as parent ──
+  // Normal child join — respects LIVE_FACTOR cap
   handleChildJoin(childPeerId) {
     if (!this.relayStream) {
-      // Stream not ready yet — queue and process when setRelayStream fires
       this.pendingJoins.push(childPeerId);
       return;
     }
     if (!this.channel) return;
     if (this.childConns.size >= LIVE_FACTOR) {
-      // Full — this child will reconnect and be reassigned to another parent
       console.warn('LiveMeshEngine: max children reached, ignoring', childPeerId);
       return;
     }
-    this._connectChild(childPeerId);
+    this._connectChild(childPeerId, false);
   }
 
-  async _connectChild(childPeerId) {
-    // Close stale connection if exists (reconnect case)
+  // Phase 18C: backup activation — child's primary parent failed, I am the backup.
+  // Bypasses LIVE_FACTOR cap — a peer in failover must be served regardless.
+  // Sends offer with offer_type:'backup' so child's LivePlayer routes it correctly.
+  handleActivationRequest(childPeerId) {
+    if (!this.channel) return;
+    if (!this.relayStream) {
+      // Stream not ready — queue as normal join (will be served when stream arrives)
+      this.pendingJoins.push(childPeerId);
+      return;
+    }
+    this._connectChild(childPeerId, true);
+  }
+
+  async _connectChild(childPeerId, isBackup) {
+    // Close stale connection if exists
     if (this.childConns.has(childPeerId)) {
       try { this.childConns.get(childPeerId).close(); } catch(e) {}
       this.childConns.delete(childPeerId);
@@ -82,13 +87,12 @@ export default class LiveMeshEngine {
     var pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
     this.childConns.set(childPeerId, pc);
 
-    // Forward relay stream tracks to child
     var self = this;
     this.relayStream.getTracks().forEach(function(track) {
       pc.addTrack(track, self.relayStream);
     });
 
-    // Send ICE candidates to child (direction: downstream = parent → child)
+    // ICE to child — direction: downstream (parent → child)
     pc.onicecandidate = function(event) {
       if (!event.candidate || !self.channel) return;
       self.channel.send({
@@ -109,14 +113,18 @@ export default class LiveMeshEngine {
       }
     };
 
-    // Create and send offer to child
     try {
       var offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
       this.channel.send({
         type:    'broadcast',
         event:   'offer',
-        payload: { from: this.myPeerId, to: childPeerId, sdp: pc.localDescription },
+        payload: {
+          from:       this.myPeerId,
+          to:         childPeerId,
+          sdp:        pc.localDescription,
+          offer_type: isBackup ? 'backup' : 'primary',
+        },
       });
     } catch(err) {
       console.error('LiveMeshEngine: createOffer failed for child', childPeerId, err);
@@ -124,13 +132,11 @@ export default class LiveMeshEngine {
     }
   }
 
-  // ── Called by LivePlayer when an answer arrives from a child ──
   async handleChildAnswer(childPeerId, sdp) {
     var pc = this.childConns.get(childPeerId);
     if (!pc) return;
     try {
       await pc.setRemoteDescription(new RTCSessionDescription(sdp));
-      // Flush buffered ICE candidates
       var pending = this.icePending.get(childPeerId) || [];
       for (var i = 0; i < pending.length; i++) {
         try { await pc.addIceCandidate(new RTCIceCandidate(pending[i])); } catch(e) {}
@@ -141,12 +147,10 @@ export default class LiveMeshEngine {
     }
   }
 
-  // ── Called by LivePlayer when an upstream ICE candidate arrives from a child ──
   async handleChildIce(childPeerId, candidate) {
     var pc = this.childConns.get(childPeerId);
     if (!pc) return;
     if (!pc.remoteDescription) {
-      // Buffer until answer is set
       var pending = this.icePending.get(childPeerId) || [];
       pending.push(candidate);
       this.icePending.set(childPeerId, pending);
@@ -155,7 +159,6 @@ export default class LiveMeshEngine {
     try { await pc.addIceCandidate(new RTCIceCandidate(candidate)); } catch(e) {}
   }
 
-  // ── Called by LivePlayer when a child viewer leaves ──
   handleChildLeave(childPeerId) {
     var pc = this.childConns.get(childPeerId);
     if (pc) {
