@@ -1,44 +1,28 @@
 // --- WHY THIS CODE EXISTS ---
-// Creator-side Phase 18A component. Full signaling flow:
-// 1. POST /api/live → create broadcast, get broadcastId
-// 2. getUserMedia → camera + mic
-// 3. Subscribe to Supabase Realtime broadcast channel for signaling
-// 4. When viewer sends 'viewer-join' event:
-//    → Create RTCPeerConnection for that viewer
-//    → Add local tracks → createOffer → send offer via Realtime
-// 5. Handle 'answer' from viewer → setRemoteDescription
-// 6. Handle 'ice-candidate' from viewer → addIceCandidate (with buffering)
-// 7. PATCH /api/live on End Stream → notify viewers → cleanup
+// Creator-side component. Phase 18B: only directly connects to Tier 1 viewers.
+// Higher-tier viewers are handled by relay peers — creator never sees them.
 
 // --- WHAT THIS MADE WORK ---
-// Phase 18A: creator goes live, viewers can connect and receive video
+// Phase 18A: creator streams directly to all viewers
+// Phase 18B: creator only connects to Tier 1 peers (max LIVE_FACTOR per tree × 4 trees = 16)
+//            All higher-tier relaying happens peer-to-peer without creator involvement.
 
 // --- PITFALLS ---
-// ⚠️ WARNING: getUserMedia requires HTTPS — works on Vercel, not localhost
-// ⚠️ WARNING: iOS Safari — getUserMedia pauses when user switches apps — warning shown always
-// ⚠️ WARNING: preview video MUST be muted — prevents echo on creator's own audio
-// ⚠️ WARNING: playsInline required on ALL video elements — iOS Safari goes fullscreen without it
-// ⚠️ WARNING: DO NOT use useEffect([phase]) to set srcObject — unreliable on Android Chrome
-//             Use a callback ref on the video element instead — sets srcObject synchronously
-//             the instant React creates the DOM node, no timing dependency
-// ⚠️ WARNING: peerConnsRef is a Map (viewerPeerId → RTCPeerConnection) — ready for Phase 18B
-// ⚠️ WARNING: ICE candidates from a viewer may arrive before answer is set — buffered in icePendingRef
-// ⚠️ WARNING: cleanup() stops all tracks, closes all PCs, unsubscribes channel
-// ⚠️ WARNING: pagehide sendBeacon fires when creator navigates away — ends broadcast in DB
-//             sendBeacon uses stream_key as secret (no auth header support)
-// ⚠️ WARNING: Realtime channel config { broadcast: { self: false } } — creator must not receive own events
+// ⚠️ WARNING: viewer-join handler MUST check parent_peer_id === 'creator'
+//             Without this, creator responds to ALL viewer-joins including Tier 2+ ones
+//             that should be handled by their relay parent.
+// ⚠️ WARNING: ICE to viewers uses direction: 'downstream' (creator → child)
+//             LivePlayer only processes ICE with direction === 'downstream'
+// ⚠️ WARNING: answer handler checks payload.to === 'creator' — unchanged from 18A
+// ⚠️ WARNING: preview video uses callback ref — not useEffect — for Android Chrome reliability
+// ⚠️ WARNING: pagehide sendBeacon ends broadcast in DB when creator navigates away
 
 // --- CHANGE LOG ---
-// [Jun 08, 2026] CREATED: Phase 18A — LiveMesh creator component
-// [Jun 08, 2026] FIXED: Black preview — original approach used useEffect([phase]) which ran
-//                after React paint but before Android Chrome reliably accepted srcObject.
-//                Replaced with callback ref that sets srcObject synchronously on DOM creation.
-// [Jun 08, 2026] FIXED: Stream not ending for viewers — added pagehide sendBeacon to
-//                /api/live/beacon. Realtime channel closes before stream-ended event sends
-//                when creator navigates away without tapping End Stream.
-// [Jun 09, 2026] FIXED: Creator preview still black on Android Chrome — removed useEffect([phase])
-//                entirely. Callback ref on video element sets srcObject the instant React
-//                creates the DOM node. More reliable than any useEffect timing approach.
+// [Jun 08, 2026] CREATED: Phase 18A
+// [Jun 08, 2026] FIXED: Black preview — callback ref on video element
+// [Jun 08, 2026] FIXED: Stream end — pagehide sendBeacon to /api/live/beacon
+// [Jun 09, 2026] UPDATED: Phase 18B — filter viewer-join to parent_peer_id === 'creator' only
+//                Added direction: 'downstream' to outgoing ICE sends
 // --- END CHANGE LOG ---
 
 'use client';
@@ -62,17 +46,15 @@ export default function LiveCreator() {
   const localStreamRef  = useRef(null);
   const broadcastRef    = useRef(null);
   const channelRef      = useRef(null);
-  const peerConnsRef    = useRef(new Map());
-  const icePendingRef   = useRef(new Map());
+  const peerConnsRef    = useRef(new Map());  // viewerPeerId → RTCPeerConnection
+  const icePendingRef   = useRef(new Map());  // viewerPeerId → RTCIceCandidate[]
 
-  // ── Unmount cleanup ──
+  // Unmount cleanup
   useEffect(function() {
     return function() { cleanup(); };
   }, []);
 
-  // ── pagehide beacon — fires when creator navigates away or closes tab ──
-  // sendBeacon is the only reliable send during page unload.
-  // Registered once on mount — broadcastRef is a ref so always has latest value.
+  // pagehide beacon — fires when creator navigates away or closes tab
   useEffect(function() {
     function onPageHide() {
       if (broadcastRef.current) {
@@ -103,81 +85,66 @@ export default function LiveCreator() {
   }
 
   function refreshViewerCount() {
-    let count = 0;
+    var count = 0;
     peerConnsRef.current.forEach(function(pc) {
       if (pc.connectionState === 'connected') count++;
     });
     setViewerCount(count);
   }
 
-  // ── Go Live ──
   async function handleGoLive() {
-    if (!user || !accessToken) {
-      setError('You must be logged in to go live.');
-      return;
-    }
+    if (!user || !accessToken) { setError('You must be logged in to go live.'); return; }
     setLoading(true);
     setError(null);
 
-    // Camera + mic must be first — user gesture unlocks getUserMedia on iOS
-    let stream;
+    var stream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-    } catch(mediaErr) {
+    } catch(e) {
       setError('Camera access denied. Please allow camera and microphone in your browser settings.');
       setLoading(false);
       return;
     }
 
     localStreamRef.current = stream;
-    // DO NOT set previewVideoRef.current.srcObject here.
-    // The video element is in the 'live' phase render — not yet in the DOM.
-    // The callback ref on the video element handles this synchronously when it mounts.
 
-    // Create broadcast in DB
-    let broadcast;
+    var broadcast;
     try {
-      const res = await fetch('/api/live', {
-        method: 'POST',
-        credentials: 'include',
+      var res = await fetch('/api/live', {
+        method: 'POST', credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer ' + accessToken,
         },
         body: JSON.stringify({ title: title.trim() || null }),
       });
-      const data = await res.json();
+      var data = await res.json();
       if (!res.ok) {
         setError(data.error || 'Failed to start broadcast');
-        cleanup();
-        setLoading(false);
-        return;
+        cleanup(); setLoading(false); return;
       }
       broadcast = data.broadcast;
     } catch(e) {
       setError('Network error. Please try again.');
-      cleanup();
-      setLoading(false);
-      return;
+      cleanup(); setLoading(false); return;
     }
 
     broadcastRef.current = broadcast;
     subscribeToSignaling(broadcast.id);
-
-    // setPhase triggers React to mount the live-phase video element.
-    // The callback ref on that element sets srcObject synchronously on mount.
     setPhase('live');
     setLoading(false);
   }
 
   function subscribeToSignaling(broadcastId) {
-    const channelName = signalChannelName(broadcastId);
-    const channel = supabase.channel(channelName, {
+    var channel = supabase.channel(signalChannelName(broadcastId), {
       config: { broadcast: { self: false } },
     });
 
     channel
+      // Phase 18B: ONLY respond to viewer-joins where parent is creator (Tier 1 only)
+      // Tier 2+ viewers are handled by their relay parent — not creator's concern
       .on('broadcast', { event: 'viewer-join' }, function(msg) {
+        if (msg.payload.parent_peer_id !== 'creator') return;
         handleViewerJoin(msg.payload.peer_id);
       })
       .on('broadcast', { event: 'answer' }, function(msg) {
@@ -186,7 +153,8 @@ export default function LiveCreator() {
         }
       })
       .on('broadcast', { event: 'ice-candidate' }, function(msg) {
-        if (msg.payload.to === 'creator') {
+        // Only process upstream ICE (from viewer/child to creator)
+        if (msg.payload.to === 'creator' && msg.payload.direction === 'upstream') {
           handleViewerIce(msg.payload.from_peer_id, msg.payload.candidate);
         }
       })
@@ -201,27 +169,29 @@ export default function LiveCreator() {
   async function handleViewerJoin(viewerPeerId) {
     if (!localStreamRef.current || !channelRef.current) return;
 
-    // Close stale connection for this viewer (reconnect case)
     if (peerConnsRef.current.has(viewerPeerId)) {
       try { peerConnsRef.current.get(viewerPeerId).close(); } catch(e) {}
       peerConnsRef.current.delete(viewerPeerId);
     }
 
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    var pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
     peerConnsRef.current.set(viewerPeerId, pc);
 
-    // Add all local tracks to this peer connection
     localStreamRef.current.getTracks().forEach(function(track) {
       pc.addTrack(track, localStreamRef.current);
     });
 
-    // Relay our ICE candidates to this viewer
+    // ICE to viewer — direction: 'downstream' (creator → child)
     pc.onicecandidate = function(event) {
       if (!event.candidate || !channelRef.current) return;
       channelRef.current.send({
-        type: 'broadcast',
-        event: 'ice-candidate',
-        payload: { from: 'creator', to: viewerPeerId, candidate: event.candidate },
+        type: 'broadcast', event: 'ice-candidate',
+        payload: {
+          from:      'creator',
+          to:        viewerPeerId,
+          candidate: event.candidate,
+          direction: 'downstream',
+        },
       });
     };
 
@@ -232,13 +202,11 @@ export default function LiveCreator() {
       }
     };
 
-    // Create and send offer
     try {
-      const offer = await pc.createOffer();
+      var offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
       channelRef.current.send({
-        type: 'broadcast',
-        event: 'offer',
+        type: 'broadcast', event: 'offer',
         payload: { from: 'creator', to: viewerPeerId, sdp: pc.localDescription },
       });
     } catch(err) {
@@ -247,14 +215,13 @@ export default function LiveCreator() {
   }
 
   async function handleAnswer(viewerPeerId, sdp) {
-    const pc = peerConnsRef.current.get(viewerPeerId);
+    var pc = peerConnsRef.current.get(viewerPeerId);
     if (!pc) return;
     try {
       await pc.setRemoteDescription(new RTCSessionDescription(sdp));
-      // Flush ICE candidates that arrived before the answer
-      const pending = icePendingRef.current.get(viewerPeerId) || [];
-      for (const candidate of pending) {
-        try { await pc.addIceCandidate(new RTCIceCandidate(candidate)); } catch(e) {}
+      var pending = icePendingRef.current.get(viewerPeerId) || [];
+      for (var i = 0; i < pending.length; i++) {
+        try { await pc.addIceCandidate(new RTCIceCandidate(pending[i])); } catch(e) {}
       }
       icePendingRef.current.delete(viewerPeerId);
     } catch(err) {
@@ -263,11 +230,10 @@ export default function LiveCreator() {
   }
 
   async function handleViewerIce(viewerPeerId, candidate) {
-    const pc = peerConnsRef.current.get(viewerPeerId);
+    var pc = peerConnsRef.current.get(viewerPeerId);
     if (!pc) return;
-    // Buffer if remote description not yet set
     if (!pc.remoteDescription) {
-      const pending = icePendingRef.current.get(viewerPeerId) || [];
+      var pending = icePendingRef.current.get(viewerPeerId) || [];
       pending.push(candidate);
       icePendingRef.current.set(viewerPeerId, pending);
       return;
@@ -276,7 +242,7 @@ export default function LiveCreator() {
   }
 
   function handleViewerLeave(viewerPeerId) {
-    const pc = peerConnsRef.current.get(viewerPeerId);
+    var pc = peerConnsRef.current.get(viewerPeerId);
     if (pc) {
       try { pc.close(); } catch(e) {}
       peerConnsRef.current.delete(viewerPeerId);
@@ -287,29 +253,19 @@ export default function LiveCreator() {
   async function handleEndStream() {
     if (!broadcastRef.current || !accessToken) return;
     setLoading(true);
-
-    // Notify all viewers stream is over via Realtime
     if (channelRef.current) {
       try {
         channelRef.current.send({
-          type: 'broadcast',
-          event: 'stream-ended',
+          type: 'broadcast', event: 'stream-ended',
           payload: { broadcast_id: broadcastRef.current.id },
         });
       } catch(e) {}
     }
-
-    // Mark broadcast ended in DB
     await fetch('/api/live', {
-      method: 'PATCH',
-      credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + accessToken,
-      },
+      method: 'PATCH', credentials: 'include',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
       body: JSON.stringify({ broadcast_id: broadcastRef.current.id }),
     }).catch(function() {});
-
     cleanup();
     setPhase('ended');
     setLoading(false);
@@ -317,7 +273,7 @@ export default function LiveCreator() {
 
   function handleCopy() {
     if (!broadcastRef.current) return;
-    const link = window.location.origin + '/live/' + broadcastRef.current.id;
+    var link = window.location.origin + '/live/' + broadcastRef.current.id;
     navigator.clipboard.writeText(link).then(function() {
       setCopied(true);
       setTimeout(function() { setCopied(false); }, 2000);
@@ -354,9 +310,7 @@ export default function LiveCreator() {
             onChange={function(e) { setTitle(e.target.value); }}
             maxLength={100}
           />
-          {error && (
-            <div style={{ color: '#ff5252', fontSize: 13, textAlign: 'center' }}>{error}</div>
-          )}
+          {error && <div style={{ color: '#ff5252', fontSize: 13, textAlign: 'center' }}>{error}</div>}
           <button className="live-btn-start" onClick={handleGoLive} disabled={loading}>
             {loading ? 'Starting...' : '🔴  Go Live'}
           </button>
@@ -366,7 +320,7 @@ export default function LiveCreator() {
   }
 
   // phase === 'live'
-  const streamLink = (typeof window !== 'undefined' && broadcastRef.current)
+  var streamLink = (typeof window !== 'undefined' && broadcastRef.current)
     ? window.location.origin + '/live/' + broadcastRef.current.id
     : '';
 
@@ -375,10 +329,6 @@ export default function LiveCreator() {
       <div className="live-stage">
         <video
           ref={function(el) {
-            // Callback ref — sets srcObject the instant React creates this DOM element.
-            // More reliable than useEffect([phase]) on Android Chrome where the timing
-            // between newly-mounted elements and useEffect execution is not guaranteed.
-            // This fires synchronously during React's commit phase, before paint.
             previewVideoRef.current = el;
             if (el && localStreamRef.current) {
               el.srcObject = localStreamRef.current;
@@ -403,9 +353,7 @@ export default function LiveCreator() {
         </button>
       </div>
 
-      {error && (
-        <div style={{ color: '#ff5252', fontSize: 13, textAlign: 'center', marginTop: 8 }}>{error}</div>
-      )}
+      {error && <div style={{ color: '#ff5252', fontSize: 13, textAlign: 'center', marginTop: 8 }}>{error}</div>}
 
       <div className="live-controls-bar">
         <button className="live-btn-end" onClick={handleEndStream} disabled={loading}>
