@@ -1,7 +1,7 @@
 // --- WHY THIS CODE EXISTS ---
 // Monitors this peer's load and capabilities every LOAD_CYCLE_MS (30s).
-// Reports bandwidth, battery, network type to /api/live/peers so the server
-// has fresh data for future tier rebalancing decisions.
+// Reports bandwidth (upload + download), battery, network type to /api/live/peers
+// so the server has fresh data for future tier rebalancing decisions.
 // Detects load spikes: when child count >= LOAD_SPIKE_THRESHOLD × LIVE_FACTOR,
 // sends 'relay-at-capacity' Realtime event so the join server can skip this peer.
 
@@ -15,10 +15,15 @@
 // ⚠️ WARNING: navigator.getBattery() is Chrome/Android only — try/catch required
 // ⚠️ WARNING: PATCH /api/live/peers uses peer_id as the secret — no auth header needed
 // ⚠️ WARNING: start() must be called AFTER channel is subscribed
+// ⚠️ WARNING: download_bps = full downlink estimate (conn.downlink × 1,000,000)
+//             upload_bps   = 60% of downlink (asymmetric network heuristic)
 // ⚠️ WARNING: cleanup() must be called on leave — clears the 30s interval
 
 // --- CHANGE LOG ---
 // [Jun 10, 2026] CREATED: Phase 18D — capability reporting + load spike detection
+// [Jun 10, 2026] UPDATED: Added download_bps tracking alongside upload_bps
+//                REASON: relay peers need sufficient download to receive stream
+//                before they can relay it. Leaf peers need download only.
 // --- END CHANGE LOG ---
 
 import { LOAD_CYCLE_MS, LIVE_FACTOR, LOAD_SPIKE_THRESHOLD } from '@/lib/liveConfig';
@@ -57,6 +62,7 @@ export default class LiveTierRouter {
         body: JSON.stringify({
           peer_id:      this.peerId,
           upload_bps:   networkInfo.upload_bps,
+          download_bps: networkInfo.download_bps,
           battery_pct:  batteryInfo.battery_pct,
           network_type: networkInfo.network_type,
         }),
@@ -77,21 +83,24 @@ export default class LiveTierRouter {
   }
 
   _getNetworkInfo() {
-  var defaults = { upload_bps: 0, download_bps: 0, network_type: 'unknown' };
-  try {
-    var conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-    if (!conn) return defaults;
-    var download_bps = conn.downlink ? Math.round(conn.downlink * 1000000) : 0;
-    var upload_bps   = conn.downlink ? Math.round(conn.downlink * 1000000 * 0.6) : 0;
-    var network_type = conn.effectiveType === '4g' ? '4g'
-      : conn.effectiveType === '3g' ? '3g'
-      : conn.type === 'wifi' ? 'wifi'
-      : 'unknown';
-    return { upload_bps, download_bps, network_type };
-  } catch(e) {
-    return defaults;
+    var defaults = { upload_bps: 0, download_bps: 0, network_type: 'unknown' };
+    try {
+      var conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+      if (!conn) return defaults;
+      // downlink is in Mbps — convert to bps
+      // download = full downlink
+      // upload   = 60% of downlink (conservative asymmetric heuristic)
+      var download_bps = conn.downlink ? Math.round(conn.downlink * 1000000) : 0;
+      var upload_bps   = conn.downlink ? Math.round(conn.downlink * 1000000 * 0.6) : 0;
+      var network_type = conn.effectiveType === '4g' ? '4g'
+        : conn.effectiveType === '3g' ? '3g'
+        : conn.type === 'wifi' ? 'wifi'
+        : 'unknown';
+      return { upload_bps, download_bps, network_type };
+    } catch(e) {
+      return defaults;
+    }
   }
-}
 
   async _getBatteryInfo() {
     var defaults = { battery_pct: 100 };
