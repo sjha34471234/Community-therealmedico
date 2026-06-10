@@ -78,7 +78,7 @@ async function assignParents(supabase, broadcastId) {
 
   // Tier 1 slot available? → connect directly to creator, no relay backup
   var tier1Count = treePeers.filter(function(p) { return p.tier_level === 1; }).length;
-  if (tier1Count < LIVE_FACTOR) {
+  if (tier1Count < 1) {
     return { tier_level: 1, tree_assignment: targetTree, parent_one_id: null, parent_two_id: null };
   }
 
