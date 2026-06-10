@@ -77,21 +77,21 @@ export default class LiveTierRouter {
   }
 
   _getNetworkInfo() {
-    var defaults = { upload_bps: 0, network_type: 'unknown' };
-    try {
-      var conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-      if (!conn) return defaults;
-      // downlink is in Mbps — convert to bps
-      var upload_bps   = conn.downlink ? Math.round(conn.downlink * 1000000 * 0.6) : 0;
-      var network_type = conn.effectiveType === '4g' ? '4g'
-        : conn.effectiveType === '3g' ? '3g'
-        : conn.type === 'wifi' ? 'wifi'
-        : 'unknown';
-      return { upload_bps, network_type };
-    } catch(e) {
-      return defaults;
-    }
+  var defaults = { upload_bps: 0, download_bps: 0, network_type: 'unknown' };
+  try {
+    var conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    if (!conn) return defaults;
+    var download_bps = conn.downlink ? Math.round(conn.downlink * 1000000) : 0;
+    var upload_bps   = conn.downlink ? Math.round(conn.downlink * 1000000 * 0.6) : 0;
+    var network_type = conn.effectiveType === '4g' ? '4g'
+      : conn.effectiveType === '3g' ? '3g'
+      : conn.type === 'wifi' ? 'wifi'
+      : 'unknown';
+    return { upload_bps, download_bps, network_type };
+  } catch(e) {
+    return defaults;
   }
+}
 
   async _getBatteryInfo() {
     var defaults = { battery_pct: 100 };
