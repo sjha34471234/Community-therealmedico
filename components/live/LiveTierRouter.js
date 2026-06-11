@@ -1,45 +1,55 @@
 // --- WHY THIS CODE EXISTS ---
 // Monitors this peer's load and capabilities every LOAD_CYCLE_MS (30s).
-// Reports bandwidth (upload + download), battery, network type to /api/live/peers
-// so the server has fresh data for future tier rebalancing decisions.
-// Detects load spikes: when child count >= LOAD_SPIKE_THRESHOLD × LIVE_FACTOR,
-// sends 'relay-at-capacity' Realtime event so the join server can skip this peer.
+// Reports bandwidth (upload + download), battery, network type to /api/live/peers.
+// Detects load spikes and sends 'relay-at-capacity' Realtime event.
 
 // --- WHAT THIS MADE WORK ---
 // Phase 18D: server always has current capability data per peer
-//            load spike detected → new joiners avoid this peer within 30s
+//            load spike detected → new joiners avoid this peer
 
 // --- PITFALLS ---
-// ⚠️ WARNING: navigator.connection is Chrome/Android only — Safari returns undefined
-//             Fall back to conservative defaults on unsupported browsers
-// ⚠️ WARNING: navigator.getBattery() is Chrome/Android only — try/catch required
-// ⚠️ WARNING: PATCH /api/live/peers uses peer_id as the secret — no auth header needed
-// ⚠️ WARNING: start() must be called AFTER channel is subscribed
-// ⚠️ WARNING: download_bps = full downlink estimate (conn.downlink × 1,000,000)
-//             upload_bps   = 60% of downlink (asymmetric network heuristic)
-// ⚠️ WARNING: cleanup() must be called on leave — clears the 30s interval
+// ⚠️ WARNING: navigator.connection and navigator.getBattery() are Chrome/Android only
+//             Brave blocks them via privacy shields. Safari/iOS does not support them.
+//             DO NOT rely on these for bandwidth — use RTCPeerConnection.getStats() instead.
+// ⚠️ WARNING: RTCPeerConnection.getStats() is W3C standard — works on Chrome, Safari,
+//             Firefox, Brave, Edge — every browser that supports WebRTC.
+//             Measures actual video bitrate, more accurate than navigator.connection estimates.
+// ⚠️ WARNING: First getStats() call returns 0 bps — no delta to measure yet.
+//             Second call 30s later returns real values. This is expected.
+// ⚠️ WARNING: pcRef is a React ref — pcRef.current is the live RTCPeerConnection.
+//             Always access pcRef.current at call time, never cache the PC object.
+// ⚠️ WARNING: start() must be called AFTER channel is subscribed and stream is flowing.
+// ⚠️ WARNING: cleanup() must be called on leave — clears the 30s interval.
 
 // --- CHANGE LOG ---
 // [Jun 10, 2026] CREATED: Phase 18D — capability reporting + load spike detection
-// [Jun 10, 2026] UPDATED: Added download_bps tracking alongside upload_bps
-//                REASON: relay peers need sufficient download to receive stream
-//                before they can relay it. Leaf peers need download only.
+// [Jun 10, 2026] UPDATED: Phase 18D — added download_bps tracking
+// [Jun 10, 2026] FIXED: replaced navigator.connection with RTCPeerConnection.getStats()
+//                REASON: navigator.connection unavailable on Safari/iOS, blocked by Brave
+//                privacy shields, and Firefox. getStats() works on all WebRTC browsers
+//                and measures actual bitrate rather than estimated capacity.
 // --- END CHANGE LOG ---
 
 import { LOAD_CYCLE_MS, LIVE_FACTOR, LOAD_SPIKE_THRESHOLD } from '@/lib/liveConfig';
 
 export default class LiveTierRouter {
-  constructor(peerId, engineRef) {
+  constructor(peerId, pcRef, engineRef) {
     this.peerId    = peerId;
-    this.engineRef = engineRef;   // ref to LiveMeshEngine — read child count from it
+    this.pcRef     = pcRef;       // React ref → RTCPeerConnection for upstream stats
+    this.engineRef = engineRef;   // React ref → LiveMeshEngine for child count
     this.channel   = null;
     this.interval  = null;
+
+    // For delta calculation between getStats() calls
+    this.lastStatsTime      = 0;
+    this.lastBytesReceived  = 0;
+    this.lastBytesSent      = 0;
   }
 
   start(channel) {
     this.channel = channel;
     var self = this;
-    // Report immediately on start, then every LOAD_CYCLE_MS
+    // First call immediately — establishes baseline (returns 0 bps on first call, real on second)
     self._reportCapabilities();
     this.interval = setInterval(function() {
       self._reportCapabilities();
@@ -47,13 +57,13 @@ export default class LiveTierRouter {
   }
 
   async _reportCapabilities() {
-    var networkInfo = this._getNetworkInfo();
-    var batteryInfo = await this._getBatteryInfo();
-    var childCount  = this.engineRef && this.engineRef.current
+    var bandwidth    = await this._measureBandwidth();
+    var batteryInfo  = await this._getBatteryInfo();
+    var networkType  = this._getNetworkType();
+    var childCount   = this.engineRef && this.engineRef.current
       ? this.engineRef.current.getChildCount()
       : 0;
 
-    // PATCH capabilities to server — peer_id is the unguessable identifier
     try {
       await fetch('/api/live/peers', {
         method: 'PATCH',
@@ -61,15 +71,15 @@ export default class LiveTierRouter {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           peer_id:      this.peerId,
-          upload_bps:   networkInfo.upload_bps,
-          download_bps: networkInfo.download_bps,
+          upload_bps:   bandwidth.upload_bps,
+          download_bps: bandwidth.download_bps,
           battery_pct:  batteryInfo.battery_pct,
-          network_type: networkInfo.network_type,
+          network_type: networkType,
         }),
       });
     } catch(e) {}
 
-    // Load spike detection — send Realtime event if at or over threshold
+    // Load spike detection
     var capacityFraction = childCount / LIVE_FACTOR;
     if (capacityFraction >= LOAD_SPIKE_THRESHOLD && this.channel) {
       try {
@@ -82,39 +92,82 @@ export default class LiveTierRouter {
     }
   }
 
-  _getNetworkInfo() {
-    var defaults = { upload_bps: 0, download_bps: 0, network_type: 'unknown' };
+  // Measure actual bitrate using RTCPeerConnection.getStats()
+  // Works on Chrome, Safari, Firefox, Brave, Edge — all WebRTC browsers
+  // Returns { upload_bps, download_bps } — both 0 on first call (no delta yet)
+  async _measureBandwidth() {
+    var defaults = { upload_bps: 0, download_bps: 0 };
     try {
-      var conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-      if (!conn) return defaults;
-      // downlink is in Mbps — convert to bps
-      // download = full downlink
-      // upload   = 60% of downlink (conservative asymmetric heuristic)
-      var download_bps = conn.downlink ? Math.round(conn.downlink * 1000000) : 0;
-      var upload_bps   = conn.downlink ? Math.round(conn.downlink * 1000000 * 0.6) : 0;
-      var network_type = conn.effectiveType === '4g' ? '4g'
-        : conn.effectiveType === '3g' ? '3g'
-        : conn.type === 'wifi' ? 'wifi'
-        : 'unknown';
-      return { upload_bps, download_bps, network_type };
+      var pc = this.pcRef && this.pcRef.current;
+      if (!pc || typeof pc.getStats !== 'function') return defaults;
+
+      var stats = await pc.getStats();
+      var bytesReceived = 0;
+      var bytesSent     = 0;
+
+      stats.forEach(function(report) {
+        // inbound-rtp: bytes this peer received (viewer download from parent/creator)
+        if (report.type === 'inbound-rtp' && report.bytesReceived) {
+          bytesReceived += report.bytesReceived;
+        }
+        // outbound-rtp: bytes this peer sent (relay upload to children)
+        if (report.type === 'outbound-rtp' && report.bytesSent) {
+          bytesSent += report.bytesSent;
+        }
+      });
+
+      var now     = Date.now();
+      var elapsed = this.lastStatsTime > 0 ? (now - this.lastStatsTime) / 1000 : 0;
+
+      // Delta / elapsed = bits per second
+      var download_bps = (elapsed > 0 && bytesReceived >= this.lastBytesReceived)
+        ? Math.round((bytesReceived - this.lastBytesReceived) * 8 / elapsed) : 0;
+      var upload_bps = (elapsed > 0 && bytesSent >= this.lastBytesSent)
+        ? Math.round((bytesSent - this.lastBytesSent) * 8 / elapsed) : 0;
+
+      // Store for next delta calculation
+      this.lastStatsTime     = now;
+      this.lastBytesReceived = bytesReceived;
+      this.lastBytesSent     = bytesSent;
+
+      return { download_bps, upload_bps };
     } catch(e) {
       return defaults;
     }
   }
 
-  async _getBatteryInfo() {
-    var defaults = { battery_pct: 100 };
+  // Best-effort network type — Chrome/Android only, 'unknown' everywhere else
+  // Not critical — used only as a soft signal for tier assignment scoring
+  _getNetworkType() {
     try {
-      if (!navigator.getBattery) return defaults;
+      var conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+      if (!conn) return 'unknown';
+      if (conn.type === 'wifi') return 'wifi';
+      if (conn.effectiveType === '4g') return '4g';
+      if (conn.effectiveType === '3g') return '3g';
+      return 'unknown';
+    } catch(e) {
+      return 'unknown';
+    }
+  }
+
+  // Best-effort battery — Chrome/Android only, defaults to 100 everywhere else
+  // Brave may block this via privacy shields — try/catch handles it silently
+  async _getBatteryInfo() {
+    try {
+      if (!navigator.getBattery) return { battery_pct: 100 };
       var battery = await navigator.getBattery();
       return { battery_pct: Math.round(battery.level * 100) };
     } catch(e) {
-      return defaults;
+      return { battery_pct: 100 };
     }
   }
 
   cleanup() {
     if (this.interval) { clearInterval(this.interval); this.interval = null; }
-    this.channel = null;
+    this.channel            = null;
+    this.lastStatsTime      = 0;
+    this.lastBytesReceived  = 0;
+    this.lastBytesSent      = 0;
   }
 }
