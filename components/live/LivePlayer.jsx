@@ -5,21 +5,26 @@
 // Phase 18C: failover — detect parent failure, activate backup parent.
 // Phase 18D: capability reporting via LiveTierRouter every 30s.
 //            Snapshot capture via LiveSnapshotAuditor on Report button tap.
+//            sessionStorage peer_id persistence — cleans up stale rows on reconnect.
 
 // --- WHAT THIS MADE WORK ---
 // Phase 18A: viewer watches direct from creator
 // Phase 18B: viewer relays stream to children
 // Phase 18C: parent failure → backup activates automatically
-// Phase 18D: server gets fresh capability data, mod team gets stream snapshots
+// Phase 18D: real bandwidth measurement via RTCPeerConnection.getStats() (all browsers)
+//            duplicate peer row prevention via sessionStorage + previous_peer_id
+//            Report button with snapshot capture
 
 // --- PITFALLS ---
 // ⚠️ WARNING: parent_one_id = null means parent is CREATOR ('creator' in signaling)
 // ⚠️ WARNING: parent_two_id = null means no backup — Tier 1 or no alternates available
 // ⚠️ WARNING: iOS autoplay fix — prime video.play() synchronously in handleWatch gesture
 // ⚠️ WARNING: playsInline required — iOS Safari makes video fullscreen without it
-// ⚠️ WARNING: tierRouterRef.start() called AFTER channel is subscribed (in ontrack handler)
-//             Router needs channel to send relay-at-capacity events
-// ⚠️ WARNING: LiveSnapshotAuditor has 30s cooldown — report button disabled after tap
+// ⚠️ WARNING: sessionStorage key is 'lm_peer_' + broadcastId — unique per broadcast
+//             Cleared in cleanup() on every leave — prevents stale IDs from old broadcasts
+// ⚠️ WARNING: LiveTierRouter now receives pcRef — pass it at construction, not later
+// ⚠️ WARNING: pcRef is set synchronously after buildPeerConnection() returns.
+//             LiveTierRouter._measureBandwidth() fires 30s later — ref is always valid by then
 // ⚠️ WARNING: Polling every 15s catches stream end when creator navigates away
 
 // --- CHANGE LOG ---
@@ -28,8 +33,8 @@
 // [Jun 08, 2026] ADDED: 15s polling for stream end detection
 // [Jun 09, 2026] UPDATED: Phase 18B — relay via LiveMeshEngine, parent_peer_id signaling
 // [Jun 10, 2026] UPDATED: Phase 18C — LivePeerManager heartbeat + failover
-// [Jun 10, 2026] UPDATED: Phase 18D — LiveTierRouter capability reporting,
-//                LiveSnapshotAuditor report button
+// [Jun 10, 2026] UPDATED: Phase 18D — LiveTierRouter with pcRef for getStats() bandwidth,
+//                LiveSnapshotAuditor report button, sessionStorage peer_id for reconnect cleanup
 // --- END CHANGE LOG ---
 
 'use client';
@@ -38,18 +43,21 @@ import { useState, useEffect, useRef } from 'react';
 import useAuthStore from '@/store/authStore';
 import supabase from '@/lib/supabase';
 import { ICE_SERVERS, signalChannelName } from '@/lib/liveConfig';
-import LiveMeshEngine    from '@/components/live/LiveMeshEngine';
-import LivePeerManager   from '@/components/live/LivePeerManager';
-import LiveTierRouter    from '@/components/live/LiveTierRouter';
+import LiveMeshEngine      from '@/components/live/LiveMeshEngine';
+import LivePeerManager     from '@/components/live/LivePeerManager';
+import LiveTierRouter      from '@/components/live/LiveTierRouter';
 import LiveSnapshotAuditor from '@/components/live/LiveSnapshotAuditor';
+
+// sessionStorage key — unique per broadcast, cleared on leave
+function storageKey(broadcastId) { return 'lm_peer_' + broadcastId; }
 
 export default function LivePlayer({ broadcastId }) {
   const { accessToken } = useAuthStore();
 
-  const [phase, setPhase]               = useState('loading');
-  const [errorMsg, setErrorMsg]         = useState(null);
+  const [phase, setPhase]                 = useState('loading');
+  const [errorMsg, setErrorMsg]           = useState(null);
   const [broadcastInfo, setBroadcastInfo] = useState(null);
-  const [reported, setReported]         = useState(false);  // Report button state
+  const [reported, setReported]           = useState(false);
 
   const videoRef          = useRef(null);
   const pcRef             = useRef(null);
@@ -59,8 +67,8 @@ export default function LivePlayer({ broadcastId }) {
   const backupParentIdRef = useRef(null);
   const engineRef         = useRef(null);
   const peerManagerRef    = useRef(null);
-  const tierRouterRef     = useRef(null);   // Phase 18D
-  const auditorRef        = useRef(new LiveSnapshotAuditor());  // Phase 18D
+  const tierRouterRef     = useRef(null);
+  const auditorRef        = useRef(new LiveSnapshotAuditor());
   const icePendingRef     = useRef([]);
   const pollRef           = useRef(null);
 
@@ -80,7 +88,7 @@ export default function LivePlayer({ broadcastId }) {
     load();
   }, [broadcastId]);
 
-  // Poll broadcast status every 15s
+  // Poll broadcast status every 15s while joining or watching
   useEffect(function() {
     if (phase !== 'joining' && phase !== 'watching') return;
     pollRef.current = setInterval(async function() {
@@ -119,6 +127,10 @@ export default function LivePlayer({ broadcastId }) {
         method: 'DELETE', credentials: 'include',
       }).catch(function() {});
     }
+    // Clear sessionStorage on intentional leave — prevents sending stale ID after stream ends
+    if (sendLeave && broadcastId) {
+      try { sessionStorage.removeItem(storageKey(broadcastId)); } catch(e) {}
+    }
     if (tierRouterRef.current) { tierRouterRef.current.cleanup(); tierRouterRef.current = null; }
     if (peerManagerRef.current) { peerManagerRef.current.cleanup(); peerManagerRef.current = null; }
     if (engineRef.current) { engineRef.current.cleanup(); engineRef.current = null; }
@@ -131,6 +143,8 @@ export default function LivePlayer({ broadcastId }) {
     icePendingRef.current = [];
   }
 
+  // Builds RTCPeerConnection with standard handlers
+  // Called from handleWatch() AND handlePrimaryFailed()
   function buildPeerConnection() {
     var pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
 
@@ -141,20 +155,24 @@ export default function LivePlayer({ broadcastId }) {
       videoRef.current.play().catch(function() {});
       setPhase('watching');
 
+      // Start relay engine
       if (engineRef.current) {
         engineRef.current.setRelayStream(stream);
         if (peerManagerRef.current) { peerManagerRef.current.startPinging(); }
       }
+      // Start parent heartbeat watchdog
       if (peerManagerRef.current) { peerManagerRef.current.startWatching(); }
 
-      // Phase 18D: start capability reporting now that stream is flowing
+      // Start capability reporting — pass pcRef so getStats() can measure real bitrate
+      // Check prevents double-start on failover reconnect
       if (!tierRouterRef.current && peerIdRef.current && channelRef.current) {
-        var router = new LiveTierRouter(peerIdRef.current, engineRef);
+        var router = new LiveTierRouter(peerIdRef.current, pcRef, engineRef);
         tierRouterRef.current = router;
         router.start(channelRef.current);
       }
     };
 
+    // Send ICE to parent — direction: upstream (child → parent)
     pc.onicecandidate = function(event) {
       if (!event.candidate || !channelRef.current) return;
       channelRef.current.send({
@@ -180,11 +198,9 @@ export default function LivePlayer({ broadcastId }) {
     return pc;
   }
 
+  // Phase 18C: primary parent failed — switch to backup without black screen
   function handlePrimaryFailed(backupId) {
-    if (!backupId) {
-      setPhase('error'); setErrorMsg('Connection lost. Please try again.');
-      return;
-    }
+    if (!backupId) { setPhase('error'); setErrorMsg('Connection lost. Please try again.'); return; }
     if (pcRef.current) { try { pcRef.current.close(); } catch(e) {} pcRef.current = null; }
     icePendingRef.current = [];
     parentPeerIdRef.current = backupId;
@@ -192,17 +208,23 @@ export default function LivePlayer({ broadcastId }) {
     pcRef.current = pc;
   }
 
+  // Watch Live — user gesture needed for iOS audio autoplay
   async function handleWatch() {
     setPhase('joining');
     setErrorMsg(null);
 
-    // iOS autoplay fix
+    // iOS autoplay fix — prime play() NOW inside the user gesture
     if (videoRef.current) {
       try {
         videoRef.current.srcObject = new MediaStream();
         videoRef.current.play().catch(function() {});
       } catch(e) {}
     }
+
+    // Read previous peer ID from sessionStorage — handles page refresh + reconnect
+    // Sent to server so it can delete the stale row regardless of auth status
+    var previousPeerId = null;
+    try { previousPeerId = sessionStorage.getItem(storageKey(broadcastId)) || null; } catch(e) {}
 
     // Join — get peer ID, tier, parent assignments
     var peerId, tier_level, parent_one_id, parent_two_id;
@@ -213,7 +235,10 @@ export default function LivePlayer({ broadcastId }) {
           'Content-Type': 'application/json',
           ...(accessToken ? { 'Authorization': 'Bearer ' + accessToken } : {}),
         },
-        body: JSON.stringify({ broadcast_id: broadcastId }),
+        body: JSON.stringify({
+          broadcast_id:     broadcastId,
+          previous_peer_id: previousPeerId,
+        }),
       });
       var joinData = await joinRes.json();
       if (!joinRes.ok) {
@@ -228,23 +253,31 @@ export default function LivePlayer({ broadcastId }) {
       setPhase('error'); setErrorMsg('Network error. Please try again.'); return;
     }
 
+    // Store new peer ID in sessionStorage — sent as previous_peer_id on next reconnect
+    try { sessionStorage.setItem(storageKey(broadcastId), peerId); } catch(e) {}
+
     peerIdRef.current         = peerId;
     parentPeerIdRef.current   = parent_one_id || 'creator';
     backupParentIdRef.current = parent_two_id  || null;
 
+    // Primary upstream RTCPeerConnection
     var pc = buildPeerConnection();
     pcRef.current = pc;
 
+    // Relay engine for forwarding stream to children
     var engine = new LiveMeshEngine(peerId);
     engineRef.current = engine;
 
+    // Heartbeat + failover manager
     var manager = new LivePeerManager(peerId, parentPeerIdRef.current, backupParentIdRef.current);
     peerManagerRef.current = manager;
     manager.setOnPrimaryFailed(function(backupId) { handlePrimaryFailed(backupId); });
 
+    // Signaling channel
     var channelName = signalChannelName(broadcastId);
     var channel = supabase.channel(channelName, { config: { broadcast: { self: false } } });
 
+    // Offer from parent/creator or backup after failover
     channel.on('broadcast', { event: 'offer' }, async function(msg) {
       if (msg.payload.to !== peerIdRef.current) return;
       if (msg.payload.offer_type === 'backup') {
@@ -253,6 +286,7 @@ export default function LivePlayer({ broadcastId }) {
       await handleParentOffer(msg.payload.sdp);
     });
 
+    // ICE candidates
     channel.on('broadcast', { event: 'ice-candidate' }, async function(msg) {
       if (msg.payload.to !== peerIdRef.current) return;
       if (msg.payload.direction === 'upstream') {
@@ -264,6 +298,7 @@ export default function LivePlayer({ broadcastId }) {
       await handleParentIce(msg.payload.candidate);
     });
 
+    // Answer from a child peer
     channel.on('broadcast', { event: 'answer' }, async function(msg) {
       if (msg.payload.to !== peerIdRef.current) return;
       if (engineRef.current) {
@@ -271,30 +306,35 @@ export default function LivePlayer({ broadcastId }) {
       }
     });
 
+    // Child joining — I am their assigned parent
     channel.on('broadcast', { event: 'viewer-join' }, function(msg) {
       if (msg.payload.parent_peer_id !== peerIdRef.current) return;
       if (engineRef.current) { engineRef.current.handleChildJoin(msg.payload.peer_id); }
     });
 
+    // Child leaving
     channel.on('broadcast', { event: 'viewer-leave' }, function(msg) {
       if (engineRef.current) { engineRef.current.handleChildLeave(msg.payload.peer_id); }
     });
 
+    // Stream ended by creator
     channel.on('broadcast', { event: 'stream-ended' }, function() {
       if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
       setPhase('ended'); cleanup(false);
     });
 
+    // Heartbeat from parent
     channel.on('broadcast', { event: 'heartbeat-ping' }, function(msg) {
       if (peerManagerRef.current) { peerManagerRef.current.onPingReceived(msg.payload.from); }
     });
 
+    // Backup activation request — I am being activated as backup parent
     channel.on('broadcast', { event: 'parent-activate' }, function(msg) {
       if (msg.payload.activate_peer_id !== peerIdRef.current) return;
       if (engineRef.current) { engineRef.current.handleActivationRequest(msg.payload.peer_id); }
     });
 
-    // Phase 18D: log relay-at-capacity events (server already handles routing)
+    // Relay capacity event — informational only
     channel.on('broadcast', { event: 'relay-at-capacity' }, function(msg) {
       console.log('LivePlayer: relay at capacity', msg.payload.peer_id);
     });
@@ -302,6 +342,7 @@ export default function LivePlayer({ broadcastId }) {
     engine.setChannel(channel);
     manager.setChannel(channel);
 
+    // Send viewer-join ONLY after SUBSCRIBED
     channel.subscribe(function(status) {
       if (status === 'SUBSCRIBED') {
         channel.send({
@@ -352,19 +393,12 @@ export default function LivePlayer({ broadcastId }) {
     try { await pc.addIceCandidate(new RTCIceCandidate(candidate)); } catch(e) {}
   }
 
-  // Phase 18D: Report button handler
   function handleReport() {
     if (reported) return;
     if (auditorRef.current) {
-      auditorRef.current.report(
-        broadcastId,
-        peerIdRef.current,
-        videoRef.current,
-        'viewer_report'
-      );
+      auditorRef.current.report(broadcastId, peerIdRef.current, videoRef.current, 'viewer_report');
     }
     setReported(true);
-    // Reset after 60s so viewer can report again if needed
     setTimeout(function() { setReported(false); }, 60000);
   }
 
